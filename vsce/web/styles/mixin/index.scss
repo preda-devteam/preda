@@ -1,0 +1,25 @@
+
+@import "flex";
+
+@mixin border-bg-color($bordercolor, $bgcolor) {
+    border-color: $bordercolor;
+    background-color: $bgcolor;
+}
+
+@mixin lineheight($height) {
+    line-height: $height;
+    height: $height;
+}
+
+
+@mixin inline-block {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+
+@mixin ellipsis {
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}

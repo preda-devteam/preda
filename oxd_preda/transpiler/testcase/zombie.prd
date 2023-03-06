@@ -1,0 +1,157 @@
+contract ZombieFactory {
+
+    @address uint32 dnaDigits;
+    @address uint32 dnaModulus;
+
+    struct Zombie {
+        string name;
+        uint32 dna;
+    }
+
+    @address array<Zombie> zombies;
+
+    @address map<uint32, address> zombieToOwner;
+    @address map<address, uint32> ownerZombieCount;
+
+    @address function _createZombie(const string _name, const uint32 _dna) {
+		zombies.push(Zombie(_name, _dna));
+		address addr;
+        zombieToOwner[zombies.length() - 1u] = addr;
+        ownerZombieCount[addr]++;
+    }
+
+    @address function uint32 _generateRandomDna(const string _str) const {
+		uint64 tmp;
+		//tmp = __block.GetSecureRandomNumber();
+        return uint32(1u64 % uint64(1));
+    }
+
+    @address function uint16 createRandomZombie(const string _name) export {
+		address addr;
+        if (ownerZombieCount[addr] != 0u){
+			return 1u16;
+		}
+        _createZombie(_name, _generateRandomDna(_name));
+		
+		return 0u16;
+    }
+	
+	@shard function array<Zombie> test(const map<uint32, array<Zombie>> p0) public {
+		array<Zombie> ret;
+		return ret;
+	}
+	
+	enum T{
+		T0,
+		T1
+	}
+	@address bigint _bi;
+	@address token _n;
+	@address T _t;
+	@address map<uint32, uint32> _m1;
+	@address map<uint32, Zombie> _m2;
+	@address array<uint32> _v1;
+	@address array<Zombie> _v2;
+	@address Zombie _s1;
+	@address address _a;
+	@address blob _b;
+	@address hash _h;
+	
+	@address uint64 _blockHeight;
+	@address uint32 _shardIndex;
+	@address uint32 _shardOrder;
+	@address uint32 _parentShardIndex;
+	@address uint32 _parentShardOrder;
+	@address hash _parentBlockHash;
+	@address uint64 _blockTimestamp;
+	@address uint64 _randomNumber;
+	@address uint64 _secureRandomNumber;
+	
+	@address transaction_type _transactionType;
+	@address address _selfAddress;
+	@address uint64 _transactionTimestamp;
+	@address array<address> _signers;
+	@address array<bool> _signersVerified;
+	@address array<bool> _signersVerified2;
+	@address uint32 _originateShardIndex;
+	@address uint32 _originateShardOrder;
+	
+	@address uievent_state _userState;
+
+	@address function uint16 test1(const T tt) export {
+		_bi = bigint(10);
+		_bi *= bigint(10000000);
+		_bi *= bigint(6557360);
+		_bi *= bigint(5635464);
+		_bi *= bigint(563600);
+		_bi *= bigint(4665000);
+		_t = T.T0;
+		_m1[100u] = 10000u;
+		_m1[14432u] = 6814u;
+		_m2[1000u] = Zombie("zombie1000", 321u);
+		_m2[25790u] = Zombie("hgarg79", 564u);
+		_v1.push(400u);
+		_v1.push(34u);
+		_v2.push(Zombie("zombie874", 233u));
+		_v2.push(Zombie("gn98b", 6u));
+		relay@_a relayfunc2(_m2);
+		relay@_a (const auto x = _t, const auto y = _bi){
+			int32 z = 1;
+			auto zz = 2u8;
+		}
+		
+		_blockHeight = __block.get_height();
+		_shardIndex = __block.get_shard_index();
+		_shardOrder = __block.get_shard_order();
+		_parentShardIndex = __block.get_parent_shard_index();
+		_parentShardOrder = __block.get_parent_shard_order();
+		_parentBlockHash = __block.get_parent_block_hash();
+		_blockTimestamp = __block.get_timestamp();
+		_randomNumber = __block.get_random_number();
+		//_secureRandomNumber = __block.get_secure_random_number();
+		
+		_transactionType = __transaction.get_type();
+		_selfAddress = __transaction.get_self_address();
+		_transactionTimestamp = __transaction.get_timestamp();
+		_signers = __transaction.get_signers();
+		for (uint32 i = 0u; i < _signers.length(); i++){
+			_signersVerified.push(__transaction.verify_signer(_signers[i]));
+			_signersVerified2.push(__transaction.verify_signer(i));
+		}
+		_originateShardIndex = __transaction.get_originated_shard_index();
+		_originateShardOrder = __transaction.get_originated_shard_order();
+		
+		_userState = __event.get_user_state();
+		__event.push(0u, "hello");
+		__event.notify(1u, "world");
+		
+		return 0u16;
+	}
+	
+	@address function test2() public
+	{
+		//__block.GetSecureRandomNumber();
+		//relay@xxx _generateRandomDna("");
+		token a;
+		a.get_id();
+		a.get_amount();
+		bigint b;
+		a.transfer(a, b);
+	}
+	
+	@address function uint16 relayfunc2(const map<uint32, Zombie> zombieMap)
+	{
+		return 0u16;
+	}
+	@address function uint16 relayfunc(const blob b)
+	{
+		return 0u16;
+	}
+	@address function uint16 testrelay() export
+	{
+		address addr;
+		blob b;
+		relay@addr relayfunc(b);
+		return 0u16;
+	}
+}

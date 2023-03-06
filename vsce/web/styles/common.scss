@@ -1,0 +1,33 @@
+@import 'font';
+@import 'flex';
+
+.ui-pointer,
+.ui-cursor-pointer {
+  cursor: pointer;
+}
+
+.ui-cursor-default {
+  cursor: default;
+}
+
+.ui-ellipsis {
+  @include ellipsis;
+}
+
+.ui-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.ui-round {
+  object-fit: cover;
+  border-radius: 100%;
+}
+
+.ui-borderbox {
+  box-sizing: border-box;
+}
+
+.ui-none {
+  display: none;
+}

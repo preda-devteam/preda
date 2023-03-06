@@ -1,0 +1,23 @@
+contract SimpleStorage {
+    @address uint32 storedData;
+	@shard uint32 perShardData;
+
+    @address function int32 set(const uint32 x) export {
+        storedData = x;
+		return 0;
+    }
+
+    @address function uint32 get() public const {
+        return storedData;
+    }
+    
+    @address function int32 increment(const uint32 n) export {
+        storedData = storedData + n;
+        return 0;
+    }
+    
+    @address function int32 decrement(const uint32 n) export {
+        storedData = storedData - n;
+        return 0;
+    }
+}

@@ -1,0 +1,40 @@
+import A;
+contract B implements IB, A.IA{
+	interface IB{
+		@address function bool a() public;
+		@address function bool b(int32 i) public;
+		@address function a(int32 i) public;
+	}
+	@address function bool a() public{
+		__debug.print("B::a()");
+		return true;
+	}
+	
+	@address function bool b(int32 j) public{
+		__debug.print("B::b(int32)");
+		return true;
+	}
+	@address function a(int32 i) public{
+		__debug.print("B::a(int32)");
+	}
+	@address function f() export {
+		__debug.print("hi");
+		__debug.print(A.__id());
+		__debug.print(B.__id());
+		__debug.print(__id());
+
+		A.IA ia = A.IA(A.__id());
+		ia.a();
+		ia.b(1);
+		ia.a(1);
+		
+		IB ib = IB(__id());
+		ib.a();
+		ib.b(1);
+		ib.a(1);
+
+		//ib.c();			// compile error
+		//ib.a("fdaf");		// compile error
+		//ib.b("fdaf");		// compile error
+	}
+}

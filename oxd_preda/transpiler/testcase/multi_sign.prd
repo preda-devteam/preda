@@ -1,0 +1,21 @@
+// Execute with:
+//   my_dapp.MultiSignTest.address.f K1GzwzQT4dyJuL87FToNEIJsn1Z0CctucitvAUQfwLidL1/erL7LGFVK9Ic3AVLRXg8wuFK1I3IUZ05POekFJw== {}
+//
+// User accounts for reference:
+//   [
+//     "K1GzwzQT4dyJuL87FToNEIJsn1Z0CctucitvAUQfwLidL1/erL7LGFVK9Ic3AVLRXg8wuFK1I3IUZ05POekFJw==",
+//     "kmqn@qncqv5hgnaayj3keoajt5foyc5raatj6wgmcx74yef9omkh6drhho:ed25519"
+//   ]
+//   [
+//     "Cubt+nw50ezEvKvDMlJuNsaoaXBFXu0G8t3W1tsVEPzwTwN2evE9qRRlfEt6nj8++WD6RiZAB7b4LCviNxWyEg==",
+//     "yi7g6xkty4ytj535fh5qn7h@7vwpiyj64soofdqr5gny4drnp89z6iyd56:ed25519"
+//   ]
+
+contract MultiSignTest{
+    @address bool user1Signed;
+    @address bool user2Signed;
+    @address function f() export{
+        user1Signed = __transaction.verify_signer(kmqn@qncqv5hgnaayj3keoajt5foyc5raatj6wgmcx74yef9omkh6drhho:ed25519);
+        user2Signed = __transaction.verify_signer(yi7g6xkty4ytj535fh5qn7h@7vwpiyj64soofdqr5gny4drnp89z6iyd56:ed25519);
+    }
+}

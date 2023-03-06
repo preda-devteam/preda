@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{title}}</title>
+  <script>
+    let BuildContext = {
+      args: "{{{args}}}",
+      contract: "{{{contract}}}",
+    };
+  </script>
+</head>
+<body>
+
+  <script type="text/javascript">
+    !(function () {
+      var style = document.createElement('style')
+      function decodeHtml(html) {
+          var txt = document.createElement("textarea");
+          txt.innerHTML = html;
+          return txt.value;
+      }
+      var path = decodeHtml('{{staticPath}}')
+      style.innerHTML= `
+        @font-face {
+          font-family: "inter-regular";
+          src: url(${path}/inter-regular.ttf);
+        }
+        @font-face {
+          font-family: "inter-bold";
+          src: url(${path}/inter-bold.ttf);
+        }
+        @font-face {
+          font-family: "menlo";
+          src: url(${path}/menlo-regular.ttf);
+        }
+      `
+      document.head.appendChild(style)
+    })();
+  </script>
+  <div id="root" class="wrap"></div>
+</body>
+</html>

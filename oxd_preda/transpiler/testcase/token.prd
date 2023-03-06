@@ -1,0 +1,20 @@
+contract TokenTest{
+	@address map<int32, token> m_min;
+	
+	@address function map<int32, token> entry() export {
+		token btcToken = __mint(bigint(10));
+		__debug.print(btcToken.get_id() + 2312u64);
+		m_min[100] = btcToken;
+		return m_min;
+	}
+
+	@address function g() export {
+		token btcToken = __mint(bigint(10));
+		token btcToken2 = __mint(bigint(10));
+		token btcToken3;
+		__debug.assert(!btcToken.transfer(btcToken2, bigint(10)));
+		__debug.assert(!btcToken.transfer(btcToken3, bigint(100)));
+		__debug.assert(!btcToken.transfer(btcToken3, bigint(-1)));
+		__debug.assert(!btcToken3.transfer(btcToken3, bigint(0)));
+	}
+}

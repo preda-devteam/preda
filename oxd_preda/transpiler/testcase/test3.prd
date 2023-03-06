@@ -1,0 +1,25 @@
+contract MyContract{
+	struct S{
+		int32 x;
+		int32 E;			// This compiles because enum E is defined later
+	}
+	
+	@address function f(const S s){
+		S s1;
+		f(1);
+	}
+	
+	@address function f(const int32 x){
+		f(S(1, 3));
+	}
+
+	enum E{
+		E0
+	}
+	
+	struct S1{
+		//int32 E;			// Compile error
+		int32 E0;			// This compiles because E0 here is a struct member, which is allowed to have the same name as another identifier in an outer scope (except global scope)
+		int32 f;			// This compiles because E0 here is a struct member, which is allowed to have the same name as a function in an outer scope (except global scope)
+	}
+}

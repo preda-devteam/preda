@@ -1,0 +1,63 @@
+[anno0 = true, anno1 = "", anno2 = 1u64]
+contract ContractA
+{
+	enum E{
+		E0,
+		E1
+	}
+	struct S0{
+		int32 i;
+		E e;
+		array<E> ae;
+		array<uint32> au32;
+	}
+	struct S
+	{
+		int32 i;
+		E e;
+		array<E> ae;
+		array<uint32> au32;
+		S0 s0;
+		map<uint32, S0> m;
+	}
+	S m_s;
+
+	function uint16 transaction_f(const array<S> vs) export
+	{
+		//m_s = s;
+		return 0u16;
+	}
+	
+	function hhh(){
+		transaction_type t = transaction_type.normal_type;
+		__block.get_secure_random_number();
+	}
+	
+	function f(S s) public
+	{
+		uint32(1);
+		array<E> ae;
+		array<uint32> au32;
+		ContractA.S0(1, E.E0, ae, au32);
+		//address a;
+		//relay@a (){
+		// 	address a;
+		// 	//hhh();			// compile error: block dependency of entropy and cannot issue relay call directly or indirectly
+		// 	relay@a (){
+		// 	}
+		//}
+		m_s = s;
+		__debug.print("This is s: ", s);
+	}
+	function int32 g() public
+	{
+		return m_s.i;
+	}
+	function const S0 h(S0 s0, S s, array<map<uint32, array<S0>>> aaa) public
+	{
+		return aaa[0u32][1u32][2u32];
+	}
+	function hh() public
+	{
+	}
+}

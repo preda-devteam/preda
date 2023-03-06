@@ -1,0 +1,34 @@
+@mixin flex($direction: row, $justify: center, $align: center) {
+  display: flex;
+  flex-direction: $direction;
+  justify-content: $justify;
+  align-items: $align;
+}
+
+@mixin flex-center {
+  @include flex(row, center, center);
+}
+
+/* ul > li  */
+@mixin flex-divide {
+  @include flex(row, flex-start, center);
+  > li {
+    width: 100%;
+    flex: 1;
+  }
+  > li:first-of-type {
+    text-align: left;
+  }
+
+  > li:last-of-type {
+    text-align: right;
+  }
+}
+
+@mixin flex-row($justify: center, $align: center) {
+  @include flex(row, $justify, $align);
+}
+
+@mixin flex-column($justify: center, $align: center) {
+  @include flex(column, $justify, $align);
+}

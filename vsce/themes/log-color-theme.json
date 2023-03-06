@@ -1,0 +1,14 @@
+{
+  "name": "predalog",
+  "colors": {},
+  "tokenColors": [
+    {
+      "name": "Regular Expressions",
+      "scope": ["string.regexp"],
+      "settings": {
+        "foreground": "#ff0000",
+        "fontStyle": " bold underline "
+      }
+    }
+  ]
+}

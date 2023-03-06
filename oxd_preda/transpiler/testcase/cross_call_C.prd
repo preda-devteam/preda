@@ -1,0 +1,13 @@
+//import ContractA as Source;
+import ContractB as Source2;
+
+contract ContractC
+{
+	@address function block()
+	{
+		//Source::S s;
+		//Source2::GetState().g(s);
+		Source2.S s2;
+		Source2.g2(s2);
+	}
+}

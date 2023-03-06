@@ -1,0 +1,119 @@
+{
+  "declare contract": {
+    "prefix": "contract",
+    "body": ["contract ${1:MyContract} {", "\t$TM_SELECTED_TEXT$0", "}"],
+    "description": "declare contract"
+  },
+  "declare struct": {
+    "prefix": "struct",
+    "body": ["struct ${0:Mystruct} {", "\t${1:TypeA} ${2:memberA};", "}"],
+    "description": "declare struct type"
+  },
+
+  "For Loop": {
+    "prefix": "for",
+    "body": [
+      "for (uint32 ${1:index} = 0u; ${1:index} < ${2:array}.length(); ${1:index}++)",
+      "{",
+      "\t${3:element} = ${2:array}[${1:index}];",
+      "\t$TM_SELECTED_TEXT$0",
+      "}"
+    ],
+    "description": "For Loop"
+  },
+  "While Statement": {
+    "prefix": "while",
+    "body": ["while (${1:condition}) {", "\t$TM_SELECTED_TEXT$0", "}"],
+    "description": "While Statement"
+  },
+  "Do-While Statement": {
+    "prefix": "dowhile",
+    "body": ["do {", "\t$TM_SELECTED_TEXT$0", "} while (${1:condition});"],
+    "description": "Do-While Statement"
+  },
+  "Function Statement": {
+    "prefix": "function",
+    "body": [
+      "function ${4:returnType} ${1:name}(${2:paramsType} ${3:params}) ${5|export,public|} {",
+      "\t$TM_SELECTED_TEXT$0",
+      "}"
+    ],
+    "description": "Function Statement"
+  },
+  "Interface Statement": {
+    "prefix": "interface",
+    "body": ["interface ${1:interfaceName}"],
+    "description": "interface statement"
+  },
+  "Implements Statement": {
+    "prefix": "implements",
+    "body": ["implements ${1:MyContract}"],
+    "description": "implements statement"
+  },
+  "If Statement": {
+    "prefix": "if",
+    "body": ["if (${1:condition}) {", "\t$TM_SELECTED_TEXT$0", "}"],
+    "description": "If Statement"
+  },
+  "If-Else Statement": {
+    "prefix": "ifelse",
+    "body": [
+      "if (${1:condition}) {",
+      "\t$TM_SELECTED_TEXT$0",
+      "} else {",
+      "\t",
+      "}"
+    ],
+    "description": "If-Else Statement"
+  },
+  "Relay global statement": {
+    "prefix": "relay@global",
+    "body": "relay@global ${1:functionName}(${2:params})",
+    "description": "Relay global statement"
+  },
+  "Relay shard statement": {
+    "prefix": "relay@shard",
+    "body": "relay@shard ${1:functionName}(${2:params})",
+    "description": "Relay shard statement"
+  },
+  "Relay statement": {
+    "prefix": "relay@address",
+    "body": "relay@${1:address} ${2:functionName}(${3:params})",
+    "description": "Relay address statement"
+  },
+  "Supply statement": {
+    "prefix": "supply",
+    "body": "supply ${1:TokenIdentifier} using ${2:factoryName}"
+  },
+
+  "Block context statement": {
+    "prefix": "__block",
+    "body": "__block",
+    "description": "the block context"
+  },
+  "Transaction context statement": {
+    "prefix": "__transaction",
+    "body": "__transaction",
+    "description": "the transaction context"
+  },
+  "Debug context statement": {
+    "prefix": "__debug",
+    "body": "__debug",
+    "description": "the debug context (debug only)"
+  },
+  "Shard scope": {
+    "prefix": "@shard",
+    "body": "@shard $TM_SELECTED_TEXT$0",
+    "description": "Shard scope"
+  },
+  "Global scope": {
+    "prefix": "@global",
+    "body": "@global $TM_SELECTED_TEXT$0",
+    "description": "global scope"
+  },
+  "Address scope": {
+    "prefix": "@address",
+    "body": "@address $TM_SELECTED_TEXT$0",
+    "description": "address scope"
+  }
+}

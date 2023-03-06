@@ -1,0 +1,15 @@
+contract Dev{
+
+	@address int32 m_i;
+
+	@address function f() export{
+		int32 i = 18;
+		relay@ijhp8we9e57t4gf9ba4hyv343yed5r66jr6trr3vwa46rda6ykow6kobaz:ed25519 (^i){
+			m_i = i;
+		}
+		// const token x;
+		// relay@ijhp8we9e57t4gf9ba4hyv343yed5r66jr6trr3vwa46rda6ykow6kobaz:ed25519 (^x){
+		// }
+	}
+
+}

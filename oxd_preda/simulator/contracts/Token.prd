@@ -1,0 +1,60 @@
+contract Token {
+    @address bigint balance;
+    
+    @address function bool transfer(address to, bigint amount) export
+    {
+        if(balance >= amount)
+        {
+            balance -= amount;
+            relay@to (^amount)
+            {
+				__debug.print("deposit: ", amount);
+                balance += amount;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    @address function mint(bigint value) {
+        __debug.assert(value >= 0ib);
+        balance += value;
+    }
+
+    struct payment
+    {
+        address     to;
+        bigint      amount;
+    }
+
+    @address function bool transfer_n(array<payment> recipients) export 
+	{
+        bigint total = 0ib;
+        for (uint32 i = 0u; i<recipients.length(); i++)
+        {
+            __debug.assert(recipients[i].amount >= 0ib);
+            total += recipients[i].amount;
+        }
+        if(total <= balance)
+        {
+ 			__debug.print("transfer_n*", recipients.length(), ", total=", total);
+			balance -= total;
+            for (uint32 i = 0u32; i<recipients.length(); i++)
+            {
+                if(recipients[i].amount>0ib)
+                {
+                    relay@recipients[i].to (bigint amount = recipients[i].amount){
+						__debug.print("deposit_n: ", amount);
+                        balance += amount;
+                    }
+                }                  
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+}

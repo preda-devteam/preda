@@ -1,0 +1,10 @@
+Package: preda-toolchain
+Version: 0.1.0.0
+Maintainer: Preda Dev Team <devteam@preda-lang.org>
+Section: devel
+Homepage: www.preda-lang.org
+Architecture: amd64
+Priority: standard
+Depends: g++-9, gcc-9, code (>=1.51)
+Description: Preda Dev Environment is a preda execution simulator by PREDA Dev Team
+

@@ -1,0 +1,157 @@
+contract ZombieFactory {
+
+    uint32 dnaDigits;
+    uint32 dnaModulus;
+
+    struct Zombie {
+        string name;
+        uint32 dna;
+    }
+
+    array<Zombie> zombies;
+
+    map<uint32, address> zombieToOwner;
+    map<address, uint32> ownerZombieCount;
+
+    function _createZombie(const string _name, const uint32 _dna) {
+		zombies.push(Zombie(_name, _dna));
+		address addr;
+        zombieToOwner[zombies.length() - 1u] = addr;
+        ownerZombieCount[addr]++;
+    }
+
+    function uint32 _generateRandomDna(const string _str) const {
+		uint64 tmp;
+		//tmp = _block.GetSecureRandomNumber();
+        return uint32(1u64 % uint64(1));
+    }
+
+    function uint16 createRandomZombie(const string _name) export {
+		address addr;
+        if (ownerZombieCount[addr] != 0u){
+			return 1u16;
+		}
+        _createZombie(_name, _generateRandomDna(_name));
+		
+		return 0u16;
+    }
+	
+	shard function array<Zombie> test(const map<uint32, array<Zombie>> p0) public {
+		array<Zombie> ret;
+		return ret;
+	}
+	
+	enum T{
+		T0,
+		T1
+	}
+	bigint _bi;
+	note _n;
+	T _t;
+	map<uint32, uint32> _m1;
+	map<uint32, Zombie> _m2;
+	array<uint32> _v1;
+	array<Zombie> _v2;
+	Zombie _s1;
+	address _a;
+	blob _b;
+	hash _h;
+	
+	uint64 _blockHeight;
+	uint32 _shardIndex;
+	uint32 _shardOrder;
+	uint32 _parentShardIndex;
+	uint32 _parentShardOrder;
+	hash _parentBlockHash;
+	uint64 _blockTimestamp;
+	uint64 _randomNumber;
+	uint64 _secureRandomNumber;
+	
+	TRANSACTION_TYPE _transactionType;
+	address _selfAddress;
+	uint64 _transactionTimestamp;
+	array<address> _signers;
+	array<bool> _signersVerified;
+	array<bool> _signersVerified2;
+	uint32 _originateShardIndex;
+	uint32 _originateShardOrder;
+	
+	UIEVENT_STATE _userState;
+
+	function uint16 test1(const T tt) export {
+		_bi = bigint(10);
+		_bi *= bigint(10000000);
+		_bi *= bigint(6557360);
+		_bi *= bigint(5635464);
+		_bi *= bigint(563600);
+		_bi *= bigint(4665000);
+		_t = T.T0;
+		_m1[100u] = 10000u;
+		_m1[14432u] = 6814u;
+		_m2[1000u] = Zombie("zombie1000", 321u);
+		_m2[25790u] = Zombie("hgarg79", 564u);
+		_v1.push(400u);
+		_v1.push(34u);
+		_v2.push(Zombie("zombie874", 233u));
+		_v2.push(Zombie("gn98b", 6u));
+		relay@_a relayfunc2(_m2);
+		relay@_a (const auto x = _t, const auto y = _bi){
+			int32 z = 1;
+			auto zz = 2u8;
+		}
+		
+		_blockHeight = _block.get_height();
+		_shardIndex = _block.get_shard_index();
+		_shardOrder = _block.get_shard_order();
+		_parentShardIndex = _block.get_parent_shard_index();
+		_parentShardOrder = _block.get_parent_shard_order();
+		_parentBlockHash = _block.get_parent_block_hash();
+		_blockTimestamp = _block.get_timestamp();
+		_randomNumber = _block.get_random_number();
+		//_secureRandomNumber = _block.get_secure_random_number();
+		
+		_transactionType = _transaction.get_type();
+		_selfAddress = _transaction.get_self_address();
+		_transactionTimestamp = _transaction.get_timestamp();
+		_signers = _transaction.get_signers();
+		for (uint32 i = 0u; i < _signers.length(); i++){
+			_signersVerified.push(_transaction.verify_signer(_signers[i]));
+			_signersVerified2.push(_transaction.verify_signer(i));
+		}
+		_originateShardIndex = _transaction.get_originated_shard_index();
+		_originateShardOrder = _transaction.get_originated_shard_order();
+		
+		_userState = _event.get_user_state();
+		_event.push(0u, "hello");
+		_event.notify(1u, "world");
+		
+		return 0u16;
+	}
+	
+	function test2() public
+	{
+		//_block.GetSecureRandomNumber();
+		//relay@xxx _generateRandomDna("");
+		note a;
+		a.get_id();
+		a.get_amount();
+		bigint b;
+		a.transfer(a, b);
+	}
+	
+	function uint16 relayfunc2(const map<uint32, Zombie> zombieMap)
+	{
+		return 0u16;
+	}
+	function uint16 relayfunc(const blob b)
+	{
+		return 0u16;
+	}
+	function uint16 testrelay() export
+	{
+		address addr;
+		blob b;
+		relay@addr relayfunc(b);
+		return 0u16;
+	}
+}

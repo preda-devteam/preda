@@ -1,0 +1,137 @@
+contract KittyBreeding {
+    
+    struct KittyInfo
+    {
+        bool    gender;     // true = matron
+        uint64  birthTime;  // block height
+        address owner;
+    }
+    @global array<KittyInfo> allKitties;
+    @shard array<KittyInfo> newBorns;
+
+    struct Kitty
+    {
+        uint32  id;
+        bigint  genes;
+        uint32  matronId;
+        uint32  sireId;        
+        uint64  lastBreed;  // block height
+    }
+    
+    @address map<uint32, Kitty> myKitties;
+
+    @global function uint32 create(bool gender, address owner)
+    {
+        uint32 id = allKitties.length();
+
+        KittyInfo n;
+        n.gender = gender;
+        n.birthTime = __block.get_height();
+        n.owner = owner;
+        allKitties.push(n);
+
+        return id;   
+    }
+
+    @global function mint(bigint genes, bool gender, address owner) export
+    {
+        uint32 id = create(gender, owner);
+
+        relay@owner (^genes, ^gender, ^id){
+            Kitty new;
+            new.id = id;
+            new.genes = genes;
+            new.matronId = 0xffffffffu;
+            new.sireId = 0xffffffffu;
+            new.lastBreed = __block.get_height();
+            myKitties[id] = new;
+
+            __debug.print("Genesis kitty: ", id, " ", gender?"matron":"sire", " DNA: ", genes%100000ib);
+        }
+    }    
+    
+    @address function bigint sqrt(bigint x)
+    {
+        bigint z = (x + 1ib) / 2ib;
+        bigint y = x;
+        while (z < y) {
+            y = z;
+            z = (x / z + z) / 2ib;
+        }
+
+        return y;
+    }
+
+    @address function breed(uint32 m, uint32 s, bool gender) export
+    {
+		//__debug.print("gender: ", gender, " by ", m, "+", s);
+
+        __debug.assert(m < allKitties.length());
+        __debug.assert(s < allKitties.length());
+        __debug.assert(allKitties[m].gender);
+        __debug.assert(!allKitties[s].gender);
+
+        relay@allKitties[m].owner (^s, ^m, ^gender){
+            //if(myKitties[m].lastBreed + 100u64 < __block.get_height()) // breed cooldown
+            {
+				__debug.print("gender: ", gender, " by ", m, "+", s);
+                myKitties[m].lastBreed = __block.get_height();
+                relay@allKitties[s].owner (
+                    auto m_genes = myKitties[m].genes,
+                    ^s, ^m, ^gender
+                ){
+                    bigint new_genes = sqrt(m_genes) * sqrt(myKitties[s].genes);  // genes mixture
+                    new_genes = sqrt(m_genes) * sqrt(myKitties[s].genes);  // genes mixture
+                    new_genes = sqrt(m_genes) * sqrt(myKitties[s].genes);  // genes mixture
+                    new_genes = sqrt(m_genes) * sqrt(myKitties[s].genes);  // genes mixture
+                    new_genes = sqrt(m_genes) * sqrt(myKitties[s].genes);  // genes mixture
+                    new_genes = sqrt(m_genes) * sqrt(myKitties[s].genes);  // genes mixture
+
+                    relay@__transaction.get_initiator_address() (^s, ^m, ^gender, ^new_genes, auto birth_time = __block.get_height()) {
+                        uint32 id_nb = newBorns.length() | 0x80000000u32;
+
+                        Kitty new;
+                        new.id = id_nb;  // initialized as new born id, not global id
+                        new.genes = new_genes;
+                        new.matronId = m;
+                        new.sireId = s;
+                        new.lastBreed = birth_time;
+                        myKitties[id_nb] = new;
+
+                        KittyInfo n;
+                        n.gender = gender;
+                        n.birthTime = birth_time;
+                        n.owner = __transaction.get_self_address();
+                        newBorns.push(n);
+
+                        __debug.print("new born: ", id_nb, " by ", m, "+", s);
+                    }
+                }
+            }
+        }
+    }
+
+    @shard function registerNewBorns() export  // periodic call
+    {
+        if(newBorns.length() > 0u)
+        {
+            relay@global (auto new_borns = newBorns){
+                __debug.print("collect new born: ", new_borns.length());
+                for(uint32 i=0u; i<new_borns.length(); i++)
+                {
+                    uint32 id = allKitties.length();
+                    allKitties.push(new_borns[i]);
+                    relay@new_borns[i].owner (auto newBornIndex = i, ^id){
+                        uint32 id_nb = 0x80000000u32 | newBornIndex;
+                        myKitties[id] = myKitties[id_nb];
+                        myKitties.erase(id_nb);
+
+                        __debug.print("new born registered: ", id);
+                    }
+                }
+            }
+
+            newBorns.set_length(0u);
+        }
+    }
+}

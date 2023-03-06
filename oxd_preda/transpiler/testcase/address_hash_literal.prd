@@ -1,0 +1,22 @@
+contract AddressLiteralTest{
+	@address address aaa;
+	@address hash hhh;
+   	@address function f() export{
+		aaa = go@jary7s6396voivktzjed5q5tvgpztbwm@et@zk@4@3sdwiztj748cgo:ed25519;
+
+		address ed25519;
+		address ccc = 0 > 1 ? ed25519:go@jary7s6396voivktzjed5q5tvgpztbwm@et@zk@4@3sdwiztj748cgo:ed25519;
+
+		// token temp;
+		// relay@aaa (token fund = temp){
+		// 	fund.transfer_all(fund);
+		// }
+
+		// relay@go@jary7s6396voivktzjed5q5tvgpztbwm@et@zk@4@3sdwiztj748cgo:ed25519 (){
+			
+		// }
+
+		hhh = 36nwe8x9sig7gb98zkb6gh@qarffhvf6c3ok9433@tz9ne4mb6qi:hash;
+		hash ddd = 0 > 1 ? 36nwe8x9sig7gb98zkb6gh@qarffhvf6c3ok9433@tz9ne4mb6qi:hash:hhh;
+	}
+}

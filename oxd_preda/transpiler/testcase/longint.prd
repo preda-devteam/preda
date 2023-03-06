@@ -1,0 +1,149 @@
+contract ContractNewInt{
+    //int128 num128;
+    //uint128 unum128;
+    @address int64 num64;
+    @address int64 num164;
+    @address int64 num264;
+
+    struct test_s{
+        int512 f;
+        array<int256> arr_f;
+    }
+    @address function computeNewIntType() export{
+        int512 in1 = 134078079299425970995740249982058461274793658205i512;
+        int512 in2 = 670390396497129854978701249910292306373968291029619668886178072i512;
+        uint8 a = 254u8;
+        uint16 b = 65534u16;
+        uint32 c = 4294967294u32;
+        uint64 d = 18446744073709551614u64;
+        uint128 e = 340282366920938463463374607431768211453u128;
+        __debug.print("e = ", e);
+        e++;
+        __debug.print("Test uint++ *** e++ = ", e);
+        ++e;
+        __debug.print("Test ++uint *** ++e = ", e);
+        uint256 f = 115792089237316195423570985008687907853269984665640564039457584007913129639934u256;
+        __debug.print("f = ", f);
+        uint256 f_2 = f;
+        __debug.print("Test uint = *** f_2 = ", f_2);
+
+        f--;
+        __debug.print("Test uint-- *** f-- = ", f);
+        --f;
+        __debug.print("Test --uint *** --f = ", f);
+        uint512 g = 13407807929942597099574024998205846127479365820592393377723561443721764030073546976801874298166903427690031858186486050853753882811946569946433649006084094u512;
+        int8 h = 126i8;
+        int16 i = 32766i16;
+        int32 j = 2147483646i32;
+        int64 k = 9223372036854775806i64;
+        int128 hex = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEi128;
+        int128 neg_hex = -0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEi128;
+        __debug.print("Test hex = ", hex);
+        __debug.print("Test negative hex = ", neg_hex);
+        //int128 neg_hex_overload = -0x8FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEi128;
+        //uint128 hex_overload = -0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF1u128;
+        int128 l = 170141183460469231731687303715884105726i128;
+        int256 m = 57896044618658097711785492504343953926634992332820282019728792003956564819966i256;
+        int512 n = 6703903964971298549787012499102923063739682910296196688861780721860882015036773488400937149083451713845015929093243025426876941405973284973216824503042046i512;
+        int512 n_2;
+        n_2 = n;
+        __debug.print("Test int = *** n_2 = ", n_2);
+        int8 neg_h = -126i8;
+        int16 neg_i = -32766i16;
+        int32 neg_j = -2147483646i32;
+        int64 neg_k = -9223372036854775806i64;
+        int128 neg_l = -170141183460469231731687303715884105726i128;
+        int256 neg_m = -57896044618658097711785492504343953926634992332820282019728792003956564819966i256;
+        int512 neg_n = -6703903964971298549787012499102923063739682910296196688861780721860882015036773488400937149083451713845015929093243025426876941405973284973216824503042046i512;
+        int512 result = in1 - in2;
+        __debug.print("in1 = ", in1);
+        __debug.print("in2 = ", in2);
+        __debug.print("in1 - in2 = ", result);
+
+        int512 neg_result = in2 - in1;
+        __debug.print("in2 - in1 = ", neg_result);
+        neg_result--;
+        __debug.print("neg_result-- = ", neg_result);
+        --neg_result;
+        __debug.print("--neg_result = ", neg_result);
+
+        test_s S;
+        int128 o = 70141183460469231731687303715884105727i128;
+        int128 p = 70141183460469231731687303715884105720i128;
+        int128 q = o + p;
+        __debug.print("o = ", o);
+        __debug.print("p = ", p);
+        __debug.print("o + p = ", q);
+        q++;
+        __debug.print("q++ = ", q);
+        ++q;
+        __debug.print("++q = ", q);
+
+        int128 r = 170141183460469231731687303715884105727i128;
+        int128 s = 70141183460469231731687303715884105729i128;
+        int128 t = r / s;
+        int128 t_2 = r%s;
+        __debug.print("r = ", r);
+        __debug.print("s = ", s);
+        __debug.print("r/s = ", t);
+        __debug.print("r%s = ", t_2);
+        S.f = 6703903964971298549787012499102923063739682910296196688861780721860882015036773488400937149083451713845015929093243025426876941405973284973216824503042047i512;
+        S.arr_f.push(57896044618658097711785492504343953926634992332820282019728792003956564819967i256);
+        S.arr_f.push(1766847064778384329583297500742918515827483896875618958121606201292619776i256);
+        S.arr_f.push(1684996666696914987166688442938726917102321526408785780068975640576i256);
+
+        int512 u = 2037035976334486086268445688409378161051468393665936250636140449354381299763336706183397376i512;
+        __debug.print("u = ", u);
+        u = u % u;
+        //u = u * u;
+        __debug.print("u * u = ", u);
+        int512 v = -2293498615990071511610820895302086940796564989168281123737588839386922876088484808070018553110125686554624i512;
+        int512 w = -v;
+        __debug.print("v = ", v);
+        __debug.print("negative of v = ",w);
+        int512 xx = -w;
+        __debug.print("negative of w = ",xx);
+
+        if(s < r){
+            __debug.print("correct!!!");
+        }
+        else if(s > r){
+             __debug.print("correct!!!");
+        }
+
+        if(p <= q){
+            __debug.print("correct!!!");
+        }
+        else{
+            __debug.print("ERROR!!!");
+        }
+
+        uint128 x = 170141183460469231731687303715884105727u128;
+        uint128 y = 15345654652498786596356447u128;
+        uint128 z = x%y;
+        __debug.print("x = ", x);
+        __debug.print("y = ", y);
+        __debug.print("x%y = ", z);
+
+        //int128 test_neg_fail = -170141183460469231731687303715884105728i128;
+        //int128 test = -test_neg_fail;
+        //__debug.print("test = ", test);
+
+        int128 vvv = 170141183460469231731687303715884105727i128;
+        int128 vvvv = 170141183460469231731687303715884105727i128;
+        //int128 vvvvv = vvv + vvvv;
+
+        string str0 = string(e);
+        __debug.print("Construct string with uint128 = ", str0);
+        string str1 = string(neg_l);
+        __debug.print("Construct string with int128 = ", str1);
+        string str2 = string(S.f);
+        __debug.print("Construct string with int512 = ", str2);
+        string str3 = string(S.arr_f[1u]);
+        __debug.print("Construct string with longint = ", str3);
+        __debug.print("End of ContractLongInt");
+
+    }
+
+}
+//vm.sign my_dapp_test1.ContractFloat.computeFloat {"in1" : 7.581,"in2" : 3.14}

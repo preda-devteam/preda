@@ -1,0 +1,21 @@
+
+contract BigIntTest{
+	@address bigint v;
+	@address bigint v2;
+	@address function uint16 f() export {
+		bigint bi = bigint(10);
+		for (uint32 i = 0u; i < 100u; i++){
+			bi = bi * bi;
+		}
+		// runtime error: bigint overflow
+		
+		return 0u16;
+	}
+
+	@address function g() export{
+		v = 78569537630965345460524957349053498057ib;
+		v2 = -6849468146847684641648ib;
+		v = 100000000000000000000ib;
+		v = v.div_uint32(30000000u);
+	}
+}

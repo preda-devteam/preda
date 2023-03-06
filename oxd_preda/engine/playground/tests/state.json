@@ -1,0 +1,38 @@
+{
+	"Addresses": {
+		"itkn9jpmky6ohqa7rf95byk4tv4r85dz5gqc3gvnkzzof@yogisi": {
+			"Core.Coins.Address": {
+				"Balance": "7679999872"
+			},
+			"Core.Credit.Address": {
+				"LastUpdated": 1566177599800,
+				"FirstSeen": 1566177599800,
+				"UpdateCount": 1,
+				"CoinAge": "0",
+				"CoinCredit": "0",
+				"TurnoverVolume": "2559999872"
+			}
+		},
+		"igc997pj7683icpb@4aez6shq3k6zzhr6xyhny6@am5sr5fmxg90": {
+			"Core.Coins.Address": {
+				"Balance": "25870006359"
+			},
+			"Core.Credit.Address": {
+				"LastUpdated": 1566184598520,
+				"FirstSeen": 1566179598120,
+				"UpdateCount": 4,
+				"CoinAge": "768286989",
+				"CoinCredit": "768519446",
+				"TurnoverVolume": "20750006359"
+			},
+			"Core.Profile.Address": {
+				"Metadata": "Bob, Stone"
+			}
+		}
+	},
+	"Shards": {
+		"Core.Coins.Shard": {
+			"TotalToBeIssued": "51199994880000128"
+		}
+	}
+}

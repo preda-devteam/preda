@@ -1,0 +1,3 @@
+[submodule "oxd_preda/3rdParty/antlr4"]
+	path = oxd_preda/3rdParty/antlr4
+	url = https://github.com/antlr/antlr4.git

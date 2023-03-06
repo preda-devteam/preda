@@ -1,0 +1,89 @@
+{
+  "watch start and report": {
+    "prefix": "stopwatch",
+    "body": ["stopwatch.restart", "${0:chain.run}", "stopwatch.report"],
+    "description": "watch start and report"
+  },
+  "set random seed": {
+    "prefix": "set:seed",
+    "body": ["random.reseed ${0}"],
+    "description": "set random seed"
+  },
+  "set gaslimit": {
+    "prefix": "set:gas",
+    "body": ["chain.gaslimit ${0:256}"],
+    "description": "set gaslimit"
+  },
+  "set state": {
+    "prefix": "set:state",
+    "body": [
+      "state.set ${1|global,shard,address|}.${2:contract_name} {${3:name}: ${4:value}}"
+    ],
+    "description": "set state"
+  },
+  "chain run": {
+    "prefix": "chain:run",
+    "body": ["chain.run"],
+    "description": "chain run"
+  },
+  "chain info": {
+    "prefix": "chain:info",
+    "body": ["chain.info"],
+    "description": "chain info"
+  },
+  "chain deploy": {
+    "prefix": "chain:deploy",
+    "body": ["chain.deploy ${0:contract}.prd"],
+    "description": "deploy contract"
+  },
+  "visualize all block": {
+    "prefix": "viz:b#all",
+    "body": ["viz.block #all"],
+    "description": "visualize all block"
+  },
+  "visualize specified block in shard": {
+    "prefix": "viz:b#shard:block",
+    "body": ["viz.block #${1:0}:${2:0}", "$TM_SELECTED_TEXT$0"],
+    "description": "visualize specified block in shard"
+  },
+  "visualize all shard block": {
+    "prefix": "viz:b#shard",
+    "body": ["viz.block #${1|g,0|}"],
+    "description": "visualize all shard block"
+  },
+  "visualize shard": {
+    "prefix": "viz:s",
+    "body": ["viz.shard #${1|g,0|}"],
+    "description": "visualize shard or global state visualization"
+  },
+  "visualize address": {
+    "prefix": "viz:a",
+    "body": ["viz.addr @${1|all,random,0|}"],
+    "description": "visualize address"
+  },
+  "visualize transaction": {
+    "prefix": "viz:t",
+    "body": ["viz.txn ${0:txn_name}"],
+    "description": "visualize transaction"
+  },
+  "visualize trace": {
+    "prefix": "viz:trace",
+    "body": ["viz.trace ${0:txn_name}"],
+    "description": "visualize trace"
+  },
+  "visualize profile": {
+    "prefix": "viz:p",
+    "body": ["viz.profiling"],
+    "description": "visualize profile"
+  },
+  "visualize section": {
+    "prefix": "viz:section",
+    "body": ["viz.section ${0:section}"],
+    "description": "visualize section"
+  },
+  "log hightlight": {
+    "prefix": "log:h",
+    "body": ["log.hightlight ${0:message}"],
+    "description": "hightlight message"
+  }
+}

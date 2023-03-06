@@ -1,0 +1,20 @@
+
+contract LiteralTest{
+
+	@address function f() {
+		uint8 u0 = 255u8;
+		//uint8 u1 = -1u8;		// compile error
+		//uint8 u2 = 256u8;		// compile error
+		int8 i0 = -1i8;
+		int8 i1 = -1i8;
+		//int32 i2 = 2147483648;	// compile error
+		int32 i3 = -2147483648;
+		//int32 i4 = - 2147483648;	// compile error
+		int32 h0 = 0x7fffffff;
+		//int32 h1 = 0x80000000;		// compile error
+		int32 h2 = -0x80000000;
+		uint32 h3 = 0xffffffffu32;
+		int64 h4 = 0xffffffffffffi64;
+	}
+
+}

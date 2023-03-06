@@ -1,0 +1,389 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "preda",
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#operator"
+    },
+    {
+      "include": "#keyword-control"
+    },
+    {
+      "include": "#keyword-other"
+    },
+    {
+      "include": "#constant-boolean"
+    },
+    {
+      "include": "#constant-number"
+    },
+    {
+      "include": "#constant-address"
+    },
+    {
+      "include": "#constant-hash"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#declaration"
+    },
+    {
+      "include": "#type"
+    },
+    {
+      "include": "#global"
+    },
+
+    {
+      "include": "#function-call"
+    },
+    {
+      "include": "#punctuation"
+    }
+  ],
+  "repository": {
+    "comment": {
+      "patterns": [
+        {
+          "include": "#comment-line"
+        },
+        {
+          "include": "#comment-block"
+        }
+      ]
+    },
+    "comment-line": {
+      "match": "//.*?$",
+      "name": "comment.line.preda"
+    },
+    "comment-block": {
+      "begin": "/\\*",
+      "end": "\\*/",
+      "name": "comment.block.preda"
+    },
+    "operator": {
+      "patterns": [
+        {
+          "include": "#operator-logical"
+        },
+        {
+          "include": "#operator-comparison"
+        },
+        {
+          "include": "#operator-arithmetic"
+        },
+        {
+          "include": "#operator-bitwise"
+        },
+        {
+          "include": "#operator-assignment"
+        }
+      ]
+    },
+    "operator-logical": {
+      "match": "(\\&\\&|\\|\\||\\?|\\:|\\!(?!=))",
+      "name": "keyword.operator.logic.preda"
+    },
+    "operator-comparison": {
+      "match": "(==|\\!=|<(?!<)|<=|>(?!>)|>=)",
+      "name": "keyword.operator.logic.preda"
+    },
+    "operator-arithmetic": {
+      "match": "(\\+{1,2}|\\-{1,2}|\\/|\\*|%)",
+      "name": "keyword.operator.arithmetic.preda"
+    },
+    "operator-bitwise": {
+      "match": "(~|\\^|\\&|\\||<<|>>)",
+      "name": "keyword.operator.binary.preda"
+    },
+    "operator-assignment": {
+      "match": "(=)",
+      "name": "keyword.operator.assignment.preda"
+    },
+    "keyword-other": {
+      "patterns": [
+        {
+          "include": "#keyword-other-directive"
+        },
+        {
+          "include": "#keyword-other-nondirective"
+        }
+      ]
+    },
+    "keyword-control": {
+      "match": "\\b(if|else|for|while|do|break|continue)\\b",
+      "name": "keyword.control.flow.preda"
+    },
+    "keyword-other-directive": {
+      "match": "\\b(import|supply)(\\s+([A-Za-z_]\\w*))?\\b",
+      "name": "keyword.other.preda",
+      "captures": {
+        "1": {
+          "name": "keyword.other.preda"
+        },
+        "3": {
+          "name": "entity.name.type.contract.preda"
+        }
+      }
+    },
+    "keyword-other-nondirective": {
+      "match": "\\b(relay|issue|as|return|broadcast|using|miner)\\b",
+      "name": "keyword.other.preda"
+    },
+    "constant-boolean": {
+      "match": "\\b(true|false)\\b",
+      "name": "constant.language.boolean.preda"
+    },
+    "constant-number": {
+      "patterns": [
+        {
+          "include": "#number-decimal"
+        },
+        {
+          "include": "#number-hex"
+        },
+        {
+          "include": "#number-float"
+        }
+      ]
+    },
+    "number-decimal": {
+      "match": "\\b(\\d+(((u|i)(8|16|32|64)?)|ib)?)\\b",
+      "name": "constant.numeric.decimal.preda"
+    },
+    "number-hex": {
+      "match": "\\b(0[xX][a-fA-F0-9]+)(((u|i)(8|16|32|64))|ib)?\\b",
+      "name": "constant.numeric.hexadecimal.preda"
+    },
+    "number-float": {
+      "match": "\\b(\\d*[.]\\d+)(f(256|512|1024))\\b",
+      "name": "constant.numeric.float.preda"
+    },
+    "constant-address": {
+      "match": "\\b[a-zA-z0-9@]{58}:ed25519\\b",
+      "name": "constant.numeric.decimal.preda"
+    },
+    "constant-hash": {
+      "match": "\\b[a-zA-z0-9@]{52}:hash\\b",
+      "name": "constant.numeric.decimal.preda"
+    },
+    "string": {
+      "patterns": [
+        {
+          "match": "\\\".*?\\\"",
+          "name": "string.quoted.double.preda"
+        }
+      ]
+    },
+    "type": {
+      "patterns": [
+        {
+          "include": "#type-primitive"
+        },
+        {
+          "include": "#type-auto"
+        },
+        {
+          "match": "(?<=\\<)(([a-zA-Z_]\\w*))*(?=[\\,|\\>])",
+          "name": "support.type.primitive.preda"
+        },
+        {
+          "match": "(?<=\\,\\s+)(([a-zA-Z_]\\w*))*(?=\\>)",
+          "name": "support.type.primitive.preda"
+        },
+        {
+          "match": "\\b([a-zA-Z_]\\w*)\\s+([a-zA-Z_]\\w*)\\s+\\=",
+          "captures": {
+            "1": {
+              "name": "support.type.primitive.preda"
+            }
+          }
+        }
+      ]
+    },
+    "type-primitive": {
+      "match": "\\b(address|string|int8|int16|int32|int64|uint8|uint16|uint32|uint64|uint128|uint256|float256|float512|float1024|bool|hash|token|blob|array|map|bigint)\\b",
+      "name": "support.type.primitive.preda"
+    },
+    "type-auto": {
+      "match": "\\b(auto)\\b",
+      "name": "support.type.primitive.preda"
+    },
+    "global": {
+      "patterns": [
+        {
+          "include": "#global-variables"
+        }
+      ]
+    },
+    "global-variables": {
+      "patterns": [
+        {
+          "match": "\\b(__transaction|__block|__event|__debug)\\b",
+          "name": "variable.language.transaction.preda"
+        }
+      ]
+    },
+    "declaration": {
+      "patterns": [
+        {
+          "include": "#declaration-scope"
+        },
+        {
+          "include": "#declaration-contract"
+        },
+        {
+          "include": "#declaration-implements"
+        },
+        {
+          "include": "#declaration-interface"
+        },
+        {
+          "include": "#declaration-struct"
+        },
+        {
+          "include": "#declaration-enum"
+        },
+        {
+          "include": "#declaration-function"
+        }
+      ]
+    },
+    "declaration-scope": {
+      "patterns": [
+        {
+          "match": "\\s@(?:(shard)|(global)|(address))\\s",
+          "name": "storage.type.modifier.preda"
+        }
+      ]
+    },
+    "declaration-implements": {
+      "patterns": [
+        {
+          "match": "\\b(implements)(\\s+([A-Za-z_]\\w*)\\.?([A-Za-z_]\\w*)?)?\\b",
+          "captures": {
+            "1": {
+              "name": "storage.type.implements.preda"
+            },
+            "3": {
+              "name": "entity.name.type.implements.preda"
+            },
+            "4": {
+              "name": "entity.name.type.implements.preda"
+            }
+          }
+        },
+        {
+          "match": "\\b(\\,)(\\s+([A-Za-z_]\\w*)\\.?([A-Za-z_]\\w*)?)?[\\s|\\{]+",
+          "captures": {
+            "3": {
+              "name": "entity.name.type.implements.preda"
+            },
+            "4": {
+              "name": "entity.name.type.implements.preda"
+            }
+          }
+        }
+      ]
+    },
+    "declaration-interface": {
+      "patterns": [
+        {
+          "match": "\\b(interface)(\\s+([A-Za-z_]\\w*))?\\b",
+          "captures": {
+            "1": {
+              "name": "storage.type.interface.preda"
+            },
+            "3": {
+              "name": "entity.name.type.interface.preda"
+            }
+          }
+        }
+      ]
+    },
+    "declaration-contract": {
+      "patterns": [
+        {
+          "match": "\\b(contract)(\\s+([A-Za-z_]\\w*))?\\b",
+          "captures": {
+            "1": {
+              "name": "storage.type.contract.preda"
+            },
+            "3": {
+              "name": "entity.name.type.contract.preda"
+            }
+          }
+        }
+      ]
+    },
+    "declaration-struct": {
+      "match": "\\b(struct)(\\s+([A-Za-z_]\\w*))?\\b",
+      "captures": {
+        "1": {
+          "name": "storage.type.struct.preda"
+        },
+        "3": {
+          "name": "entity.name.type.struct.preda"
+        }
+      }
+    },
+    "declaration-enum": {
+      "match": "\\b(enum)(\\s+([A-Za-z_]\\w*))?\\b",
+      "captures": {
+        "1": {
+          "name": "storage.type.enum.preda"
+        },
+        "3": {
+          "name": "entity.name.type.enum.preda"
+        }
+      }
+    },
+    "declaration-function": {
+      "patterns": [
+        {
+          "match": "\\b(function)\\b",
+          "name": "storage.type.function.preda"
+        },
+        {
+          "match": "\\b(public|export|shard|const|global)\\b",
+          "name": "storage.type.modifier.preda"
+        },
+        {
+          "match": "\\b([A-Za-z_]\\w*)\\s+([A-Za-z_]\\w*)\\b(\\,|\\;|\\))",
+          "captures": {
+            "1": {
+              "name": "entity.name.type.preda"
+            }
+          }
+        }
+      ]
+    },
+    "function-call": {
+      "match": "\\b([A-Za-z_]\\w*)\\s*\\(",
+      "captures": {
+        "1": {
+          "name": "entity.name.function.preda"
+        }
+      }
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "match": ";",
+          "name": "punctuation.terminator.statement.preda"
+        },
+        {
+          "match": "\\.",
+          "name": "punctuation.accessor.preda"
+        }
+      ]
+    }
+  },
+  "scopeName": "source.preda",
+  "uuid": "60B331CD-9EF8-46E1-A58B-18FC1685FE36"
+}

@@ -1,0 +1,116 @@
+contract Ballot {
+
+    struct Proposal {
+        string name;
+        uint64 totalVotedWeight;
+    }
+
+    struct BallotResult {
+        string topVoted;
+        uint32 case;
+    }
+
+    @global address controller;
+	@global uint32 current_case;
+    @global array<Proposal> proposals;
+    @global BallotResult last_result;
+
+    @global uint32 shardGatherRatio;
+    @global function shardGather_reset(){ shardGatherRatio = 0u; }
+    @global function bool shardGather_isCompleted(){ return shardGatherRatio == 0x80000000u; }
+    @global function bool shardGather_gather()
+    {   shardGatherRatio += 0x80000000u>>__block.get_shard_order();
+        return shardGatherRatio == 0x80000000u;
+    }
+
+    @shard array<uint64> votedWeights;
+
+    // address scope
+    @address uint64 weight;
+    @address uint32 voted_case;
+
+    @address function bool is_voting()
+    {
+        return last_result.case < current_case;
+    }
+
+    @address function init(array<string> names) export {
+        //__debug.assert(controller == __transaction.get_self_address());
+        __debug.assert(!is_voting());
+        relay@global (^names){
+			__debug.print("global: ", names);
+            for (uint32 i = 0u; i < names.length(); i++) {
+                Proposal proposal;
+                proposal.name = names[i];
+                proposal.totalVotedWeight = 0u64;
+                proposals.push(proposal);
+            }
+            current_case++;
+            last_result.case = 0u;
+            last_result.topVoted = "";
+        }
+		__debug.print("EOC init: ", names);
+    }
+    
+    @address function bool vote(uint32 proposal_index, uint32 case_num) export {
+        if(case_num == current_case && case_num > voted_case && proposal_index<proposals.length())
+        {
+            voted_case = case_num;
+			__debug.print("Vote: ", proposal_index);
+
+            /*
+            relay@global (^case_num, ^proposal_index, ^weight) {
+                if(case_num == current_case)
+                    proposals[proposal_index].totalVotedWeight += weight;
+            }*/
+            votedWeights.set_length(proposals.length());
+            votedWeights[proposal_index] += weight;
+			return true;
+        }
+
+		__debug.print("Vote: ", proposal_index, " failed");
+		return false;
+    }
+
+    @address function finalize() export {
+        //__debug.assert(controller == __transaction.get_self_address());
+        __debug.assert(is_voting());
+        relay@global (){
+            // ... maybe do something else before scatter-gathering
+            __debug.print("In global");
+            shardGather_reset();
+            relay@shards (){
+                // ... maybe do something in each shard
+				__debug.print("Shard Vote: ", votedWeights);
+                relay@global(auto shardVotes = votedWeights) {
+                    //BEGIN: code for scattering
+                    for(uint32 i=0u; i<shardVotes.length(); i++)
+                    {
+                        proposals[i].totalVotedWeight += uint64(shardVotes[i]);
+                    }
+                    //END
+
+                    if(shardGather_gather())
+                    {
+						__debug.print("votes: ", proposals);
+                        //BEGIN: code for gathering
+                        last_result.case = current_case;
+                        uint64 w = 0u64;
+                        for(uint32 i=0u; i<proposals.length(); i++)
+                        {
+                            if(proposals[i].totalVotedWeight > w)
+                            {
+                                last_result.topVoted = proposals[i].name;
+                                w = proposals[i].totalVotedWeight;
+                            }
+                        }
+
+						__debug.print("result: ", last_result);
+                        //END                     
+                    }
+                }
+            }
+        }
+    }
+}
+

@@ -1,0 +1,144 @@
+// inter
+@font-face {
+  font-family: "inter-regular";
+  src: url("../static/fonts/inter/inter-regular.ttf");
+}
+@font-face {
+  font-family: "inter-bold";
+  src: url("../static/fonts/inter/inter-bold.ttf");
+}
+@font-face {
+  font-family: "menlo";
+  src: url("../static/fonts/menlo/menlo-regular.ttf");
+}
+// roboto
+// @font-face {
+//   font-family: "roboto-regular";
+//   src: url("../static/fonts/roboto/roboto-regular.ttf");
+// }
+
+// @font-face {
+//   font-family: "roboto-medium";
+//   src: url("../static/fonts/roboto/roboto-medium.ttf");
+// }
+
+// @font-face {
+//   font-family: "roboto-lightitalic";
+//   src: url("../static/fonts/roboto/roboto-lightitalic.ttf");
+// }
+
+// @font-face {
+//   font-family: "roboto-bold";
+//   src: url("../static/fonts/roboto/roboto-bold.ttf");
+// }
+
+// // roboto mono
+// @font-face {
+//   font-family: "roboto-mono-regular";
+//   src: url("../static/fonts/roboto-mono/regular.ttf");
+// }
+
+// @font-face {
+//   font-family: "roboto-mono-medium";
+//   src: url("../static/fonts/roboto-mono/medium.ttf");
+// }
+
+// @font-face {
+//   font-family: "roboto-mono-bold";
+//   src: url("../static/fonts/roboto-mono/bold.ttf");
+// }
+
+// @font-face {
+//   font-family: "roboto-mono-thin";
+//   src: url("../static/fonts/roboto-mono/thin.ttf");
+// }
+
+// @font-face {
+//   font-family: "roboto-mono-light";
+//   src: url("../static/fonts/roboto-mono/light.ttf");
+// }
+
+// ====== sourcehansanscn end ========
+$fontfallback: system-ui, -apple-system, blinkmacsystemfont, helvetica,
+  "pingfang sc", scheiti, "microsoft yahei", sans-serif, "apple color emoji",
+  "segoe ui emoji", "segoe ui symbol", "noto color emoji";
+
+// ======= menlon font class ========
+// .font-inter-regular {
+//   font-family: inter-regular, $fontfallback;
+// }
+
+// .font-inter-bold {
+//   font-family: inter-bold, $fontfallback;
+// }
+
+// .font-inter-semibold {
+//   font-family: inter-semibold, $fontfallback;
+// }
+
+// .font-inter-medium {
+//   font-family: inter-medium, $fontfallback;
+// }
+
+// // ======= roboto font class ========
+// .ui-font-roboto-regular {
+//   font-family: roboto-regular, $fontfallback;
+// }
+
+// .ui-font-roboto-medium {
+//   font-family: roboto-medium, $fontfallback;
+// }
+
+// .ui-font-roboto-bold {
+//   font-family: roboto-bold, $fontfallback;
+// }
+
+// // ======= roboto mono font class ========
+// .ui-font-robotom-regular {
+//   font-family: roboto-mono-regular, $fontfallback;
+// }
+
+// .ui-font-robotom-bold {
+//   font-family: roboto-mono-bold, $fontfallback;
+// }
+
+// .ui-color-gold {
+//   color: var(--color-gold);
+// }
+
+// .ui-color-error {
+//   color: var(--color-error);
+// }
+
+// .ui-txt-muted {
+//   color: var(--color-text-deep);
+// }
+
+// .ui-color-info {
+//   color: var(--color-text-light);
+// }
+
+// .ui-color-default {
+//   color: var(--color-text-default);
+// }
+
+h3 {
+  font-size: 18px;
+}
+h4,
+.ui-h4 {
+  font-size: 16px;
+}
+
+h5,
+.ui-h5 {
+  font-size: 14px;
+}
+
+h6 {
+  font-size: 13px;
+}
+
+.ui-fs15 {
+  font-size: 15px;
+}

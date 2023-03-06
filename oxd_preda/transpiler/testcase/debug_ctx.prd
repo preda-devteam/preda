@@ -1,0 +1,45 @@
+contract DebugCtxTest{
+	struct S{
+		array<int32> ai;
+		map<int32, array<bool>> miab;
+		token n;
+		address a;
+		blob b;
+		hash h;
+		string s;
+	}
+	
+	enum E{
+		E0,
+		E1
+	}
+	
+	struct S1{
+		S s;
+		bigint bi;
+		E e;
+	}
+	
+	@address function uint16 f() export{
+		__debug.print(1, 2);
+		S1 s1;
+		__debug.print(s1);
+		__debug.print(s1.s);
+		__debug.print(s1.s.ai);
+		__debug.print(s1.s.miab);
+		__debug.print(s1.s.n);
+		__debug.print(s1.s.a);
+		__debug.print(s1.s.b);
+		__debug.print(s1.s.h);
+		__debug.print(s1.s.s);
+		__debug.print(s1.bi, ", ", s1.e);
+		__debug.print("hello");
+		__debug.assert("a" > "b");
+		__debug.print("world");
+		return 0u16;
+	}
+	
+	@address function g(int32 a, string s) export{
+		__debug.print(a, s);
+	}
+}

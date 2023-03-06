@@ -1,0 +1,16 @@
+contract RelayBroadcast
+{
+    @shard uint32 id;
+    @shard function fsb()
+    {
+        id = __block.get_shard_index();
+    }
+    @shard function fs()
+    {
+        relay@shards fsb();
+    }
+    @address function fa() export
+    {
+        fs();
+    }
+}

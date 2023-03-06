@@ -1,0 +1,60 @@
+supply TESTCOIN using CoinFactory;
+
+contract SDKTest
+{
+    enum TestEnum{
+        testEnum0,
+        testEnum1
+    }
+    @address uint8 m_u8;
+    @shard uint16 s_u16;
+    @address uint32 m_u32;
+    @shard uint64 s_u64;
+
+    @shard int8 s_i8;
+    @address int16 m_i16;
+    @shard int32 s_i32;
+    @address int64 m_i64;
+
+    struct TestStruct{
+        bool b;
+        string s;
+        blob bb;
+        address a;
+        hash h;
+        bigint bi;
+    }
+
+    @shard TestEnum s_te;
+    @address TestStruct m_ts;
+    @address map<bool, array<token>> m_mbat;
+    @address map<bool, array<bigint>> m_mbabi;
+
+    @address function Test(uint8 u8, uint16 u16, uint32 u32, uint64 u64,
+               int8 i8, int16 i16, int32 i32, int64 i64,
+               TestEnum te, TestStruct ts, map<bool, array<bigint>> mbabi) export {
+        m_u8 = u8;
+        s_u16 = u16;
+        m_u32 = u32;
+        s_u64 = u64;
+        s_i8 = i8;
+        m_i16 = i16;
+        s_i32 = i32;
+        m_i64 = i64;
+        s_te = te;
+        m_ts = ts;
+        m_mbabi = mbabi;
+        array<bool> ab;
+        ab.push(true);
+        ab.push(false);
+        for (uint32 idx0 = 0u; idx0 < ab.length(); idx0++)
+        {
+            array<bigint> abi = mbabi[ab[idx0]];
+            array<token> at;
+            for (uint32 idx = 0u; idx < abi.length(); idx++){
+                at.push(CoinFactory.mint(abi[idx]));
+            }
+            m_mbat[ab[idx0]] = at;
+        }
+    }
+}

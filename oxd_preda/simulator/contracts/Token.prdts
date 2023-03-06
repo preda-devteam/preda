@@ -1,0 +1,22 @@
+random.reseed
+allocate.address 1024
+chain.gaslimit 256
+
+chain.deploy Token.prd
+
+log.highlight Token test
+log Perparing test transactions
+
+state.set address.Token @all { balance:"10000000000000" }
+
+txn1[] = Token.transfer*$~count$ @random { to:"$@random$", amount:"$random(1000, 2000)*100$" }
+
+chain.info
+
+stopwatch.restart
+chain.run
+stopwatch.report
+
+chain.info
+
+viz.profiling

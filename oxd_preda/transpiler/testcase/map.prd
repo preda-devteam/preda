@@ -1,0 +1,25 @@
+
+contract Dev{
+	@address map<uint16, string> mi16str;
+
+	@address function f() export{
+		mi16str[1u16] = "Hello";
+		mi16str[2u16] = "World";
+		mi16str[4u16] = "!!!";
+		mi16str[5u16] = "(...zzzz)";
+		__debug.assert(mi16str.has(1u16));
+		__debug.assert(mi16str.has(2u16));
+		__debug.assert(!mi16str.has(3u16));
+		__debug.print(mi16str.has(1u16), " ", mi16str.has(2u16), " ", mi16str.has(3u16));		// outputs: true true false
+	}
+
+	@address function g() export{
+		mi16str[2u16] = "W";
+		mi16str[200u16] = "Z";
+		mi16str[300u16] = "~~~";
+		mi16str.erase(200u16);
+		mi16str.erase(20u16);
+		mi16str.erase(4u16);
+	}
+
+}

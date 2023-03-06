@@ -1,0 +1,101 @@
+contract SimpleStorage {
+	struct S{
+		int32 i;
+	}
+	@address S m_s;
+	@address array<int32> m_ai;
+	@address function array<int32> returns_array(){
+		array<int32> tmp;
+		return tmp;
+	}
+
+	@address function array<int32> returns_m_array(){
+		return m_ai;
+	}
+
+	@address function const array<int32> returns_const_array(){
+		array<int32> tmp;
+		return tmp;
+	}
+	
+	@address function S const_returns_S() const{
+		S s;
+		return s;
+		//return m_s;					// compile error: cannot convert from "const S" to "S" 
+	}
+
+	@address function const S const_returns_const_m_S() const{
+		return m_s;
+	}
+	
+	@address function S returns_m_S(){
+		return m_s;					// compile error: cannot convert from "const S" to "S" 
+	}
+	
+	@address function uint16 main() export {
+		returns_array().push(1);
+		//returns_const_array().push(1);	// compile error: calling non-const function from a const context
+		array<int32> tmp;
+		//returns_array() = tmp;			// compile error: cannot assign to non-lvalue
+		returns_m_array().push(1);
+		returns_m_array()[0u] = 2;
+		//returns_const_array()[0u] = 2;	// compile error: cannot assign to a const variable
+		S s = const_returns_S();
+		S s1 = S(1);
+		
+		const array<int32> ai;
+		//ai.push(1);						// compile error: calling non-const function from a const context
+		
+		returns_m_S().i = 1;
+
+		main_const();
+		
+		return 0u16;
+	}
+
+	@address function param_int(int32 i) const{
+	}
+
+	@address function param_S(S s) const{
+	}
+
+	@address function param_const_S(const S s) const {
+	}
+	
+	@address function main_const() const {
+		{
+			//S s = m_s;			// compile error: cannot convert from "const S" to "S"
+			const S c_s = m_s;
+			const auto c_auto_s = m_s;
+			auto auto_s = m_s;		// when the initializer is const reference type, auto will automatically be const-qualified
+			//auto_s.i = 2;			// compile error: cannot assign to a const variable
+		}
+		{
+			S s2;
+			//s2 = m_s;				// compile error: cannot convert from "const S" to "S"
+		}
+		{
+			const S s;
+			//s = m_s;				// compile error: cannot assign to a const variable
+		}
+		const int32 i = 1;
+		//i = 2;					// compile error: cannot assign to a const variable
+		auto j = i;
+		j = 2;
+		const auto k = i;
+		//k = 2;					// compile error: cannot assign to a const variable
+		int32 m = 1;
+		int32 n = 2;
+		//m + n = 3;				// compile error: cannot assign to a non-lvalue
+		param_int(i);
+		//param_S(m_s);				// compile error: cannot convert argument 0 from "const S" to "S";
+		param_const_S(m_s);
+		{
+			S s1;
+			auto s2 = 1 > 0 ? m_s : s1;		// ternary picks const over non-const
+			//s2.i = 1;				// compile error: cannot assign to a const variable
+			//(1 > 0 ? s1 : const_returns_S()) = s1;		// compile error: cannot assign to a non-lvalue (because ternary picks non-lvalue over lvalue)
+			(1 > 0 ? s1 : const_returns_S()).i = 1;		// this works, member of a non-lvalue is an lvalue
+		}
+	}
+}

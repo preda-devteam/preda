@@ -1,0 +1,64 @@
+import ContractA;		// same as import ContractA as ContractA
+
+contract ContractB
+{
+	//ContractA src;		// compile error, contract type cannot be used on state variables
+	struct S
+	{
+		ContractA.S s;
+		//array<ContractA> a;
+		int32 i;
+	}
+	@address function ggg() const{
+		//ContractA.f(ContractA.S());			// compile error: calling non-const function from const context.
+	}
+	@address function uint16 f() export
+	{
+		ContractA.S s;
+		
+		s.i = 2;
+		//ContractA::f(s);
+		s.e = ContractA.E.E0;
+		s.ae.push(ContractA.E.E1);
+		s.au32.push(100u32);
+
+		ContractA.S0 s0;
+		s0.i = 3;
+		s0.e = ContractA.E.E1;
+		s0.ae.push(ContractA.E.E0);
+		s0.au32.push(200u32);
+		
+		s.s0 = s0;
+		s.m[255u32] = s0;
+
+		// ContractA src;	// compile error: contract type cannot be used to define variables
+		s.e = ContractA.E.E1;
+		ContractA.f(s);
+		
+		//address otherAddr;
+		//ContractA src2 = ContractA(otherAddr);
+		//src2.f(s);
+		//const ContractA.S s1 = src2.m_s;
+		
+		__debug.print("hello world!");
+		
+		return 0u16;
+	}
+	@address function ff(S s) export
+	{
+	}
+	@address function int32 g(ContractA.S s) public
+	{
+		ContractA.f(s);								// ContractA.f() issues a relay
+		//__block.GetSecureRandomNumber();			// compile error: block dependency of entropy and cannot issue relay call directly or indirectly
+		return ContractA.g();
+	}
+
+	@address function int32 g2(S s) public
+	{
+		ContractA.f(s.s);
+		return ContractA.g();
+	}
+
+	//function h(ContractA src) public		// compile error: contract type cannot be passed to a function
+}

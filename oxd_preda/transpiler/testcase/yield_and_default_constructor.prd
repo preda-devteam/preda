@@ -1,0 +1,72 @@
+
+contract YieldAndDefaultConstructor{
+
+	@shard int32 s_acc;
+
+	@address int32 m_acc;
+	function on_block() const {
+		__debug.print("on_block_address", m_acc);
+		issue@__transaction.get_self_address() (){
+			m_acc++;
+		}
+	}
+
+	@shard function on_block() const{
+		__debug.print("on_block_shard", s_acc);
+		issue@miner (){
+			s_acc++;
+			//m_acc++;
+		}
+	}
+	
+	@shard function on_deploy() const{
+		__debug.print("deploy_yield");
+		issue@miner (){
+			s_acc = 1000;
+		}		
+	}
+
+	@shard function on_scaleout(bool a) const{
+	}
+	
+	@address map<int32, map<uint8, array<int64>>> m_m;
+	@address array<int32> m_ai;
+	@address function g() export {
+		int32 i;
+		i = int32();
+		uint32 j = uint32();
+		bigint k = bigint();
+		string s = string();
+		blob b = blob();
+		address a = address();
+		hash h1= hash();
+		//token().transfer_all(token());
+		array<int32> ai;
+		ai = array<int32>();
+		map<int32, map<uint8, array<int64>>> m;
+		m = map<int32, map<uint8, array<int64>>>();
+		m_m[1] = map<uint8, array<int64>>();
+		m_m[1][3u8].push(1000i64);
+		m_m[1][3u8] = array<int64>();
+		m_m[1][4u8] = array<int64>();
+	}
+
+	@address function f() export {
+		m_acc = 100;
+	}
+
+	@address function g(uint32 u32) {
+	}
+	
+	@address function h() {
+		address a;
+		relay@a g(1u);
+		relay@a g();
+	}
+	
+	@address function ff(array<token> n)
+	{
+		address a;
+		array<token> n1;
+	}
+}

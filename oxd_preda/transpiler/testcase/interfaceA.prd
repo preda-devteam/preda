@@ -1,0 +1,26 @@
+contract A implements IA{
+	enum E{
+		E0
+	}
+	struct S{
+		int32 i;
+	}
+	interface IA{
+		@address function bool a() public;
+		@address function bool b(int32 i) public;
+		@address function a(int32 i) public;
+	}
+	
+	@address function bool a() public{
+		__debug.print("A::a()");
+		return true;
+	}
+	
+	@address function bool b(int32 j) public{
+		__debug.print("A::b(int32)");
+		return true;
+	}
+	@address function a(int32 i) public{
+		__debug.print("A::a(int32)");
+	}
+}

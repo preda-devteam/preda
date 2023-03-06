@@ -1,0 +1,97 @@
+contract ContractFloat{
+    @address float256 mem;
+    struct test_s{
+        float1024 f;
+        array<float256> arr_f;
+    }
+    @address function computeFloat(float1024 in1, float1024 in2) export{
+    // function computeFloat() export{
+
+        __debug.print("start of ContractFloat");
+
+        float1024 result = in1 - in2;
+        __debug.print("in1 = ", in1);
+        __debug.print("in2 = ", in2);
+        __debug.print("in1 - in2 = ", result);
+
+        float1024 neg_result = in2 - in1;
+        __debug.print("in2 - in1 = ", neg_result);
+
+        test_s S;
+        float256 a = 456.321f256;
+        float256 b = 123.456f256;
+        float256 x = a + b;
+        __debug.print("a = ", a);
+        __debug.print("b = ", b);
+        __debug.print("a + b = ", x);
+
+        float256 c = 10.5f256;
+        float256 e = 0.751f256;
+        float256 f = c / e;
+        __debug.print("c = ", c);
+        __debug.print("e = ", e);
+        __debug.print("c/e = ", f);
+
+        S.f = 987654321.123456789f1024;
+        S.arr_f.push(0.3333333f256);
+        S.arr_f.push(1.3333333f256);
+        S.arr_f.push(2.3333333f256);
+
+        float1024 d = .3f1024;
+        __debug.print("d = ", d);
+        d = d * d;
+        __debug.print("d * d = ", d);
+
+        float512 g = -999.999f512;
+        float512 h = -g;
+        __debug.print("g = ", g);
+        __debug.print("negative of g = ",h);
+
+        if(c < e){
+            __debug.print("ERROR!!!");
+        }
+        else if(c > e){
+             __debug.print("correct!!!");
+        }
+
+        if(f >= e){
+            __debug.print("correct!!!");
+        }
+        else{
+            __debug.print("ERROR!!!");
+        }
+
+        if(c == f * e){
+            __debug.print("correct!!!");
+        }
+        else{
+            __debug.print(f*e);
+            __debug.print("ERROR!!!");
+        }
+
+        float256 p = 1.11111f256;
+        float256 q = 0.0f256;
+        float256 r = p/q;
+        __debug.print("divide by zero" , r);
+
+        float256 i = 7.89;
+        __debug.print("i = " , i);
+        i += 0.11f256;
+        __debug.print("i += 0.11 = " , i);
+        i -= 0.55f256;
+        __debug.print("i -= 0.55 = " , i);
+        i *= 6.66f256;
+        __debug.print("i *= 6.66 = " , i);
+        i /= 4.56f256;
+        __debug.print("i /= 4.56 = " , i);
+
+        string str256 = string(d);
+        __debug.print("Construct string with float256 = ", str256);
+        string str512 = string(S.f);
+        __debug.print("Construct string with float512 = ", str512);
+        string str1024 = string(h);
+        __debug.print("Construct string with float1024 = ", str1024);
+        __debug.print("End of ContractFloat");
+    }
+}
+//vm.sign my_dapp_test1.ContractFloat.computeFloat {"in1" : 7.581,"in2" : 3.14}

@@ -1,0 +1,27 @@
+contract RelayTest{
+    @address int32 value;
+    // set value
+    @address function set_v(int32 v) export
+    {
+        value = v;
+    }
+    // relay once, each with depth of 1
+    @address function set_and_emit1x1(int32 v, address a0, int32 v0) export
+    {
+        set_v(v);
+        relay@a0 set_v(v0);
+    }
+    // relay twice, each with depth of 1
+    @address function set_and_emit2x1(int32 v, address a0, int32 v0, address a1, int32 v1) export
+    {
+        set_v(v);
+        relay@a0 set_v(v0);
+        relay@a1 set_v(v1);
+    }
+    // relay once, each with depth of 2
+    @address function set_and_emit1x2(int32 v, address a0, int32 v0, address a1, int32 v1) export
+    {
+        set_v(v);
+        relay@a0 set_and_emit1x1(v0, a1, v1);
+    }
+}

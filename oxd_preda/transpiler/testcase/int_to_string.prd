@@ -1,0 +1,15 @@
+contract Dev
+{
+    @address string su;
+    @address string si;
+    @address string sbi;
+    @address string sa;
+    @address function f() export {
+        su = string(65534u16);
+        si = string(-15546837560i64);
+        sbi = string(-54137905745713490534790534151ib);
+        sa.append(su);
+        sa.append(si);
+        sa.append(sbi);
+    }
+}

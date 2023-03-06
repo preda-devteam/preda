@@ -1,0 +1,14 @@
+
+contract StringTest{
+    @address string s1;
+    @address string s2;
+	@address function f() export{
+        s1 = "Hello";
+        s1.append(" world!");
+        s2 = "zzzz";
+        for (int32 i = 0; i < 1000; i++)
+        {
+            //s1.append(s1);        // runtime exception: string length overflow
+        }
+	}
+}

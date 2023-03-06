@@ -1,0 +1,260 @@
+{
+  "name": "preda",
+  "displayName": "PREDA Language Preview Toolchain",
+  "description": "Local development environment for the PREDA smart contract programming language",
+  "version": "0.1.64",
+  "engines": {
+    "vscode": "^1.56.0"
+  },
+  "icon": "resource/images/logo.png",
+  "categories": [
+    "Testing",
+    "Debuggers",
+    "Programming Languages"
+  ],
+  "publisher": "PREDADevTeam",
+  "activationEvents": [
+    "onCommand:Preda.run",
+    "onCommand:Preda.edit",
+    "onCommand:Preda.compile",
+    "onCommand:Preda.compileMultiple",
+    "onCommand:Preda.view",
+    "onLanguage:prdts",
+    "onLanguage:log"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "keybindings": [
+      {
+        "command": "Preda.run",
+        "key": "ctrl+5",
+        "mac": "cmd+5",
+        "when": "resourceExtname =~ /\\.prd(ts)?/"
+      },
+      {
+        "command": "Preda.edit",
+        "key": "ctrl+6",
+        "mac": "cmd+6",
+        "when": "resourceExtname =~ /\\.prd(ts)?/"
+      },
+      {
+        "command": "Preda.compile",
+        "key": "ctrl+7",
+        "mac": "cmd+7",
+        "when": "resourceExtname == .prd"
+      },
+      {
+        "command": "Preda.compileMultiple",
+        "key": "ctrl+8",
+        "mac": "cmd+8",
+        "when": "resourceExtname == .prd"
+      }
+    ],
+    "commands": [
+      {
+        "command": "Preda.run",
+        "title": "PREDA: Run"
+      },
+      {
+        "command": "Preda.edit",
+        "title": "PREDA: Set Args"
+      },
+      {
+        "command": "Preda.compile",
+        "title": "PREDA: Compile"
+      },
+      {
+        "command": "Preda.compileMultiple",
+        "title": "PREDA: Set Compile Args"
+      },
+      {
+        "command": "Preda.view",
+        "title": "PREDA: View File"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "Preda.run",
+          "group": "1_Preda",
+          "when": "resourceExtname =~ /\\.prd(ts)?/"
+        },
+        {
+          "command": "Preda.edit",
+          "group": "1_Preda",
+          "when": "resourceExtname =~ /\\.prd(ts)?/"
+        },
+        {
+          "command": "Preda.compile",
+          "group": "1_Preda",
+          "when": "resourceExtname == .prd"
+        },
+        {
+          "command": "Preda.compileMultiple",
+          "group": "1_Preda",
+          "when": "resourceExtname == .prd"
+        },
+        {
+          "command": "Preda.view",
+          "group": "1_Preda",
+          "when": "resourceExtname == .html"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "Preda.run",
+          "group": "1_Preda",
+          "when": "editorTextFocus && resourceExtname =~ /\\.prd(ts)?/"
+        },
+        {
+          "command": "Preda.edit",
+          "group": "1_Preda",
+          "when": "editorTextFocus && resourceExtname =~ /\\.prd(ts)?/"
+        },
+        {
+          "command": "Preda.compile",
+          "group": "1_Preda",
+          "when": "editorTextFocus && resourceExtname == .prd"
+        },
+        {
+          "command": "Preda.compileMultiple",
+          "group": "1_Preda",
+          "when": "editorTextFocus && resourceExtname == .prd"
+        },
+        {
+          "command": "Preda.view",
+          "group": "1_Preda",
+          "when": "editorTextFocus && resourceExtname == .html"
+        }
+      ]
+    },
+    "languages": [
+      {
+        "id": "predalog",
+        "aliases": [
+          "plog"
+        ],
+        "extensions": [
+          ".log"
+        ],
+        "configuration": "./log.configuration.json",
+        "mimetypes": [
+          "log",
+          "text/log",
+          "text/x-log",
+          "text/x-code-output",
+          "x-code-output"
+        ]
+      },
+      {
+        "id": "preda",
+        "aliases": [
+          "preda"
+        ],
+        "extensions": [
+          ".prd"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "prdts",
+        "extensions": [
+          ".prdts"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "preda",
+        "scopeName": "source.preda",
+        "path": "./syntaxes/preda.tmLanguage.json"
+      },
+      {
+        "language": "predalog",
+        "scopeName": "source.predalog",
+        "path": "./syntaxes/log.tmLanguage.json"
+      },
+      {
+        "language": "prdts",
+        "scopeName": "source.prdts",
+        "path": "./syntaxes/prdts.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "prdts",
+        "path": "./snippets/prdts.code-snippets"
+      },
+      {
+        "language": "preda",
+        "path": "./snippets/preda.code-snippets"
+      }
+    ],
+    "configuration": {
+      "title": "Preda",
+      "properties": {
+        "Preda.path": {
+          "type": "string",
+          "default": "",
+          "description": "Run contracts with the local preda environment."
+        }
+      }
+    }
+  },
+  "license": "ISC",
+  "scripts": {
+    "vscode:prepublish": "yarn run compile",
+    "watch": "npm-run-all -p watch:*",
+    "watch:view": "cd web && cross-env NODE_ENV=development webpack --watch --mode development",
+    "watch:extension": "tsc -watch -p ./",
+    "compile": "npm-run-all compile:*",
+    "compile:extension": "tsc -p ./",
+    "compile:view": "cd web && cross-env NODE_ENV=production webpack --mode production",
+    "test": "npm run compile:extension && node ./out/test/runTest.js",
+    "lint": "eslint src --ext ts",
+    "build:vsix": "vsce package"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^16.0.2",
+    "@commitlint/config-conventional": "^16.0.0",
+    "@types/ejs": "^3.1.1",
+    "@types/fs-extra": "^9.0.13",
+    "@types/glob": "^7.2.0",
+    "@types/mocha": "^9.1.1",
+    "@types/mustache": "^4.2.1",
+    "@types/node": "16.x",
+    "@types/vscode": "^1.56.0",
+    "@typescript-eslint/eslint-plugin": "^5.31.0",
+    "@typescript-eslint/parser": "^5.31.0",
+    "@vscode/test-electron": "^2.1.5",
+    "cross-env": "^7.0.3",
+    "css-loader": "^5.2.6",
+    "eslint": "^8.20.0",
+    "eslint-plugin-react-hooks": "^4.2.0",
+    "glob": "^8.0.3",
+    "husky": "^8.0.0",
+    "less": "^4.1.1",
+    "less-loader": "^8.1.1",
+    "mocha": "^10.0.0",
+    "node-fetch": "^3.2.10",
+    "npm-run-all": "^4.1.5",
+    "react-dev-utils": "^12.0.1",
+    "rimraf": "^3.0.2",
+    "style-loader": "^2.0.0",
+    "terser-webpack-plugin": "^5.1.4",
+    "typescript": "^4.7.4",
+    "webpack": "^5.74.0",
+    "webpack-cli": "^4.10.0"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.6",
+    "ejs": "^3.1.8",
+    "fs-extra": "^10.1.0",
+    "mustache": "^4.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/duiyuan/preda"
+  }
+}

@@ -1,0 +1,198 @@
+//import SomeApp.SomeContract as SomeAlias;
+
+contract CompileErrorTest
+{
+	@address int32 m_i;
+	
+	@address function f()
+	{
+		int32 u;
+		int32 u;
+		int32 u__;
+		int32 uu = uint32;
+		int32 uu = __block;
+		int16 uu = 1;
+		const array<int32> a;
+		for (uint32 i = 1; ;){
+		}
+		array<int32> b = a;
+
+		for (array<int32> c = a; ;){
+		}
+
+		auto c;
+		
+		return 1;
+	}
+	@address function int32 g()
+	{
+		return;
+		return 2u16;
+	}
+	@address function array<int32> h()
+	{
+		const array<int32> ai;
+		return ai;
+	}
+	
+	@shard function ff()
+	{
+		int32 u;
+		if (u)
+		{
+		}
+		else if (u){
+		}
+		
+		while (u){
+		}
+		
+		do {
+		} while (u);
+
+		address a;
+		relay@a h();
+	}
+
+	@address function gg()
+	{
+		relay@m_i f();
+		address a;
+		relay@a zzz();
+		relay@a m_i();
+		relay@a ff();
+		relay@a g();
+	}
+	
+	@address function fff()
+	{
+		address a;
+		const array<int32> ai;
+		relay@a (array<int32> x = 1){
+			return 0u16;
+		}
+		relay@a (array<int32> x = ai){
+			return 0u16;
+		}
+		token n;
+		relay@a (const token x = n){
+			return 0u16;
+		}
+		
+		continue;
+		break;
+		CompileErrorTest c;
+	}
+
+	@address function CompileErrorTest ggg()
+	{
+	}
+
+	@address function ggg(CompileErrorTest s)
+	{
+	}
+
+	@address function gg__g()
+	{
+	}
+
+	@address function m_i1()
+	{
+	}
+	@address function uint32 gggg() export
+	{
+	}
+	@address function uint16 ffff(const token n) export
+	{
+	}
+	
+	@address function hhh() export
+	{
+	}
+	@address function hhh() export
+	{
+	}
+	@address function hhh(int32 i) export
+	{
+	}
+	
+	@address CompileErrorTest m_s;
+	
+	struct S{
+		CompileErrorTest s;
+		int32 i;
+		int32 i;
+	}
+	
+	@address function uint16 ffff() export 
+	{
+	}
+	
+	struct SS{
+	}
+	
+	enum E{
+		E0,
+		E0
+	}
+	
+	@address function gggg(int32 i)
+	{
+		address a;
+		relay@a (){
+		}
+	}
+	
+	@address function ggggg(){
+	}
+	
+	@shard function ggggg(int32 i) const{
+	}
+	
+	@shard function hhhh()
+	{
+		__block.get_secure_random_number();
+		address a;
+		relay@a (){
+			return 0u16;
+		}
+		
+		gggg();
+		gggg(0u32);
+		ggggg(1,2,3);
+		
+		uint8 i = 10000u8;
+		zzz = 100;
+		
+		int32 z = m_i;
+		ggggg();
+		ggggg(1);
+		
+		E e = E.E1;
+		E e = E();
+		E + 1;
+	}
+	
+	@address function fffff() const
+	{
+		-ggggg();
+		m_i & 2;
+		1 + 2u;
+		E.E0 = E.E0;
+		const int32 i = 1;
+		i = 2;
+		array<int32> ai;
+		ai[10];
+		map<address, int32> mai;
+		mai[3];
+		m_i();
+		ggggg();
+		S s;
+		s.zz;
+		m_i ? m_i : i;
+		true ? m_i : ai;
+		SS ss;
+		CompileErrorTest.SS ss;
+		array<SS> ass;
+	}
+}

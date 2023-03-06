@@ -1,0 +1,1 @@
+// emcc -v -Oz --profiling-funcs --no-entry -DNDEBUG -sMAIN_MODULE=2 -fvisibility=hidden -sERROR_ON_UNDEFINED_SYMBOLS=0 -sALLOW_MEMORY_GROWTH -I./ -std=c++17 -o./contract_wasm_main.wasm ./contract_wasm_main.cpp

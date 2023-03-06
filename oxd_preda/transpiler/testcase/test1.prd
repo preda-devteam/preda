@@ -1,0 +1,127 @@
+contract MyContract{
+	@address uint32 i;
+	@address string s;
+	@address address addr;
+	@address array<int32> m_v;
+	@address function a() const{
+		int32 x;
+		//m_v[1u] = x;			// Compile error, this function is const, so access to m_v is const, hence m_v[1u] is const and cannot be used as a modifiable lvalue
+		x = m_v[1u];			// This is allowed, since m_v[1u] is only used as rvalue.
+	}
+	@address function f() const {
+		//i = 0u;
+		hash h0;
+		hash h1;
+		h0 = h1;
+		if (h0 == h1 && h0 != h1) {}
+		
+		blob b0;
+		blob b1;
+		b0 = b1;
+		if (b0 == b1 || !(b0 != b1)) {}
+		bigint bi0;
+		bigint bi1;
+		bi0 = bigint(1);
+		bi1 = bigint(2);
+		bi0 += bi1;
+		uint64 r;
+		r = uint64(bi0);
+	}
+	@address function f1() {
+		i = 0x10u32;
+		int16 j;
+		j = int16(i);
+		i = uint32(32132132i64);
+		s = "this is a string";
+	}
+	@address function f(uint32 x){
+		//addr = msg.sender;
+	}
+	@address function f(uint16 x){
+		//s = abi.encodePacked("653rhytgf");
+	}
+	@address function bool g() const
+	{
+		bool z;
+		z = true;
+		//z += false;				// Compile error
+		if (true)
+		{
+			return true;			// This doesn't count as returning at end of function
+		}
+		return true;				// If we comment this line, a compile error will be generated
+	}
+	
+	@address function f(const uint32 x, uint32 y) const {
+		//require(1 > 2);
+		int32 ii;
+		//i = int32(keccak256("stream"));
+		
+		if (true) {
+			f();
+		}
+		else {
+			f();
+		}
+		
+		if (true) {
+			f();
+			//continue;		// Compile error
+			//break;		// Compile error
+		}
+		//else i++;		// Compile error
+		
+		//if (2){		// Compile error
+		//}
+		
+		if (false){
+		}
+		else if (true){
+		}
+		
+		while(true){
+			{
+			f();break;
+			}
+		}
+		
+		do{{
+			f();continue;}
+		}while (true);
+		
+		uint64 j;
+		array<int32> v;
+		map<int32, uint64> m;
+		for (uint32 iii = 0u32; iii < v.length(); iii++)
+		{
+			{j += m[v[iii]];}
+			if (false){
+				continue;
+			}
+		}
+
+		//for (f();f();f())		// compile error
+		//{
+		//}
+
+		for (f();g();f())
+		{
+			{}{}{}{{{}}}
+		}
+		//int32 x;				// compile error, "x" is already defined in function parameter list
+		{
+			//int32 x;				// compile error, "x" is already defined in function parameter list
+			{
+				//int32 x;				// compile error, "x" is already defined in function parameter list
+				{
+					//uint32 x;				// compile error, "x" is already defined in function parameter list
+					{
+						{
+							//uint64 x;				// compile error, "x" is already defined in function parameter list
+						}
+					}
+				}
+			}
+		}
+	}
+}

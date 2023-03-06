@@ -1,0 +1,118 @@
+contract MyContract{
+
+	struct S0{
+		int32 i;
+	}
+	struct S{
+		//S s1;		// compile error
+		S0 s0;
+		int32 s2;
+	}
+
+	@address function s()
+	{
+		S ss;
+		ss.s0.i = 1;
+		t();
+	}
+	
+	@address function t()
+	{
+		s();
+	}
+	
+	enum MyEnum{
+		X,
+		Y
+	}
+	@address map<int32, uint64> m;
+	
+	@address function TestEnum()
+	{
+		map<int32, uint64> m_local;
+
+		MyEnum e;
+		e = MyEnum.X;
+		//e = 1;		// Error
+		e = MyEnum.Y;
+		if (e == MyEnum.Y){
+			//Y = e;	// Compile error
+		}
+	}
+	
+	@address function TestBlock()
+	{
+		uint64 x;
+		x = __block.get_height();
+		uint32 y;
+		y = __block.get_shard_index();
+		y = __block.get_shard_order();
+		y = __block.get_parent_shard_index();
+		y = __block.get_parent_shard_order();
+		hash z;
+		z = __block.get_parent_block_hash();
+		x = __block.get_timestamp();
+		x = __block.get_random_number();
+		x = __block.get_secure_random_number();
+		
+		//uint16 block;		// compile error
+	}
+	
+	@address function array<int32> tt()
+	{
+		array<int32> ret;
+		return ret;
+	}
+	
+	@address function TestTransaction()
+	{
+		tt();
+		transaction_type type;
+		type = __transaction.get_type();
+		//__transaction.GetType() = type;			// compile error
+		if (type == transaction_type.relay_type) {}
+
+		address addr;
+		addr = __transaction.get_self_address();
+		
+		uint64 timestamp;
+		timestamp = __transaction.get_timestamp();
+		
+		array<address> signers;
+		signers = __transaction.get_signers();
+		addr = __transaction.get_signers()[0u];
+		//__transaction.GetSigners()[0u] = addr;		// compile error
+		
+		__transaction.verify_signer(0u);
+		__transaction.verify_signer(addr);
+		
+		uint32 i;
+		i = __transaction.get_originated_shard_index();
+		i = __transaction.get_originated_shard_order();
+	}
+	
+	@address function TestEvent()
+	{
+		uievent_state userState;
+		userState = __event.get_user_state();
+		if (userState == uievent_state.locked) {}
+		__event.push(0u, "push data");
+		__event.notify(0u, "notify data");
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

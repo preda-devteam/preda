@@ -1,0 +1,236 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "predalog",
+  "scopeName": "source.predalog",
+  "patterns": [
+    { "include": "#string" },
+    { "include": "#quote" },
+    { "include": "#brackets" },
+    { "include": "#key-pairs" },
+    { "include": "#punctuation" },
+    { "include": "#function-call" },
+    { "include": "#declare-number" },
+    { "include": "#exception" },
+    { "include": "#date-time" },
+    { "include": "#namespace" }
+  ],
+  "repository": {
+    "quote": {
+      "patterns": [
+        {
+          "match": "\\\".*?\\\"",
+          "name": "string.quoted.double.predalog"
+        },
+        {
+          "match": "\\'.*?\\'",
+          "name": "string.quoted.single.predalog"
+        }
+      ]
+    },
+    "string": {
+      "patterns": [
+        {
+          "match": "(\\[PRD\\]:)(.*)",
+          "name": "markup.raw.predalog",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#square-bracket"
+                }
+              ]
+            },
+            "2": {
+              "patterns": [
+                {
+                  "include": "#namespace"
+                },
+                {
+                  "include": "#short-address"
+                },
+                {
+                  "include": "#shard-height"
+                },
+                {
+                  "include": "#declare-number"
+                },
+                {
+                  "include": "#key-pairs"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "match": "\\b(?:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}))\\b",
+          "name": "support.class.predalog"
+        },
+        {
+          "match": "contract\\s`\\w+`:.*",
+          "name": "markup.heading.predalog"
+        },
+        {
+          "match": "\\b(?:(hint|info|information|true|log|viz))(:|\\b)",
+          "name": "keyword.predalog"
+        },
+        {
+          "match": "^[Ss]topwatch(.*)",
+          "name": "keyword.control.untitled"
+        },
+        {
+          "match": "[\\s\\S]+\\.\\.\\.$",
+          "name": "keyword.control.operator"
+        }
+      ]
+    },
+
+    "date-time": {
+      "patterns": [
+        {
+          "match": "\\[\\d{2,4}-\\d{2}-\\d{2}(?:\\s\\d{2}:\\d{2}:\\d{2}?)\\]",
+          "name": "constant.numeric.predalog"
+        },
+        {
+          "match": "\\b(((0|1)?[0-9][1-2]?)|(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sept(ember)?|Oct(ober)?|Nov(ember)?|Dec(ember)?))[/|\\-|\\.| ]([0-2]?[0-9]|[3][0-1])[/|\\-|\\.| ]((19|20)?[0-9]{2})\\b",
+          "name": "constant.numeric.predalog"
+        },
+        {
+          "match": "\\b((19|20)?[0-9]{2}[/|\\-|\\.| ](((0|1)?[0-9][1-2]?)|(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sept(ember)?|Oct(ober)?|Nov(ember)?|Dec(ember)?))[/|\\-|\\.| ]([0-2]?[0-9]|[3][0-1]))\\b",
+          "name": "constant.numeric.predalog"
+        },
+        {
+          "match": "\\b([0-2]?[0-9]|[3][0-1])[/|\\-|\\.| ](((0|1)?[0-9][1-2]?)|(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|Jun(e)?|Jul(y)?|Aug(ust)?|Sept(ember)?|Oct(ober)?|Nov(ember)?|Dec(ember)?))[/|\\-|\\.| ]((19|20)?[0-9]{2})\\b",
+          "name": "constant.numeric.predalog"
+        },
+        {
+          "match": "\\b([0|1]?[0-9]|2[0-3])\\:[0-5][0-9](\\:[0-5][0-9])?( ?(?:(a|p)m?))?( ?[+-]?[0-9]*)?\\b",
+          "name": "constant.numeric.predalog"
+        }
+      ]
+    },
+
+    "exception": {
+      "patterns": [
+        {
+          "match": "\\b((\\.)*[a-zA-Z]|[0-9])*(compile\\s)?(Exception|Error|Failure|Fail(?:ed)?)\\b",
+          "name": "invalid"
+        },
+        {
+          "match": "\\b(?:(Down|Error|Failure|Fail|Fatal))(\\:|\\b)",
+          "name": "invalid.illegal"
+        }
+      ]
+    },
+
+    "punctuation": {
+      "patterns": [
+        {
+          "match": ";",
+          "name": "punctuation.terminator.statement.predalog"
+        },
+        {
+          "match": "\\.",
+          "name": "punctuation.accessor.predalog"
+        }
+      ]
+    },
+    "brackets": {
+      "patterns": [
+        {
+          "include": "#log-message"
+        },
+        {
+          "include": "#square-bracket"
+        },
+        {
+          "include": "#short-address"
+        },
+        {
+          "name": "constant.numeric.predalog",
+          "match": "\\b\\d+\\)\\s?"
+        }
+      ]
+    },
+
+    "log-message": {
+      "patterns": [
+        {
+          "include": "#highlight-log"
+        },
+        {
+          "include": "#error-log"
+        },
+        {
+          "include": "#warning-log"
+        },
+        {
+          "include": "#hint-log"
+        }
+      ]
+    },
+
+    "highlight-log": {
+      "match": "\\[(HIGHLIGHT|highlight)\\]:?\\s?.*$",
+      "name": "support.function.predalog"
+    },
+    "error-log": {
+      "match": "\\[(ERROR|error)\\]:?\\s?.*$",
+      "name": "invalid.predalog"
+    },
+
+    "warning-log": {
+      "match": "\\[(WARNING|warning)\\]:?\\s?.*$",
+      "name": "markup.deleted.predalog"
+    },
+    "hint-log": {
+      "match": "\\[(HINT|INFO|hint|info)\\]:?\\s?.*$",
+      "name": "keyword.predalog"
+    },
+
+    "square-bracket": {
+      "match": "\\[\\w+\\]:",
+      "name": "support.function.predalog"
+    },
+
+    "short-address": {
+      "match": "(#\\d+)?\\[[\\w\\:]+\\]",
+      "name": "constant.numeric.predalog"
+    },
+    "shard-height": {
+      "match": "(#[0-9gG]+)?(-\\w+)",
+      "name": "constant.numeric.predalog"
+    },
+
+    "declare-number": {
+      "patterns": [
+        {
+          "include": "#integer"
+        },
+        {
+          "include": "#number-decimal"
+        }
+      ]
+    },
+    "number-decimal": {
+      "match": "\\b\\d+\\.\\d*?\\b",
+      "name": "constant.numeric.predalog"
+    },
+    "integer": {
+      "match": "\\b\\d+\\b",
+      "name": "constant.numeric.predalog"
+    },
+    "namespace": {
+      "match": "\\b(?:(([a-zA-Z]|[0-9]|[_|-])*(\\.([a-zA-Z]|[0-9]|[_|-])*)+))\\b",
+      "name": "support.type.predalog"
+    },
+    "key-pairs": {
+      "patterns": [
+        {
+          "match": "((-?[a-zA-Z_]\\s?)|[0-9])+\\:",
+          "name": "storage.predalog"
+        },
+        { "match": "\\b\\w+#\\d+\\:", "name": "storage.predalog" }
+      ]
+    }
+  }
+}
