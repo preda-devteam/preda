@@ -117,9 +117,12 @@ public:
 	static const LPCSTR		Normal_Append;		
 
 	enum _tagCopyPathOption
-	{	CPOPT_MIRROR		= 0x0001,	///< remove destination items if source don't have them
-		CPOPT_OVERWRITE		= 0x0002,	///< overwrite all files, otherwise only modified files will be overwritten
-		CPOPT_HIDDEN_FILE	= 0x0004,	///< don't ignore hidden files
+	{
+		CPOPT_MIRROR			= 0x0001,	///< remove destination items if source don't have them
+		CPOPT_OVERWRITE			= 0x0002,	///< overwrite existing files if modified, otherwise any existing file will remain untouched
+		CPOPT_OVERWRITE_ALL		= 0x0008,	///< overwrite all existing files, no matter it is modified or not
+		CPOPT_HIDDEN_FILE		= 0x0004,	///< don't ignore hidden files
+											///< **modified** means different file size or last modified time (in second)
 	};
 
 public:

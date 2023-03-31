@@ -1,6 +1,9 @@
-contract Token {
+import Kitty;
+
+contract ERC20 {
     @address bigint balance;
     
+    Kitty.create = Kitty.create()
     @address function bool transfer(address to, bigint amount) export
     {
         if(balance >= amount)

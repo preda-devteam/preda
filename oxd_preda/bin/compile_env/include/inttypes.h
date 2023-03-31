@@ -204,7 +204,7 @@ namespace prlrt {
 
 		this_type operator*(const this_type &rhs) const
 		{
-			if (max_value::value / _v < rhs._v)
+			if (_v != 0 && max_value::value / _v < rhs._v)
 			{
 				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
@@ -258,7 +258,26 @@ namespace prlrt {
 				return this_type(internal_type(0));
 			return this_type(_v >> rhs._v);
 		}
-
+		template<typename T_OtherIntType>
+		this_type operator<<(const T_OtherIntType& rhs) const
+		{
+			int64_t bitShift;
+			if(rhs.ToInt64(bitShift))
+			{
+				return this_type(_v << bitShift);
+			}
+			return this_type(internal_type(0));
+		}
+		template<typename T_OtherIntType>
+		this_type operator>>(const T_OtherIntType& rhs) const
+		{
+			int64_t bitShift;
+			if(rhs.ToInt64(bitShift))
+			{
+				return this_type(_v >> bitShift);
+			}
+			return this_type(internal_type(0));
+		}
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(&);
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(^);
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(| );
@@ -517,73 +536,72 @@ namespace prlrt {
 		}
 	};
 
-	#define LONGINTTEMP(_SIZE) LongIntTemp<_SIZE>
 	#define ____LONGINT_NEGATE_FUNCTION(_SIZE)\
-	static void LongInt_negate(const LONGINTTEMP(_SIZE)& a, LONGINTTEMP(_SIZE)& result){ \
+	static void LongInt_negate(const LongIntInternal<_SIZE>& a, LongIntInternal<_SIZE>& result){ \
 		PREDA_CALL(LongInt_Negate_##_SIZE, &a, &result); \
 	} \
-	static bool LongInt_IsSign(const LONGINTTEMP(_SIZE)& a){ \
+	static bool LongInt_IsSign(const LongIntInternal<_SIZE>& a){ \
 		return PREDA_CALL(LongInt_IsSign_##_SIZE, &a); \
 	}
 	#define ____LONGINT_ALL_FUNCTION(_SIZE, _INT_TYPE)\
-	static void _INT_TYPE##_zero(LONGINTTEMP(_SIZE)& _fStruct){\
+	static void _INT_TYPE##_zero(LongIntInternal<_SIZE>& _fStruct){\
 		PREDA_CALL(_INT_TYPE##_Zero_##_SIZE, &_fStruct);\
 	}\
-	static void _INT_TYPE##_ToString(const LONGINTTEMP(_SIZE)& _fStruct, char* buf){ \
+	static void _INT_TYPE##_ToString(const LongIntInternal<_SIZE>& _fStruct, char* buf){ \
 		PREDA_CALL(_INT_TYPE##_ConvertToString_##_SIZE, &_fStruct, buf); \
 	}\
-    static void _INT_TYPE##_fromInt(LONGINTTEMP(_SIZE)& _fStruct, int64_t in){\
+    static void _INT_TYPE##_fromInt(LongIntInternal<_SIZE>& _fStruct, int64_t in){\
 		PREDA_CALL(_INT_TYPE##_fromInt_##_SIZE, &_fStruct, in);\
 	}\
-    static void _INT_TYPE##_fromUInt(LONGINTTEMP(_SIZE)& _fStruct, uint64_t in){\
+    static void _INT_TYPE##_fromUInt(LongIntInternal<_SIZE>& _fStruct, uint64_t in){\
 		PREDA_CALL(_INT_TYPE##_fromUInt_##_SIZE, &_fStruct, in);\
 	}\
-	static int _INT_TYPE##_toInt64(const LONGINTTEMP(_SIZE)& _fStruct, int64_t& result){\
+	static int _INT_TYPE##_toInt64(const LongIntInternal<_SIZE>& _fStruct, int64_t& result){\
 		return PREDA_CALL(_INT_TYPE##_toInt64_##_SIZE, &_fStruct, &result);\
 	}\
-    static int _INT_TYPE##_toUInt64(const LONGINTTEMP(_SIZE)& _fStruct, uint64_t& result){\
+    static int _INT_TYPE##_toUInt64(const LongIntInternal<_SIZE>& _fStruct, uint64_t& result){\
 		return PREDA_CALL(_INT_TYPE##_toUInt64_##_SIZE, &_fStruct, &result);\
 	}\
-	static void _INT_TYPE##_rightShift(LONGINTTEMP(_SIZE)& a, int64_t shift){\
+	static void _INT_TYPE##_rightShift(LongIntInternal<_SIZE>& a, int64_t shift){\
 		PREDA_CALL(_INT_TYPE##_rightShift_##_SIZE, &a, shift);\
 	}\
-    static void _INT_TYPE##_leftShift(LONGINTTEMP(_SIZE)& a, int64_t shift){\
+    static void _INT_TYPE##_leftShift(LongIntInternal<_SIZE>& a, int64_t shift){\
 		PREDA_CALL(_INT_TYPE##_leftShift_##_SIZE, &a, shift);\
 	}\
-	static uint32_t _INT_TYPE##_GetConvertToStringLen(const LONGINTTEMP(_SIZE)& _fStruct){ \
+	static uint32_t _INT_TYPE##_GetConvertToStringLen(const LongIntInternal<_SIZE>& _fStruct){ \
 		return PREDA_CALL(_INT_TYPE##_GetConvertToStringLen_##_SIZE, &_fStruct); \
 	}\
-	static void _INT_TYPE##_ConvertFromString(LONGINTTEMP(_SIZE)& _fStruct, const char* longint_literal){ \
+	static void _INT_TYPE##_ConvertFromString(LongIntInternal<_SIZE>& _fStruct, const char* longint_literal){ \
 		PREDA_CALL(_INT_TYPE##_ConvertFromString_##_SIZE, &_fStruct, longint_literal); \
 	}\
-	static void _INT_TYPE##_ConvertFromHexString(LONGINTTEMP(_SIZE)& _fStruct, const char* longint_literal){ \
+	static void _INT_TYPE##_ConvertFromHexString(LongIntInternal<_SIZE>& _fStruct, const char* longint_literal){ \
 		PREDA_CALL(_INT_TYPE##_ConvertFromHexString_##_SIZE, &_fStruct, longint_literal); \
 	}\
-	static void _INT_TYPE##_add(const LONGINTTEMP(_SIZE)& a, const LONGINTTEMP(_SIZE)& b, LONGINTTEMP(_SIZE)& result){ \
+	static void _INT_TYPE##_add(const LongIntInternal<_SIZE>& a, const LongIntInternal<_SIZE>& b, LongIntInternal<_SIZE>& result){ \
 		PREDA_CALL(_INT_TYPE##_Add_##_SIZE, &a, &b, &result); \
 	}\
-	static void _INT_TYPE##_sub(const LONGINTTEMP(_SIZE)& a, const LONGINTTEMP(_SIZE)& b, LONGINTTEMP(_SIZE)& result){ \
+	static void _INT_TYPE##_sub(const LongIntInternal<_SIZE>& a, const LongIntInternal<_SIZE>& b, LongIntInternal<_SIZE>& result){ \
 		PREDA_CALL(_INT_TYPE##_Sub_##_SIZE, &a, &b, &result); \
 	}\
-	static void _INT_TYPE##_mul(const LONGINTTEMP(_SIZE)& a, const  LONGINTTEMP(_SIZE)& b, LONGINTTEMP(_SIZE)& result){ \
+	static void _INT_TYPE##_mul(const LongIntInternal<_SIZE>& a, const  LongIntInternal<_SIZE>& b, LongIntInternal<_SIZE>& result){ \
 		PREDA_CALL(_INT_TYPE##_Mul_##_SIZE, &a, &b, &result); \
 	}\
-	static void _INT_TYPE##_div(const LONGINTTEMP(_SIZE)& a, const  LONGINTTEMP(_SIZE)& b, LONGINTTEMP(_SIZE)& result){ \
+	static void _INT_TYPE##_div(const LongIntInternal<_SIZE>& a, const  LongIntInternal<_SIZE>& b, LongIntInternal<_SIZE>& result){ \
 		PREDA_CALL(_INT_TYPE##_Div_##_SIZE, &a, &b, &result); \
 	}\
-	static void _INT_TYPE##_mod(const LONGINTTEMP(_SIZE)& a, const  LONGINTTEMP(_SIZE)& b, LONGINTTEMP(_SIZE)& result){ \
+	static void _INT_TYPE##_mod(const LongIntInternal<_SIZE>& a, const  LongIntInternal<_SIZE>& b, LongIntInternal<_SIZE>& result){ \
 		PREDA_CALL(_INT_TYPE##_Mod_##_SIZE, &a, &b, &result); \
 	}\
-	static int _INT_TYPE##_compare(const LONGINTTEMP(_SIZE)& a, const LONGINTTEMP(_SIZE)& b){ \
+	static int _INT_TYPE##_compare(const LongIntInternal<_SIZE>& a, const LongIntInternal<_SIZE>& b){ \
 		return 	PREDA_CALL(_INT_TYPE##_Compare_##_SIZE, &a, &b); \
 	}\
-	static int _INT_TYPE##_isZero(const LONGINTTEMP(_SIZE)& a){ \
+	static int _INT_TYPE##_isZero(const LongIntInternal<_SIZE>& a){ \
 		return 	PREDA_CALL(_INT_TYPE##_IsZero_##_SIZE, &a); \
 	}\
-	static void _INT_TYPE##_SetMax(LONGINTTEMP(_SIZE)& a){ \
+	static void _INT_TYPE##_SetMax(LongIntInternal<_SIZE>& a){ \
 		return 	PREDA_CALL(_INT_TYPE##_SetMax_##_SIZE, &a); \
 	}\
-	static void _INT_TYPE##_SetMin(LONGINTTEMP(_SIZE)& a){ \
+	static void _INT_TYPE##_SetMin(LongIntInternal<_SIZE>& a){ \
 		return 	PREDA_CALL(_INT_TYPE##_SetMin_##_SIZE, &a); \
 	}
 
@@ -598,7 +616,6 @@ namespace prlrt {
 		____LONGINT_NEGATE_FUNCTION(256);
 		____LONGINT_NEGATE_FUNCTION(512);
 	};
-	using impl_type = ____longintType;
 
 	template <uint32_t Size> constexpr type_identifier_enum ____get_type_identifier_enum_of_long_int_type();
 	template <> constexpr type_identifier_enum ____get_type_identifier_enum_of_long_int_type<128>() { return type_identifier_enum::___int128; }
@@ -610,9 +627,9 @@ namespace prlrt {
 	template <> constexpr type_identifier_enum ____get_type_identifier_enum_of_long_uint_type<512>() { return type_identifier_enum::___uint512; }
 
 	template<short Size>
-	constexpr prlrt::LongIntTemp<Size> ____get_max_value_of_longint()
+	constexpr prlrt::LongIntInternal<Size> ____get_max_value_of_longint()
 	{
-		prlrt::LongIntTemp<Size> max;
+		prlrt::LongIntInternal<Size> max;
 		for(int i = 0; i < (Size / 8) - 1; i++)
 		{
 			max._Data[i] = 0xff;
@@ -621,16 +638,16 @@ namespace prlrt {
 		return max;
 	}
 	template<short Size>
-	constexpr prlrt::LongIntTemp<Size> ____get_min_value_of_longint()
+	constexpr prlrt::LongIntInternal<Size> ____get_min_value_of_longint()
 	{
-		prlrt::LongIntTemp<Size> min;
+		prlrt::LongIntInternal<Size> min;
 		min._Data[Size / 8 - 1] = 0x80;
 		return min;
 	}
 	template<short Size>
-	constexpr prlrt::LongIntTemp<Size> ____get_max_value_of_ulongint()
+	constexpr prlrt::LongIntInternal<Size> ____get_max_value_of_ulongint()
 	{
-		prlrt::LongIntTemp<Size> max;
+		prlrt::LongIntInternal<Size> max;
 		for(int i = 0; i < Size / 8; i++)
 		{
 			max._Data[i] = 0xff;
@@ -642,10 +659,11 @@ namespace prlrt {
 	struct ____longint
 	{
 		using this_type = ____longint<Size>;
-		using internal_type = prlrt::LongIntTemp<Size>;
+		using internal_type = prlrt::LongIntInternal<Size>;
+		using impl_type = ____longintType;
 		using is_value_type = std::true_type;
 		using is_fixed_size = std::true_type;
-    		using fixed_size_in_bytes = std::integral_constant<serialize_size_type, serialize_size_type(sizeof(internal_type))>;
+		using fixed_size_in_bytes = std::integral_constant<serialize_size_type, serialize_size_type(sizeof(internal_type))>;
 		using type_identifier_type = simple_type_type_identifier<____get_type_identifier_enum_of_long_int_type<Size>()>;
 		constexpr static internal_type max_value = ____get_max_value_of_longint<Size>();
 		constexpr static internal_type min_value = ____get_min_value_of_longint<Size>();
@@ -662,7 +680,6 @@ namespace prlrt {
 		internal_type _fStruct;
 		____longint()
 		{
-			impl_type::LongInt_zero(_fStruct);
 		}
 		____longint(const char* longint_literal){
 			int starting_pos = *longint_literal == '-' ? 1 : 0;
@@ -697,13 +714,17 @@ namespace prlrt {
 					throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 				}
 				____longint<T_OtherSize> min;
+				memset(min._fStruct._Data, 0xff, sizeof(min._fStruct._Data));
 				memcpy(min._fStruct._Data, min_value._Data, std::min(sizeof(min_value._Data), sizeof(min._fStruct._Data)));
 				if(min > x)
 				{
 					throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 				}
 			}
-			impl_type::ULongInt_zero(_fStruct);
+			if(impl_type::LongInt_IsSign(x._fStruct))
+			{
+				memset(_fStruct._Data, 0xff, sizeof(_fStruct._Data));
+			}
 			memcpy(_fStruct._Data, x._fStruct._Data, std::min(sizeof(_fStruct._Data), sizeof(x._fStruct._Data)));
 		}
 
@@ -718,7 +739,6 @@ namespace prlrt {
 					throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 				}
 			}
-			impl_type::ULongInt_zero(_fStruct);
 			memcpy(_fStruct._Data, x._fStruct._Data, std::min(sizeof(_fStruct._Data), sizeof(x._fStruct._Data)));
 		}
 
@@ -733,9 +753,9 @@ namespace prlrt {
 		{
 			_fStruct = rhs._fStruct;
 		}
-		void operator=(const internal_type &LongIntTemp)
+		void operator=(const internal_type &rhs)
 		{
-			_fStruct = LongIntTemp;
+			_fStruct = rhs;
 		}
 		void operator++(){
 			if (*this == this_type(max_value))
@@ -835,6 +855,9 @@ namespace prlrt {
 		bool isZero() const{
 			return impl_type::LongInt_isZero(_fStruct);
 		}
+		bool isNegative() const{
+			return impl_type::LongInt_IsSign(_fStruct);
+		}
 		this_type operator/(const this_type &rhs) const{
 			if (rhs.isZero())
 			{
@@ -921,6 +944,7 @@ namespace prlrt {
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(-);
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(*);
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(/);
+		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(%);
 
 		template<typename T_OtherInternal>
 		explicit operator ____int<T_OtherInternal>() { 
@@ -975,14 +999,26 @@ namespace prlrt {
 		}
 	};
 
+#define ULONGINT_BITWISE_OPERATOR(oper)\
+this_type operator oper(const this_type &rhs) const\
+{\
+	this_type result;\
+	for(int i = 0; i < sizeof(result._fStruct._Data)/sizeof(uint8_t); i++)\
+	{\
+		result._fStruct._Data[i] = _fStruct._Data[i] oper rhs._fStruct._Data[i];\
+	}\
+	return result;\
+}
+
 template<short Size>
 	struct ____ulongint
 	{
 		using this_type = ____ulongint<Size>;
+		using impl_type = ____longintType;
 		using is_value_type = std::true_type;
 		using is_fixed_size = std::true_type;
-		using internal_type = prlrt::LongIntTemp<Size>;
-    	using fixed_size_in_bytes = std::integral_constant<serialize_size_type, serialize_size_type(sizeof(internal_type))>;
+		using internal_type = prlrt::LongIntInternal<Size>;
+		using fixed_size_in_bytes = std::integral_constant<serialize_size_type, serialize_size_type(sizeof(internal_type))>;
 		using type_identifier_type = simple_type_type_identifier<____get_type_identifier_enum_of_long_uint_type<Size>()>;
 		constexpr static internal_type max_value = ____get_max_value_of_ulongint<Size>();
 		static constexpr uint32_t get_type_identifier_size()
@@ -997,7 +1033,6 @@ template<short Size>
 		internal_type _fStruct;
 		____ulongint()
 		{
-			impl_type::ULongInt_zero(_fStruct);
 		}
 		____ulongint(const char* longint_literal){
 			if(longint_literal[0] == '0' && (longint_literal[1] == 'x' || longint_literal[0] == 'X'))
@@ -1012,6 +1047,10 @@ template<short Size>
 		}
 		template<typename T_OtherInternal>
 		____ulongint(const ____int<T_OtherInternal>& x){
+			if(x._v < 0)
+			{
+				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+			}
 			impl_type::ULongInt_fromInt(_fStruct, (int64_t)x._v);
 		}
 		template<typename T_OtherInternal>
@@ -1034,7 +1073,6 @@ template<short Size>
 					throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 				}
 			}
-			impl_type::ULongInt_zero(_fStruct);
 			memcpy(_fStruct._Data, x._fStruct._Data, std::min(sizeof(_fStruct._Data), sizeof(x._fStruct._Data)));
 		}
 
@@ -1049,7 +1087,6 @@ template<short Size>
 					throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 				}
 			}
-			impl_type::ULongInt_zero(_fStruct);
 			memcpy(_fStruct._Data, x._fStruct._Data, std::min(sizeof(_fStruct._Data), sizeof(x._fStruct._Data)));
 		}
 
@@ -1197,6 +1234,18 @@ template<short Size>
 			impl_type::ULongInt_rightShift(result._fStruct, bitWidth);
 			return result;
 		}
+		template<typename T_OtherIntType>
+		this_type operator<<(const T_OtherIntType& x)
+		{
+			int64_t bitWidth = x._v;
+			if(bitWidth >= Size)
+			{
+				return ____ulongint();
+			}
+			this_type result = *this;
+			impl_type::ULongInt_leftShift(result._fStruct, bitWidth);
+			return result;
+		}
 		bool ToInt64(int64_t& result) const{
 			if(impl_type::ULongInt_toInt64(_fStruct, result) > 0)
 			{
@@ -1215,6 +1264,15 @@ template<short Size>
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(-);
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(*);
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(/);
+		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(%);
+		ULONGINT_BITWISE_OPERATOR(&);
+		ULONGINT_BITWISE_OPERATOR(^);
+		ULONGINT_BITWISE_OPERATOR(|);
+		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(&);
+		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(^);
+		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(|);
+		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(<<);
+		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(>>);
 
 		template<typename T_OtherInternal>
 		explicit operator ____int<T_OtherInternal>() { 
@@ -1262,7 +1320,7 @@ template<short Size>
 		}
 	};
 }
-
+#undef ULONGINT_BITWISE_OPERATOR
 #undef WRAP_SIMPLE_BINARY_OPERATOR
 #undef EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT
 #undef FORWARD_POST_INC_DEC_TO_PRE_INC_DEC

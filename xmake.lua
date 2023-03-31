@@ -40,6 +40,7 @@ package("wasmtime")
         add_versions("1.0", "d70c8be5757ac1c45bbd8d1673eb2d5fd51bee2a21bbfe060a9c880ba5a3dd10")
     end
     on_install("windows", "linux", "macosx", function(package)
+        os.mkdir(path.join(os.scriptdir(), "oxd_preda", "3rdParty", "wasmtime"))
         os.cp("*", path.join(os.scriptdir(), "oxd_preda", "3rdParty", "wasmtime"))
     end)
 package_end()
@@ -51,6 +52,7 @@ if is_plat("windows") then
         add_urls("https://github.com/preda-devteam/preda/releases/download/mingw64/x86_64-8.1.0-release-win32-seh-rt_v6-rev0.7z")
         add_versions("8.1.0", "73797b9a1d0b007dbdd6f010e6064dc0aa4df835b042f6947f73a3bf9cc348c5")
         on_install(function(package)
+            os.mkdir(path.join(os.scriptdir(), "oxd_preda", "bin", "mingw64"))
             os.cp("*", path.join(os.scriptdir(), "oxd_preda", "bin", "mingw64"))
         end)
     package_end()
@@ -69,6 +71,7 @@ package("emscripten")
         add_versions("3.1.24", "d9d7397f3a36ad4b57d848ae7aca6d3c929e43850ddc9afd7106453bd3af886c")
     end
     on_install("windows", "linux", "macosx", function(package)
+        os.mkdir(path.join(os.scriptdir(), "oxd_preda", "bin", "emscripten"))
         os.mkdir(path.join(os.scriptdir(), "oxd_preda", "bin", "emscripten", "3.1.24"))
         os.cp("*", path.join(os.scriptdir(), "oxd_preda", "bin", "emscripten", "3.1.24"))
     end)
@@ -88,6 +91,7 @@ package("solc")
         add_versions("v0.8.18", "8f15287c799ad2b33f241d1252226abda5d4bc3ef6be40b946923178fc57d397")
     end
     on_install("windows", "linux", "macosx", function(package)
+        os.mkdir(path.join(os.scriptdir(), "oxd_preda", "bin", "solc"))
         if is_plat("windows") then
             os.cp("./../solc-windows.exe", path.join(os.scriptdir(), "oxd_preda", "bin", "solc"))
         elseif is_plat("linux") then

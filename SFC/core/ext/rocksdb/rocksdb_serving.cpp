@@ -73,7 +73,7 @@ bool RocksDBServe::RocksDBHandler::OnRequestList(inet::HttpResponse& resp, bool 
 
 	resp.SendChuncked_Begin(inet::TinyHttpd::MIME_STRING_JSON);
 	resp.SendChuncked(no_val?"[":"{");
-	ext::RocksCursor c = k.IsEmpty()?pDB->First():pDB->Find(SliceValue(k));
+	ext::RocksCursor c = k.IsEmpty()?pDB->First():pDB->Seek(SliceValue(k));
 	for(int i=0; i<n && c.IsValid(); i++)
 	{
 		auto key = c.Key().ToString();

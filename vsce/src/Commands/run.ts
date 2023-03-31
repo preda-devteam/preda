@@ -11,6 +11,7 @@ import { outputToChannel } from "../utils/chsimu";
 
 export default async (uri: vscode.Uri, context: vscode.ExtensionContext) => {
   try {
+    console.log('run', context)
     const fileContext = getCurrentActiveFileAndFolder(uri);
     const { currentFolder } = fileContext;
     let { currentFileName, currentFilePath, exist } = findTSByPrdName(uri);
@@ -43,7 +44,7 @@ export default async (uri: vscode.Uri, context: vscode.ExtensionContext) => {
       }
     } else {
       vscode.window.showErrorMessage(
-        "Run Chain Simulator: only run with script file"
+        "Run Chain Simulator: only run with prd(ts) file"
       );
     }
   } catch (e: any) {

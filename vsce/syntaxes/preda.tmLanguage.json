@@ -153,11 +153,11 @@
       ]
     },
     "number-decimal": {
-      "match": "\\b(\\d+(((u|i)(8|16|32|64)?)|ib)?)\\b",
+      "match": "\\b(\\d+(((u|i)(8|16|32|64|128|256)?)|ib)?)\\b",
       "name": "constant.numeric.decimal.preda"
     },
     "number-hex": {
-      "match": "\\b(0[xX][a-fA-F0-9]+)(((u|i)(8|16|32|64))|ib)?\\b",
+      "match": "\\b(0[xX][a-fA-F0-9]+)(((u|i)(8|16|32|64|128|256))|ib)?\\b",
       "name": "constant.numeric.hexadecimal.preda"
     },
     "number-float": {
@@ -197,10 +197,19 @@
           "name": "support.type.primitive.preda"
         },
         {
-          "match": "\\b([a-zA-Z_]\\w*)\\s+([a-zA-Z_]\\w*)\\s+\\=",
+          "match": "\\b([a-zA-Z_]\\w*)+(\\.)?([a-zA-Z_]\\w*)*(\\s+)([a-zA-Z_]\\w*)\\s+\\=\\s([a-zA-Z_]\\w*)+\\.([a-zA-Z_]\\w*)",
           "captures": {
             "1": {
               "name": "support.type.primitive.preda"
+            },
+            "3": {
+              "name": "support.type.primitive.preda"
+            },
+            "6": {
+              "name": "support.type.primitive.preda"
+            },
+            "7": {
+              "name": "entity.name.function.preda"
             }
           }
         }

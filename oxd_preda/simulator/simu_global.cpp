@@ -514,7 +514,8 @@ void getVarNameType(const rt::String_Ref* varArr, uint32_t& idx, rt::String& var
 	}
 	else if (curType == "map" && idx + 3 <= size)
 	{
-		varType = "map (" + varArr[idx++] + " : " + varArr[idx++] + ")";
+		varType = "map (" + varArr[idx++] + " : ";
+		varType += varArr[idx++] + ")";
 		varName = varArr[idx++];
 	}
 	else

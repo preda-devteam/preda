@@ -30,6 +30,12 @@ namespace prlrt {
 	{
 		if (m_bigNum.GetLength() > 1)
 			return m_bigNum.GetSign() ? -1 : 1;
+		if ((m_bigNum.GetLength() && *m_bigNum.Data() == 0) || m_bigNum.GetLength() == 0)
+		{
+			*out = 0;
+			return 0;
+		}
+
 		if (m_bigNum.GetSign())
 		{
 			if (*m_bigNum.Data() > 0x8000000000000000ULL)
@@ -57,8 +63,6 @@ namespace prlrt {
 
 		if (m_bigNum.GetSign())
 			return -1;
-		if (*m_bigNum.Data() >= 0x8000000000000000ULL)
-			return 1;
 		*out = *m_bigNum.Data();
 		return 0;
 	}
@@ -113,6 +117,14 @@ namespace prlrt {
 		rvm::BigNumMutable tmp;
 		tmp.Div(a->m_bigNum, b->m_bigNum, &m_bigNum);
 	}
+	void CBigInt::ShiftRightInplace(int a)
+	{
+		m_bigNum >>= a;
+	}
+	void CBigInt::ShiftLeftInplace(int a)
+	{
+		m_bigNum <<= a;
+	}
 	void CBigInt::Negate(const CBigInt* a)
 	{
 		m_bigNum = a->m_bigNum;
@@ -122,7 +134,10 @@ namespace prlrt {
 	{
 		m_bigNum.FlipSign();
 	}
-
+	bool CBigInt::IsNegative()
+	{
+		return m_bigNum.IsNegative();
+	}
 	// compare
 	int CBigInt::Compare(const CBigInt* a) // a < b:-1, a == b:0, a > b:1
 	{

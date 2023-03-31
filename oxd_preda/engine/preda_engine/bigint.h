@@ -36,8 +36,11 @@ namespace prlrt {
 		void Div_Uint32(const CBigInt* a, uint32_t b, uint32_t* remainder = nullptr);
 		void Div(const CBigInt* a, const CBigInt* b, CBigInt* remainder = nullptr);
 		void Mod(const CBigInt* a, const CBigInt* b);
+		void ShiftRightInplace(int a);
+		void ShiftLeftInplace(int a);
 		void Negate(const CBigInt* a);
 		void NegateInplace();
+		bool IsNegative();
 
 		// compare
 		int Compare(const CBigInt* a); // a < b:-1, a == b:0, a > b:1

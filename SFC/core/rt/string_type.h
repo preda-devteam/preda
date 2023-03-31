@@ -666,7 +666,7 @@ public:
 							if (*(--s)==(char)'-') neg = true;
 						}
 					}
-					else if (!rt::NumericTraits<T>::IsSigned && (*(--s) == (char)'-')) return -1;
+					else if (!rt::NumericTraits<T>::IsSigned && (s - _SC::_p) >= 1 && (*(s-1) == (char)'-')) return -1;
 					// check if there is leading non-numeric
 					if(!ALLOW_LEADING_NON_NUMERIC)
 					{

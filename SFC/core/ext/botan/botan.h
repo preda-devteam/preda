@@ -111,7 +111,7 @@ public:
 *  @{
 */
 
-inline void Randomize(LPVOID p, UINT len) { if (os::Randomize(p, len))return; Botan::AutoSeeded_RNG().randomize((LPBYTE)p, len); }
+inline void Randomize(LPVOID p, UINT len) { if(os::Randomize(p, len))return; Botan::AutoSeeded_RNG().randomize((LPBYTE)p, len); }
 
 template<typename T>
 inline void Randomize(T& d){ Randomize(&d, sizeof(T)); }

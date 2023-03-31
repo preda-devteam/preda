@@ -75,7 +75,7 @@ public:
 
 private:
 	std::vector<transpiler::FunctionRef> m_exportedFunctions;
-
+	ForwardDeclaredContractFunction* m_curFunc; //current processing function in TraverseAllFunctions()
 public:
 	struct ExportedFunctionMeta
 	{
@@ -172,18 +172,19 @@ private:
 
 	struct PendingRelayLambda
 	{
-		PendingRelayLambda(PredaParser::RelayLambdaDefinitionContext *ctx, const std::vector<transpiler::QualifiedConcreteType> &types, RelayType type, size_t slot)
-			: pDefinitionCtx(ctx), paramTypes(types), relayType(type), exportFuncSlot(slot)
+		PendingRelayLambda(PredaParser::RelayLambdaDefinitionContext *ctx, const std::vector<transpiler::QualifiedConcreteType> &types, RelayType type, size_t slot, ForwardDeclaredContractFunction* base)
+			: pDefinitionCtx(ctx), paramTypes(types), relayType(type), exportFuncSlot(slot), baseFunc(base)
 		{
 		}
 		PredaParser::RelayLambdaDefinitionContext *pDefinitionCtx;
 		std::vector<transpiler::QualifiedConcreteType> paramTypes;
 		RelayType relayType;
 		size_t exportFuncSlot;
+		ForwardDeclaredContractFunction* baseFunc; //function name where the relay lambda is defined
 	};
 
 	std::vector<PendingRelayLambda> m_pendingRelayLambdas;
-	size_t DeclareRelayLambdaFunction(PredaParser::RelayLambdaDefinitionContext *ctx, const std::vector<transpiler::QualifiedConcreteType> &paramTypes, RelayType type);
+	size_t DeclareRelayLambdaFunction(PredaParser::RelayLambdaDefinitionContext *ctx, const std::vector<transpiler::QualifiedConcreteType> &paramTypes, RelayType type, ForwardDeclaredContractFunction* base);
 	void DefinePendingRelayLambdas();
 
 private:

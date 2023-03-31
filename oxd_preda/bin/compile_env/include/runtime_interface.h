@@ -75,19 +75,19 @@ namespace prlrt {
 
 #pragma pack(push, 1)
 	template<int bitWidth>
-	struct PrecisionFloatTemp {
+	struct PrecisionFloatInternal {
 		static const bool __IsPOD = true;
 		uint8_t _Data[bitWidth / 8 + 4];
-		PrecisionFloatTemp<bitWidth>() {
+		PrecisionFloatInternal<bitWidth>() {
 			memset(_Data, 0, bitWidth / 8 + 4);
 		}
 	};
 
 	template<int Size>
-	struct LongIntTemp{
+	struct LongIntInternal{
 		static const bool __IsPOD = true;
 		uint8_t _Data[Size/8];
-		constexpr LongIntTemp<Size>() : _Data()
+		constexpr LongIntInternal<Size>() : _Data()
 		{
 			for (int i = 0; i < Size / 8; i++)
 			{
@@ -98,43 +98,43 @@ namespace prlrt {
 #pragma pack(pop)
 
 #define FOR_EACH_PREDA_FLOAT_METHOD(V, _BIT)\
-	V(uint32_t, GetConvertToStringLen_##_BIT, const ::prlrt::PrecisionFloatTemp<_BIT>* pftemp)\
-	V(void, ConvertToString_##_BIT, const ::prlrt::PrecisionFloatTemp<_BIT>* pftemp, char* buf)\
-	V(void, ConvertFromString_##_BIT, ::prlrt::PrecisionFloatTemp<_BIT>* pftemp, const char* float_literal)\
-	V(void, Float_Add_##_BIT, const ::prlrt::PrecisionFloatTemp<_BIT>* a, const ::prlrt::PrecisionFloatTemp<_BIT>* b, ::prlrt::PrecisionFloatTemp<_BIT>* result)\
-	V(void, Float_Sub_##_BIT, const ::prlrt::PrecisionFloatTemp<_BIT>* a, const ::prlrt::PrecisionFloatTemp<_BIT>* b, ::prlrt::PrecisionFloatTemp<_BIT>* result)\
-	V(void, Float_Mul_##_BIT, const ::prlrt::PrecisionFloatTemp<_BIT>* a, const ::prlrt::PrecisionFloatTemp<_BIT>* b, ::prlrt::PrecisionFloatTemp<_BIT>* result)\
-	V(void, Float_Div_##_BIT, const ::prlrt::PrecisionFloatTemp<_BIT>* a, const ::prlrt::PrecisionFloatTemp<_BIT>* b, ::prlrt::PrecisionFloatTemp<_BIT>* result)\
-	V(void, Float_Zero_##_BIT, ::prlrt::PrecisionFloatTemp<_BIT>* a)\
-	V(bool, Float_IsZero_##_BIT, const ::prlrt::PrecisionFloatTemp<_BIT>* a)\
-	V(void, Float_Negate_##_BIT, const ::prlrt::PrecisionFloatTemp<_BIT>* a, ::prlrt::PrecisionFloatTemp<_BIT>* result)\
-	V(int, Float_Compare_##_BIT, const ::prlrt::PrecisionFloatTemp<_BIT>* a, const ::prlrt::PrecisionFloatTemp<_BIT>* b)\
+	V(uint32_t, GetConvertToStringLen_##_BIT, const ::prlrt::PrecisionFloatInternal<_BIT>* pftemp)\
+	V(void, ConvertToString_##_BIT, const ::prlrt::PrecisionFloatInternal<_BIT>* pftemp, char* buf)\
+	V(void, ConvertFromString_##_BIT, ::prlrt::PrecisionFloatInternal<_BIT>* pftemp, const char* float_literal)\
+	V(void, Float_Add_##_BIT, const ::prlrt::PrecisionFloatInternal<_BIT>* a, const ::prlrt::PrecisionFloatInternal<_BIT>* b, ::prlrt::PrecisionFloatInternal<_BIT>* result)\
+	V(void, Float_Sub_##_BIT, const ::prlrt::PrecisionFloatInternal<_BIT>* a, const ::prlrt::PrecisionFloatInternal<_BIT>* b, ::prlrt::PrecisionFloatInternal<_BIT>* result)\
+	V(void, Float_Mul_##_BIT, const ::prlrt::PrecisionFloatInternal<_BIT>* a, const ::prlrt::PrecisionFloatInternal<_BIT>* b, ::prlrt::PrecisionFloatInternal<_BIT>* result)\
+	V(void, Float_Div_##_BIT, const ::prlrt::PrecisionFloatInternal<_BIT>* a, const ::prlrt::PrecisionFloatInternal<_BIT>* b, ::prlrt::PrecisionFloatInternal<_BIT>* result)\
+	V(void, Float_Zero_##_BIT, ::prlrt::PrecisionFloatInternal<_BIT>* a)\
+	V(bool, Float_IsZero_##_BIT, const ::prlrt::PrecisionFloatInternal<_BIT>* a)\
+	V(void, Float_Negate_##_BIT, const ::prlrt::PrecisionFloatInternal<_BIT>* a, ::prlrt::PrecisionFloatInternal<_BIT>* result)\
+	V(int, Float_Compare_##_BIT, const ::prlrt::PrecisionFloatInternal<_BIT>* a, const ::prlrt::PrecisionFloatInternal<_BIT>* b)\
 
 #define FOR_EACH_LONGINT_METHOD(V, _SIZE, _INT_TYPE) \
-	V(void, _INT_TYPE##_Zero_##_SIZE, ::prlrt::LongIntTemp<_SIZE>* a)\
-	V(void, _INT_TYPE##_ConvertFromString_##_SIZE, ::prlrt::LongIntTemp<_SIZE>* a, const char* longint_literal)\
-	V(void, _INT_TYPE##_fromInt_##_SIZE, ::prlrt::LongIntTemp<_SIZE>* a, int64_t in)\
-	V(void, _INT_TYPE##_fromUInt_##_SIZE, ::prlrt::LongIntTemp<_SIZE>* a, uint64_t in)\
-	V(int, _INT_TYPE##_toInt64_##_SIZE, const ::prlrt::LongIntTemp<_SIZE>* a, int64_t* result)\
-	V(int, _INT_TYPE##_toUInt64_##_SIZE, const ::prlrt::LongIntTemp<_SIZE>* a, uint64_t* result)\
-	V(void, _INT_TYPE##_rightShift_##_SIZE, ::prlrt::LongIntTemp<_SIZE>* a, int64_t shift)\
-	V(void, _INT_TYPE##_leftShift_##_SIZE, ::prlrt::LongIntTemp<_SIZE>* a, int64_t shift)\
-	V(void, _INT_TYPE##_ConvertFromHexString_##_SIZE, ::prlrt::LongIntTemp<_SIZE>* a, const char* longint_literal)\
-	V(void, _INT_TYPE##_ConvertToString_##_SIZE, const ::prlrt::LongIntTemp<_SIZE>* a, char* buf)\
-	V(uint32_t, _INT_TYPE##_GetConvertToStringLen_##_SIZE, const ::prlrt::LongIntTemp<_SIZE>* a)\
-	V(bool, _INT_TYPE##_IsZero_##_SIZE, const ::prlrt::LongIntTemp<_SIZE>* a)\
-	V(void, _INT_TYPE##_Add_##_SIZE, const ::prlrt::LongIntTemp<_SIZE>* a, const ::prlrt::LongIntTemp<_SIZE>* b, ::prlrt::LongIntTemp<_SIZE>* result)\
-	V(void, _INT_TYPE##_Sub_##_SIZE, const ::prlrt::LongIntTemp<_SIZE>* a, const ::prlrt::LongIntTemp<_SIZE>* b, ::prlrt::LongIntTemp<_SIZE>* result)\
-	V(void, _INT_TYPE##_Mul_##_SIZE, const ::prlrt::LongIntTemp<_SIZE>* a, const ::prlrt::LongIntTemp<_SIZE>* b, ::prlrt::LongIntTemp<_SIZE>* result)\
-	V(void, _INT_TYPE##_Div_##_SIZE, const ::prlrt::LongIntTemp<_SIZE>* a, const ::prlrt::LongIntTemp<_SIZE>* b, ::prlrt::LongIntTemp<_SIZE>* result)\
-	V(void, _INT_TYPE##_Mod_##_SIZE, const ::prlrt::LongIntTemp<_SIZE>* a, const ::prlrt::LongIntTemp<_SIZE>* b, ::prlrt::LongIntTemp<_SIZE>* result)\
-	V(int, _INT_TYPE##_Compare_##_SIZE, const ::prlrt::LongIntTemp<_SIZE>* a, const ::prlrt::LongIntTemp<_SIZE>* b)\
-	V(void, _INT_TYPE##_SetMax_##_SIZE, ::prlrt::LongIntTemp<_SIZE>* a)\
-	V(void, _INT_TYPE##_SetMin_##_SIZE, ::prlrt::LongIntTemp<_SIZE>* a)\
+	V(void, _INT_TYPE##_Zero_##_SIZE, ::prlrt::LongIntInternal<_SIZE>* a)\
+	V(void, _INT_TYPE##_ConvertFromString_##_SIZE, ::prlrt::LongIntInternal<_SIZE>* a, const char* longint_literal)\
+	V(void, _INT_TYPE##_fromInt_##_SIZE, ::prlrt::LongIntInternal<_SIZE>* a, int64_t in)\
+	V(void, _INT_TYPE##_fromUInt_##_SIZE, ::prlrt::LongIntInternal<_SIZE>* a, uint64_t in)\
+	V(int, _INT_TYPE##_toInt64_##_SIZE, const ::prlrt::LongIntInternal<_SIZE>* a, int64_t* result)\
+	V(int, _INT_TYPE##_toUInt64_##_SIZE, const ::prlrt::LongIntInternal<_SIZE>* a, uint64_t* result)\
+	V(void, _INT_TYPE##_rightShift_##_SIZE, ::prlrt::LongIntInternal<_SIZE>* a, int64_t shift)\
+	V(void, _INT_TYPE##_leftShift_##_SIZE, ::prlrt::LongIntInternal<_SIZE>* a, int64_t shift)\
+	V(void, _INT_TYPE##_ConvertFromHexString_##_SIZE, ::prlrt::LongIntInternal<_SIZE>* a, const char* longint_literal)\
+	V(void, _INT_TYPE##_ConvertToString_##_SIZE, const ::prlrt::LongIntInternal<_SIZE>* a, char* buf)\
+	V(uint32_t, _INT_TYPE##_GetConvertToStringLen_##_SIZE, const ::prlrt::LongIntInternal<_SIZE>* a)\
+	V(bool, _INT_TYPE##_IsZero_##_SIZE, const ::prlrt::LongIntInternal<_SIZE>* a)\
+	V(void, _INT_TYPE##_Add_##_SIZE, const ::prlrt::LongIntInternal<_SIZE>* a, const ::prlrt::LongIntInternal<_SIZE>* b, ::prlrt::LongIntInternal<_SIZE>* result)\
+	V(void, _INT_TYPE##_Sub_##_SIZE, const ::prlrt::LongIntInternal<_SIZE>* a, const ::prlrt::LongIntInternal<_SIZE>* b, ::prlrt::LongIntInternal<_SIZE>* result)\
+	V(void, _INT_TYPE##_Mul_##_SIZE, const ::prlrt::LongIntInternal<_SIZE>* a, const ::prlrt::LongIntInternal<_SIZE>* b, ::prlrt::LongIntInternal<_SIZE>* result)\
+	V(void, _INT_TYPE##_Div_##_SIZE, const ::prlrt::LongIntInternal<_SIZE>* a, const ::prlrt::LongIntInternal<_SIZE>* b, ::prlrt::LongIntInternal<_SIZE>* result)\
+	V(void, _INT_TYPE##_Mod_##_SIZE, const ::prlrt::LongIntInternal<_SIZE>* a, const ::prlrt::LongIntInternal<_SIZE>* b, ::prlrt::LongIntInternal<_SIZE>* result)\
+	V(int, _INT_TYPE##_Compare_##_SIZE, const ::prlrt::LongIntInternal<_SIZE>* a, const ::prlrt::LongIntInternal<_SIZE>* b)\
+	V(void, _INT_TYPE##_SetMax_##_SIZE, ::prlrt::LongIntInternal<_SIZE>* a)\
+	V(void, _INT_TYPE##_SetMin_##_SIZE, ::prlrt::LongIntInternal<_SIZE>* a)\
 
 #define FOR_EACH_LONGINT_NEGATE_METHOD(V, _SIZE) \
-	V(void, LongInt_Negate_##_SIZE, const ::prlrt::LongIntTemp<_SIZE>* a, ::prlrt::LongIntTemp<_SIZE>* result)\
-	V(bool, LongInt_IsSign_##_SIZE, const ::prlrt::LongIntTemp<_SIZE>* a)\
+	V(void, LongInt_Negate_##_SIZE, const ::prlrt::LongIntInternal<_SIZE>* a, ::prlrt::LongIntInternal<_SIZE>* result)\
+	V(bool, LongInt_IsSign_##_SIZE, const ::prlrt::LongIntInternal<_SIZE>* a)\
 
 #define FOR_EACH_PREDA_INTERFACE_METHOD(V) \
 	/* Bigint start */ \
@@ -161,6 +161,8 @@ namespace prlrt {
 	V(void, BigintMul, ::prlrt::BigintPtr self, const ::prlrt::BigintPtr a, const ::prlrt::BigintPtr b)\
 	V(void, BigintMul_Uint32, ::prlrt::BigintPtr self, const ::prlrt::BigintPtr a, uint32_t b)\
 	V(void, BigintMul_Int32, ::prlrt::BigintPtr self, const ::prlrt::BigintPtr a, int b)\
+	V(void, BigintShiftRightInplace, ::prlrt::BigintPtr self, int a)\
+	V(void, BigintShiftLeftInplace, ::prlrt::BigintPtr self, int a)\
 	V(void, BigintMulInplace_Int32, ::prlrt::BigintPtr self, int a)\
 	V(void, BigintMulInplace_Uint32, ::prlrt::BigintPtr self, uint32_t a)\
 	V(void, BigintDiv_Uint32, ::prlrt::BigintPtr self, const ::prlrt::BigintPtr a, uint32_t b, uint32_t* remainder = nullptr)\
@@ -168,6 +170,7 @@ namespace prlrt {
 	V(void, BigintMod, ::prlrt::BigintPtr self, const ::prlrt::BigintPtr a, const ::prlrt::BigintPtr b)\
 	V(void, BigintNegate, ::prlrt::BigintPtr self, const ::prlrt::BigintPtr a)\
 	V(void, BigintNegateInplace, ::prlrt::BigintPtr self)\
+	V(bool, BigintIsNegative, ::prlrt::BigintPtr self)\
 \
 	/*  compare */\
 	V(int, BigintCompare, ::prlrt::BigintPtr self, const ::prlrt::BigintPtr a)\
@@ -184,10 +187,14 @@ namespace prlrt {
 	V(bool, InitAddressFromLiteral, void* pAddress, const char* str)\
 	V(bool, InitHashFromLiteral, void* pHash, const char* str)\
 	V(bool, StringToAddress, void* pAddress, const char* data, uint32_t data_len)\
+	V(uint32_t, GetHashToStringLength, )\
+	V(uint32_t, GetAddressToStringLength, )\
+	V(bool, AddressToString, const void* pData, uint32_t dataLen, char* out)\
 	V(void, CalculateHash, void* pHash, const uint8_t* data, uint32_t data_len)\
 	V(bool, EmitRelayToAddress, const uint8_t* address, uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)\
 	V(bool, EmitRelayToGlobal, uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)\
 	V(bool, EmitRelayToShards, uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)\
+	V(bool, HashToString, const void* pData, uint32_t dataLen, char* out) \
 	V(uint32_t, CrossCall, uint64_t contractId, uint32_t opCode, const void** ptrs, uint32_t numPtrs)\
 	V(uint32_t, InterfaceCall, uint64_t contractId, const char *interfaceName, uint32_t funcIdx, const void** ptrs, uint32_t numPtrs)\
 	V(void, ReportOrphanToken, uint64_t id, ::prlrt::BigintPtr amount)\

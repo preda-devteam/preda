@@ -120,7 +120,6 @@ Linux/Mac:`preda-repo/.xmake` ，`preda-repo/build`，`~/.xmake`
 
 then re-run `xmake`
 
-
 ## Acknowledgements
 
 PREDA uses the following open source libraries as the components. The acknowledgements pertain to the corresponding software license.
@@ -199,4 +198,3 @@ Copyright (c) 2011-2017 JP Richardson
 https://github.com/janl/mustache.js  
 License: MIT License  
 Copyright (c) 2010-2015 The mustache.js community
-

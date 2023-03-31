@@ -1,4 +1,4 @@
-#if defined(PLATFORM_64BIT) && (defined(PLATFORM_MAC) || defined(PLATFORM_IOS))
+﻿#if defined(PLATFORM_64BIT) && (defined(PLATFORM_MAC) || defined(PLATFORM_IOS))
 #define _DARWIN_USE_64_BIT_INODE 1
 #endif
 
@@ -1210,7 +1210,8 @@ bool os::File::CopyPath(const rt::String_Ref& dest_, const rt::String_Ref& src_,
 
 	rt::String dst = dest_.TrimTrailingPathSeparator();
 
-	bool overwrite = opt&CPOPT_OVERWRITE;
+	bool skip_unmodified = !(opt&CPOPT_OVERWRITE_ALL);
+	bool overwrite = opt&(CPOPT_OVERWRITE|CPOPT_MIRROR|CPOPT_OVERWRITE_ALL);
 	thread_local rt::BufferEx<BYTE>	buf;
 
 	// Copy a file
@@ -1229,11 +1230,11 @@ bool os::File::CopyPath(const rt::String_Ref& dest_, const rt::String_Ref& src_,
 			{
 				if(!RemovePath(dst))return false;
 			}
-			else
+			else if(skip_unmodified)
 			{
 				if(file_size == os::File::GetFileSize(dst))
 				{
-					os::File::GetPathTime(src, nullptr, nullptr, &d_tm);
+					os::File::GetPathTime(dst, nullptr, nullptr, &d_tm);
 					if(s_tm == d_tm) // file is same, skip
 						return true;
 				}
@@ -1545,7 +1546,7 @@ APPPATH_UTF8_SET:
 	}
 	out_path = largest + '/' + app_name;
 	*/
-	out_path = "/storage/emulated/0/SFC";
+	out_path = "/storage/emulated/0/sandbox";
 	os::File::CreateDirectory(out_path);
 #else
 	ASSERT_STATIC_NOT_IMPLMENTED;

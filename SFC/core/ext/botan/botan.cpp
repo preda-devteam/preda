@@ -217,7 +217,7 @@ bool TLS::Create(const rt::String_Ref& hostname)
 	{
 #if defined PLATFORM_ANDROID
 #else
-		if (strstr(e.what(), "Server certificate is not valid") != nullptr)
+		if(strstr(e.what(), "Server certificate is not valid") != nullptr)
 #endif
 			_CertificateError = true;
 	}

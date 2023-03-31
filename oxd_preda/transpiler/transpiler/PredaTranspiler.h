@@ -109,7 +109,27 @@ struct PredaTranspilerContext : public BaseTranspilerContext {
 	// For fast indexing, we just put in plain array
 	ConcreteTypePtr m_builtInUintType[7];
 	ConcreteTypePtr m_builtInIntType[7];
-
+	struct OperatorProcessor
+	{	
+		struct expressionPack
+		{
+			std::string left_text;
+			std::string right_text;
+			ConcreteTypePtr left_type;
+			ConcreteTypePtr right_type;
+			std::string operand_str;
+			transpiler::OperatorTypeBitMask type;
+		};
+		typedef void(*processingFunc)(const expressionPack&, ConcreteTypePtr, std::string&);
+		typedef std::tuple<OperatorTypeBitMask, ConcreteTypePtr, ConcreteTypePtr> operatorMapKey;
+		typedef std::pair<ConcreteTypePtr, processingFunc> operationResult;
+		//if operation on left subexpression and right subexpression is allowed, if allowed, what are the result expression and cast type, which is often the result type.
+		//implicit conversion is performed here
+		//assignment operator applies to variable assignment and declaration (int a = b and a = b)
+		std::map<operatorMapKey, operationResult> m;
+		bool processOperation(const expressionPack& expr, std::string& result, ConcreteTypePtr& resultType);
+	};
+	OperatorProcessor opProcessor;
 	//Float data structure
 	ConcreteTypePtr m_builtFloatType[3];
 

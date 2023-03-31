@@ -391,77 +391,77 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 	if (!linker.func_wrap("env", "predaGetConvertToStringLen_" # _BIT,\
 	[&engine](wasmtime::Caller caller, WasmPtrT pftemp_offset) -> uint32_t {\
 		wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-		return engine.runtimeInterface().GetConvertToStringLen_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatTemp<_BIT>*>(mem, pftemp_offset));\
+		return engine.runtimeInterface().GetConvertToStringLen_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatInternal<_BIT>*>(mem, pftemp_offset));\
 	})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "predaConvertToString_" # _BIT,\
 	[&engine](wasmtime::Caller caller, WasmPtrT pftemp_offset, WasmPtrT buf_offset) -> void {\
 		wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-		return engine.runtimeInterface().ConvertToString_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatTemp<_BIT>*>(mem, pftemp_offset), WasmPtrToPtr<char*>(mem, buf_offset));\
+		return engine.runtimeInterface().ConvertToString_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatInternal<_BIT>*>(mem, pftemp_offset), WasmPtrToPtr<char*>(mem, buf_offset));\
 	})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "predaConvertFromString_" # _BIT,\
 	[&engine](wasmtime::Caller caller, WasmPtrT pftemp_offset, WasmPtrT buf_offset) -> void {\
 		wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-		return engine.runtimeInterface().ConvertFromString_##_BIT(WasmPtrToPtr<::prlrt::PrecisionFloatTemp<_BIT>*>(mem, pftemp_offset), WasmPtrToPtr<const char*>(mem, buf_offset));\
+		return engine.runtimeInterface().ConvertFromString_##_BIT(WasmPtrToPtr<::prlrt::PrecisionFloatInternal<_BIT>*>(mem, pftemp_offset), WasmPtrToPtr<const char*>(mem, buf_offset));\
 	})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "predaFloat_Add_" # _BIT,\
 	[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT b_offset, WasmPtrT result_offset) -> void {\
 		wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-		return engine.runtimeInterface().Float_Add_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatTemp<_BIT>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::PrecisionFloatTemp<_BIT>*>(mem, b_offset), WasmPtrToPtr<::prlrt::PrecisionFloatTemp<_BIT>*>(mem, result_offset));\
+		return engine.runtimeInterface().Float_Add_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatInternal<_BIT>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::PrecisionFloatInternal<_BIT>*>(mem, b_offset), WasmPtrToPtr<::prlrt::PrecisionFloatInternal<_BIT>*>(mem, result_offset));\
 	})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "predaFloat_Sub_" # _BIT,\
 	[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT b_offset, WasmPtrT result_offset) -> void {\
 		wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-		return engine.runtimeInterface().Float_Sub_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatTemp<_BIT>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::PrecisionFloatTemp<_BIT>*>(mem, b_offset), WasmPtrToPtr<::prlrt::PrecisionFloatTemp<_BIT>*>(mem, result_offset));\
+		return engine.runtimeInterface().Float_Sub_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatInternal<_BIT>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::PrecisionFloatInternal<_BIT>*>(mem, b_offset), WasmPtrToPtr<::prlrt::PrecisionFloatInternal<_BIT>*>(mem, result_offset));\
 	})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "predaFloat_Mul_" # _BIT,\
 	[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT b_offset, WasmPtrT result_offset) -> void {\
 		wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-		return engine.runtimeInterface().Float_Mul_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatTemp<_BIT>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::PrecisionFloatTemp<_BIT>*>(mem, b_offset), WasmPtrToPtr<::prlrt::PrecisionFloatTemp<_BIT>*>(mem, result_offset));\
+		return engine.runtimeInterface().Float_Mul_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatInternal<_BIT>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::PrecisionFloatInternal<_BIT>*>(mem, b_offset), WasmPtrToPtr<::prlrt::PrecisionFloatInternal<_BIT>*>(mem, result_offset));\
 	})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "predaFloat_Div_" # _BIT,\
 	[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT b_offset, WasmPtrT result_offset) -> void {\
 		wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-		return engine.runtimeInterface().Float_Div_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatTemp<_BIT>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::PrecisionFloatTemp<_BIT>*>(mem, b_offset), WasmPtrToPtr<::prlrt::PrecisionFloatTemp<_BIT>*>(mem, result_offset));\
+		return engine.runtimeInterface().Float_Div_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatInternal<_BIT>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::PrecisionFloatInternal<_BIT>*>(mem, b_offset), WasmPtrToPtr<::prlrt::PrecisionFloatInternal<_BIT>*>(mem, result_offset));\
 	})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "predaFloat_Zero_" # _BIT,\
 	[&engine](wasmtime::Caller caller, WasmPtrT a_offset) -> void {\
 		wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-		return engine.runtimeInterface().Float_Zero_##_BIT(WasmPtrToPtr<::prlrt::PrecisionFloatTemp<_BIT>*>(mem, a_offset));\
+		return engine.runtimeInterface().Float_Zero_##_BIT(WasmPtrToPtr<::prlrt::PrecisionFloatInternal<_BIT>*>(mem, a_offset));\
 	})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "predaFloat_IsZero_" # _BIT,\
 	[&engine](wasmtime::Caller caller, WasmPtrT a_offset) -> uint32_t {\
 		wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-		return engine.runtimeInterface().Float_IsZero_##_BIT(WasmPtrToPtr<::prlrt::PrecisionFloatTemp<_BIT>*>(mem, a_offset));\
+		return engine.runtimeInterface().Float_IsZero_##_BIT(WasmPtrToPtr<::prlrt::PrecisionFloatInternal<_BIT>*>(mem, a_offset));\
 	})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "predaFloat_Negate_" # _BIT,\
 	[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT result_offset) -> void {\
 		wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-		return engine.runtimeInterface().Float_Negate_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatTemp<_BIT>*>(mem, a_offset), WasmPtrToPtr<::prlrt::PrecisionFloatTemp<_BIT>*>(mem, result_offset));\
+		return engine.runtimeInterface().Float_Negate_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatInternal<_BIT>*>(mem, a_offset), WasmPtrToPtr<::prlrt::PrecisionFloatInternal<_BIT>*>(mem, result_offset));\
 	})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "predaFloat_Compare_" # _BIT,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT b_offset) -> int32_t {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface().Float_Compare_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatTemp<_BIT>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::PrecisionFloatTemp<_BIT>*>(mem, b_offset));\
+			return engine.runtimeInterface().Float_Compare_##_BIT(WasmPtrToPtr<const ::prlrt::PrecisionFloatInternal<_BIT>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::PrecisionFloatInternal<_BIT>*>(mem, b_offset));\
 		})) {\
 		return {};\
 	}\
@@ -475,14 +475,14 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 	if (!linker.func_wrap("env", "predaLongInt_Negate_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT b_offset) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface().LongInt_Negate_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, b_offset));\
+			return engine.runtimeInterface().LongInt_Negate_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, b_offset));\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "predaLongInt_IsSign_" # _SIZE,\
 	[&engine](wasmtime::Caller caller, WasmPtrT a_offset) -> uint32_t {\
 		wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-		return engine.runtimeInterface().LongInt_IsSign_##_SIZE(WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset));\
+		return engine.runtimeInterface().LongInt_IsSign_##_SIZE(WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset));\
 	})) {\
 		return {};\
 	}\
@@ -496,140 +496,140 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_Zero_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_Zero_##_SIZE(WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_Zero_##_SIZE(WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset));\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_ConvertFromString_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT longint_literal_offset) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_ConvertFromString_##_SIZE(WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const char*>(mem, longint_literal_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_ConvertFromString_##_SIZE(WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const char*>(mem, longint_literal_offset));\
 		})) {\
 		return {};\
 	}\
     if (!linker.func_wrap("env", "preda" # _INT_TYPE "_fromInt_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, int64_t in) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_fromInt_##_SIZE(WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), in);\
+			return engine.runtimeInterface()._INT_TYPE##_fromInt_##_SIZE(WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), in);\
 		})) {\
 		return {};\
 	}\
     if (!linker.func_wrap("env", "preda" # _INT_TYPE "_fromUInt_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, uint64_t in) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_fromUInt_##_SIZE(WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), in);\
+			return engine.runtimeInterface()._INT_TYPE##_fromUInt_##_SIZE(WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), in);\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_toInt64_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT result_offset) -> int {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_toInt64_##_SIZE(WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), WasmPtrToPtr<int64_t*>(mem, result_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_toInt64_##_SIZE(WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), WasmPtrToPtr<int64_t*>(mem, result_offset));\
 		})) {\
 		return {};\
 	}\
     if (!linker.func_wrap("env", "preda" # _INT_TYPE "_toUInt64_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT result_offset) -> int {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_toUInt64_##_SIZE(WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), WasmPtrToPtr<uint64_t*>(mem, result_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_toUInt64_##_SIZE(WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), WasmPtrToPtr<uint64_t*>(mem, result_offset));\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_rightShift_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, int64_t shift) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_rightShift_##_SIZE(WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), shift);\
+			return engine.runtimeInterface()._INT_TYPE##_rightShift_##_SIZE(WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), shift);\
 		})) {\
 		return {};\
 	}\
     if (!linker.func_wrap("env", "preda" # _INT_TYPE "_leftShift_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, int64_t shift) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_leftShift_##_SIZE(WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), shift);\
+			return engine.runtimeInterface()._INT_TYPE##_leftShift_##_SIZE(WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), shift);\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_ConvertFromHexString_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT longint_literal_offset) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_ConvertFromHexString_##_SIZE(WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const char*>(mem, longint_literal_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_ConvertFromHexString_##_SIZE(WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const char*>(mem, longint_literal_offset));\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_ConvertToString_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT longint_literal_offset) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_ConvertToString_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), WasmPtrToPtr<char*>(mem, longint_literal_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_ConvertToString_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), WasmPtrToPtr<char*>(mem, longint_literal_offset));\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_GetConvertToStringLen_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset) -> uint32_t {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_GetConvertToStringLen_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_GetConvertToStringLen_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset));\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_IsZero_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset) -> uint32_t {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_IsZero_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_IsZero_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset));\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_Add_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT b_offset, WasmPtrT result_offset) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_Add_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, b_offset), WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, result_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_Add_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, b_offset), WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, result_offset));\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_Sub_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT b_offset, WasmPtrT result_offset) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_Sub_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, b_offset), WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, result_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_Sub_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, b_offset), WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, result_offset));\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_Mul_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT b_offset, WasmPtrT result_offset) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_Mul_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, b_offset), WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, result_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_Mul_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, b_offset), WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, result_offset));\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_Div_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT b_offset, WasmPtrT result_offset) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_Div_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, b_offset), WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, result_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_Div_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, b_offset), WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, result_offset));\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_Mod_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT b_offset, WasmPtrT result_offset) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_Mod_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, b_offset), WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, result_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_Mod_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, b_offset), WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, result_offset));\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_Compare_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset, WasmPtrT b_offset) -> int32_t {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_Compare_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::LongIntTemp<_SIZE>*>(mem, b_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_Compare_##_SIZE(WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset), WasmPtrToPtr<const ::prlrt::LongIntInternal<_SIZE>*>(mem, b_offset));\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_SetMax_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_SetMax_##_SIZE(WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_SetMax_##_SIZE(WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset));\
 		})) {\
 		return {};\
 	}\
 	if (!linker.func_wrap("env", "preda" # _INT_TYPE "_SetMin_" # _SIZE,\
 		[&engine](wasmtime::Caller caller, WasmPtrT a_offset) -> void {\
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());\
-			return engine.runtimeInterface()._INT_TYPE##_SetMin_##_SIZE(WasmPtrToPtr<::prlrt::LongIntTemp<_SIZE>*>(mem, a_offset));\
+			return engine.runtimeInterface()._INT_TYPE##_SetMin_##_SIZE(WasmPtrToPtr<::prlrt::LongIntInternal<_SIZE>*>(mem, a_offset));\
 		})) {\
 		return {};\
 	}\

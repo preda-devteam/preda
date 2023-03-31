@@ -694,6 +694,44 @@ ostream& operator << (ostream& s, const os::Date32& d)
 	return s;
 };
 
+namespace rt
+{
+
+template <typename T, bool desc = false>
+struct BigEndianNumber
+{
+	TYPETRAITS_DECLARE_POD;
+	T		_V;
+public:
+	BigEndianNumber(const T& value){ Set(value); }
+	void Set(const T& value)
+	{
+		static bool is_signed = T(-1) < 0; // rt::NumericTraits<T>::IsSigned
+		T v = value;
+		if(is_signed)
+			v -= ((T)1) << (sizeof(T) * 8 - 1);
+		if(desc)
+			v ^= (T)-1;
+		rt::SwitchByteOrderTo<sizeof(T)>(&v, &_V);
+	}
+	T Value() const
+	{
+		static bool is_signed = T(-1) < 0;
+		T value;
+		rt::SwitchByteOrderTo<sizeof(T)>(&_V, &value);
+		if(desc)
+			value ^= (T)-1;
+		if(is_signed)
+			value -= ((T)1) << (sizeof(T) * 8 - 1);
+		return value;
+	}
+	operator T() const { return Value(); }
+	void MakeMin(){ rt::Zero(_V); }
+	void Maximize(){ rt::Void(_V); }
+	bool IsEqual(BigEndianNumber& x) const { return rt::IsEqual(*this, x); }
+};
+
+} // namespace rt
 
 namespace rt
 {
@@ -760,14 +798,6 @@ extern SIZE_T	UTF8DecodeLength(LPCSTR pIn, SIZE_T len);
  * @return SIZE_T 
  */
 extern SIZE_T	UTF8Decode(LPCSTR pIn, SIZE_T len, LPU16CHAR pOut);	
-/**
- * @brief UTF8 to UTF16
- * 
- * return number of wchar
- * @param pIn 
- * @return U16CHAR 
- */
-extern U16CHAR	UTF8Decode(LPCSTR& pIn);
 /**
  * @brief UTF8 to UTF16
  * 

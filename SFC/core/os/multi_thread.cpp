@@ -561,15 +561,15 @@ void os::ConsolePrompt::_ConsoleInput()
 			os::Sleep(); // halt here, wait to be terminated
 		}
 
-#ifdef PLATFORM_WIN
 		int mb_len = (int)strlen(cmdbuf.Begin());
+#ifdef PLATFORM_WIN
 		LPWSTR utf16 = (LPWSTR)alloca((1 + mb_len*2)*sizeof(WCHAR));
 		int utf16_len = MultiByteToWideChar(CP_THREAD_ACP, 0, cmdbuf.Begin(), mb_len, utf16, 1 + mb_len*2);
 		mb_len = (int)os::UTF8Encode(utf16, utf16_len, cmdbuf.Begin());
+#endif
 		ASSERT(mb_len < cmdbuf.GetSize()*3/2);
 		cmdbuf.ChangeSize(mb_len);
 		if(mb_len > 0) cmdbuf[mb_len] = 0;
-#endif
 
 		if(_InputCallback)
 			_InputCallback(cmdbuf.Begin(), (UINT)cmdbuf.GetSize(), _InputCallbackCookie);

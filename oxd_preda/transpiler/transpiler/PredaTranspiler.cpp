@@ -20,6 +20,41 @@ namespace transpiler{
 		RegisterRuntimeContextTypes();
 	}
 
+	void IntArithmeticOperation(const PredaTranspilerContext::OperatorProcessor::expressionPack& exprpk, ConcreteTypePtr resultType, std::string& result)
+	{
+		if (resultType == exprpk.left_type)
+		{
+			result = exprpk.left_text + " " + exprpk.operand_str + " " + resultType->outputFullName + "(" + exprpk.right_text + ")";
+		}
+		else
+		{
+			result = resultType->outputFullName + "(" + exprpk.left_text + ") " + exprpk.operand_str + " " + exprpk.right_text;
+		}
+	}
+	void IntArithmeticAssignmentOperation(const PredaTranspilerContext::OperatorProcessor::expressionPack& exprpk, ConcreteTypePtr resultType, std::string& result)
+	{
+		result = exprpk.left_text + " " + exprpk.operand_str + " " + resultType->outputFullName + "(" + exprpk.right_text + ")";
+	}
+	void IntBitWiseOperation(const PredaTranspilerContext::OperatorProcessor::expressionPack& exprpk, ConcreteTypePtr resultType, std::string& result)
+	{
+		result = exprpk.left_text + " " + exprpk.operand_str + " " + resultType->outputFullName + "(" + exprpk.right_text + ")";
+	}
+	void IntComparsionOperation(const PredaTranspilerContext::OperatorProcessor::expressionPack& exprpk, ConcreteTypePtr resultType, std::string& result)
+	{
+		if (resultType == exprpk.left_type)
+		{
+			result = exprpk.left_text + " " + exprpk.operand_str + " " + resultType->outputFullName + "(" + exprpk.right_text + ")";
+		}
+		else
+		{
+			result = resultType->outputFullName + "(" + exprpk.left_text + ") " + exprpk.operand_str + " " + exprpk.right_text;
+		}
+	}
+	void UnchangingOperation(const PredaTranspilerContext::OperatorProcessor::expressionPack& exprpk, ConcreteTypePtr resultType, std::string& result)
+	{
+		result = exprpk.left_text + " " + exprpk.operand_str + " " + exprpk.right_text;
+	}
+
 	void PredaTranspilerContext::RegisterFundementalTypes()
 	{
 		RegisterFundementalIntegerTypes();
@@ -27,6 +62,12 @@ namespace transpiler{
 		bool res = true;
 
 		m_builtInBoolType = BuiltInBoolType::CreateType();
+		std::vector<OperatorTypeBitMask> LogicalOp({ OperatorTypeBitMask::LogicalOrBit, OperatorTypeBitMask::LogicalAndBit });
+		for (int i = 0; i < LogicalOp.size(); i++)
+		{
+			OperatorProcessor::operatorMapKey key = std::make_tuple(LogicalOp[i], m_builtInBoolType, m_builtInBoolType);
+			opProcessor.m.emplace(key, OperatorProcessor::operationResult({ m_builtInBoolType, &UnchangingOperation }));
+		}
 		res = res && (globalType->AttachInnerConcreteType(m_builtInBoolType));
 		res = res && (m_builtInBoolType->DefineDefaultConstructor() != nullptr);
 		assert(res);
@@ -42,6 +83,7 @@ namespace transpiler{
 				signature.returnType = QualifiedConcreteType(nullptr, true, false);
 				signature.parameters.push_back(Allocator::New<DefinedIdentifier>(GetBuiltInStringType(), false, true, "value", 0));
 				res = res && (m_builtInStringType->DefineMemberFunction("set", signature, false) != nullptr);
+				signature.returnType = QualifiedConcreteType(GetBuiltInStringType(), false, false);
 				res = res && (m_builtInStringType->DefineMemberFunction("append", signature, false) != nullptr);
 			}
 
@@ -111,7 +153,16 @@ namespace transpiler{
 				signature.parameters[0] = (Allocator::New<DefinedIdentifier>(GetBuiltInStringType(), true, true, "src", 0));
 				res = res && (m_builtInAddressType->DefineMemberFunction("@constructor", signature, false) != nullptr);
 			}
+			// string constructor with address
+			{
+				FunctionSignature signature;
+				signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+				signature.parameters.resize(1);
+				signature.returnType = QualifiedConcreteType(m_builtInStringType, false, false);
 
+				signature.parameters[0] = (Allocator::New<DefinedIdentifier>(m_builtInAddressType, false, true, "src", 0));
+				res = res && (m_builtInStringType->DefineMemberFunction("@constructor", signature, false) != nullptr);
+			}
 			// add member functions
 			{
 				FunctionSignature signature;
@@ -151,6 +202,15 @@ namespace transpiler{
 
 				signature.parameters[0] = (Allocator::New<DefinedIdentifier>(GetBuiltInStringType(), true, true, "src", 0));
 				res = res && (m_builtInHashType->DefineMemberFunction("@constructor", signature, false) != nullptr);
+			}
+			{
+				FunctionSignature signature;
+				signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+				signature.parameters.resize(1);
+				signature.returnType = QualifiedConcreteType(m_builtInStringType, false, false);
+
+				signature.parameters[0] = (Allocator::New<DefinedIdentifier>(m_builtInHashType, false, true, "src", 0));
+				res = res && (m_builtInStringType->DefineMemberFunction("@constructor", signature, false) != nullptr);
 			}
 			assert(res);
 		}
@@ -283,6 +343,60 @@ namespace transpiler{
 			bool res = (globalType->AttachInnerConcreteType(allIntegerTypes[i]));
 			assert(res);
 		}
+		std::vector<OperatorTypeBitMask> ArithmeticOp({ OperatorTypeBitMask::AddBit, OperatorTypeBitMask::SubtractBit, OperatorTypeBitMask::MultiplyBit, OperatorTypeBitMask::DivideBit, OperatorTypeBitMask::ModuloBit });
+		//bitwise not operation is not included because it only taks one operand
+		std::vector<OperatorTypeBitMask> BitWiseOp({ OperatorTypeBitMask::ShiftLeftBit, OperatorTypeBitMask::ShiftRightBit,
+			OperatorTypeBitMask::BitwiseAndBit, OperatorTypeBitMask::BitwiseXorBit, OperatorTypeBitMask::BitwiseOrBit, OperatorTypeBitMask::AssignmentBitwiseAndBit, 
+			OperatorTypeBitMask::AssignmentBitwiseXorBit, OperatorTypeBitMask::AssignmentBitwiseOrBit, OperatorTypeBitMask::AssignmentShiftLeftBit, OperatorTypeBitMask::AssignmentShiftRightBit });
+		std::vector<OperatorTypeBitMask> ArithmeticAssignmentOp({ OperatorTypeBitMask::AssignmentBit, OperatorTypeBitMask::AssignmentAddBit, OperatorTypeBitMask::AssignmentSubtractBit, OperatorTypeBitMask::AssignmentMultiplyBit, OperatorTypeBitMask::AssignmentDivideBit, OperatorTypeBitMask::AssignmentModuloBit });
+		std::vector<OperatorTypeBitMask> ComparsionOp({ OperatorTypeBitMask::LessThanBit, OperatorTypeBitMask::GreaterThanBit, OperatorTypeBitMask::LessThanOrEqualBit, OperatorTypeBitMask::GreaterThanOrEqualBit, OperatorTypeBitMask::EqualBit, OperatorTypeBitMask::NotEqualBit });
+		//allIntegerTypes: uint8, int8, uint16, int16, ....... uint512, int512, bigint (signed int -> odd, unsigned int -> even) 
+		//case 1: int16 -> uint16 NO
+		//case 2: int16 -> uint32 NO
+		//case 3: int16 -> int32 YES
+		//case 4: int16 -> bigint YES
+		//case 5: uint16 -> int16 NO
+		//case 6: uint16 -> int32 NO
+		//case 7: uint16 -> uint32 YES
+		//case 8: uint16 -> bigint YES
+		for (int j = 0; j < allIntegerTypes.size(); j++)
+		{
+			for (int k = 0; k < allIntegerTypes.size(); k++)
+			{
+				if (k != allIntegerTypes.size() - 1 && j != allIntegerTypes.size() - 1 && ((j - k) % 2 != 0)) //signed int
+				{
+					continue;
+				}
+				for (int i = 0; i < ArithmeticOp.size(); i++)
+				{
+					OperatorProcessor::operatorMapKey key = std::make_tuple(ArithmeticOp[i], allIntegerTypes[j], allIntegerTypes[k]);
+					opProcessor.m.emplace(key, OperatorProcessor::operationResult({ allIntegerTypes[std::max(j,k)], &IntArithmeticOperation }));
+				}
+				for (int i = 0; i < ArithmeticAssignmentOp.size(); i++)
+				{
+					if (j > k)
+					{
+						OperatorProcessor::operatorMapKey key = std::make_tuple(ArithmeticAssignmentOp[i], allIntegerTypes[j], allIntegerTypes[k]);
+						opProcessor.m.emplace(key, OperatorProcessor::operationResult({ allIntegerTypes[j], &IntArithmeticAssignmentOperation }));
+					}
+				}
+				for (int i = 0; i < BitWiseOp.size(); i++)
+				{
+					if (j % 2 == 0 && k <= j && k != allIntegerTypes.size() - 1 && j != allIntegerTypes.size() - 1) //opt out bigint
+					{
+						OperatorProcessor::operatorMapKey key = std::make_tuple(BitWiseOp[i], allIntegerTypes[j], allIntegerTypes[k]);
+						opProcessor.m.emplace(key, OperatorProcessor::operationResult({ allIntegerTypes[j], &IntBitWiseOperation }));
+					}
+				}
+				for (int i = 0; i < ComparsionOp.size(); i++)
+				{
+					OperatorProcessor::operatorMapKey key = std::make_tuple(ComparsionOp[i], allIntegerTypes[j], allIntegerTypes[k]);
+					opProcessor.m.emplace(key, OperatorProcessor::operationResult({ allIntegerTypes[std::max(j,k)], &IntComparsionOperation }));
+				}
+			}
+		}
+		
+		return;
 	}
 
 	void PredaTranspilerContext::RegisterBuiltInTemplatedContainerTypes()
@@ -327,5 +441,20 @@ namespace transpiler{
 			assert(pFunc != nullptr);
 			m_builtInDebugAssertFunctionType = pFunc->qualifiedType.baseConcreteType;
 		}
+	}
+
+	bool PredaTranspilerContext::OperatorProcessor::processOperation(const expressionPack& expr, std::string& result, ConcreteTypePtr& resultType)
+	{
+		ConcreteTypePtr left_type = expr.left_type;
+		ConcreteTypePtr right_type = expr.right_type;
+		operatorMapKey k = std::make_tuple(expr.type, left_type, right_type);
+		auto iter = m.find(k);
+		if (iter == m.end())
+		{
+			return false;
+		}
+		(*iter->second.second)(expr, iter->second.first, result);
+		resultType = iter->second.first;
+		return true;
 	}
 }

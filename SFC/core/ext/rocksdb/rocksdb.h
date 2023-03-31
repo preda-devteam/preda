@@ -124,15 +124,20 @@ public:
 #define SliceValueNull		::rocksdb::Slice()
 #define SliceValueSS(x)		::rocksdb::Slice(x, sizeof(x)-1)
 
+namespace _details
+{
+template<typename T_KEYVAL, int METADATA_SIZE, UINT PAGING_SIZE, typename T_PAGE, typename T_VALUESIZE, class DB_CLS>
+class RocksPagedBase;
+} // namespace _details
+
 class RocksCursor
 {
-	::rocksdb::Iterator* iter;
 	friend class RocksDB;
+	template<typename T_KEYVAL, int METADATA_SIZE, UINT PAGING_SIZE, typename T_PAGE, typename T_VALUESIZE, class DB_CLS>
+	friend class _details::RocksPagedBase;
 
-	RocksCursor();
-	RocksCursor(::rocksdb::Iterator* it){ iter = it; }
-	RocksCursor(const RocksCursor& x) = delete; // RocksCursor can only be constructed by RocksDB
-
+	int					 _PagedKeySize;
+	::rocksdb::Iterator* _Iter = nullptr;
 public:
 /**
  * @brief move constructor, enable return by RocksDB::First/Last
@@ -140,9 +145,27 @@ public:
  * @param x 
  * @return inline 
  */
-	RocksCursor(RocksCursor&& x){ iter = x.iter; x.iter = nullptr; }	
+	RocksCursor() = default;
+	RocksCursor(RocksCursor&& x){ _Iter = x._Iter; x._Iter = nullptr; _PagedKeySize = x._PagedKeySize; }
 	~RocksCursor(){ Empty(); }
-	void				operator = (RocksCursor&& x){ _SafeDel_Untracked(iter); iter = x.iter; x.iter = nullptr; }
+	bool				IsEmpty() const { return _Iter == nullptr; }
+	void				Empty(){ _SafeDel_Untracked(_Iter); }
+	void				operator = (RocksCursor&& x){ _SafeDel_Untracked(_Iter); _Iter = x._Iter; x._Iter = nullptr; }
+
+	template<typename T>
+	const T&			Key() const { return *(T*)_Iter->key().data(); }
+	template<typename T>
+	const T&			Value() const { return *(T*)_Iter->value().data(); }
+	const SliceValue	Key() const { return (const SliceValue&)_Iter->key(); }
+	const SliceValue	Value() const { return (const SliceValue&)_Iter->value(); }
+	SIZE_T				KeyLength() const { return _Iter->key().size(); }
+	SIZE_T				ValueLength() const { return _Iter->value().size(); }
+	bool				IsValid() const { return _Iter && _Iter->Valid(); }
+
+	void				Next(){	_Iter->Next(); if(_PagedKeySize)while(_Iter->Valid() && KeyLength() != _PagedKeySize)_Iter->Next();	}
+	void				Prev(){ _Iter->Prev(); if(_PagedKeySize)while(_Iter->Valid() && KeyLength() != _PagedKeySize)_Iter->Prev(); }
+	void				Next(UINT co){ while(co--)_Iter->Next(); }
+	void				Prev(UINT co){ while(co--)_Iter->Prev(); }
 	void				operator ++ (){ Next(); }
 	void				operator -- (){ Prev(); }
 	void				operator += (int step){ if(step>0){ Next(step); }else{ Prev(-step); } }
@@ -150,22 +173,20 @@ public:
 	void				operator ++ (int){ Next(); }
 	void				operator -- (int){ Prev(); }
 
-	template<typename T>
-	const T&			Value() const { return *(T*)iter->value().data(); }
-	template<typename T>
-	const T&			Key() const { return *(T*)iter->key().data(); }
-
-	const SliceValue	Key() const { return (const SliceValue&)iter->key(); }
-	const SliceValue	Value() const { return (const SliceValue&)iter->value(); }
-	SIZE_T				KeyLength() const { return iter->key().size(); }
-	SIZE_T				ValueLength() const { return iter->value().size(); }
-	bool				IsValid() const { return iter && iter->Valid(); }
-	void				Next(){ iter->Next(); }
-	void				Prev(){ iter->Prev(); }
-	void				Next(UINT co){ while(co--)iter->Next(); }
-	void				Prev(UINT co){ while(co--)iter->Prev(); }
-	bool				IsEmpty() const { return iter == nullptr; }
-	void				Empty(){ _SafeDel_Untracked(iter); }
+private:
+	RocksCursor(const RocksCursor& x) = delete; // RocksCursor can only be constructed by RocksDB
+	RocksCursor(::rocksdb::Iterator* it, int paged_keysize)
+	{	_Iter = it;
+		if(paged_keysize > 0)
+		{	_PagedKeySize = paged_keysize;
+			while(_Iter->Valid() && KeyLength() != _PagedKeySize)_Iter->Next();
+		}
+		else if(paged_keysize < 0)
+		{	_PagedKeySize = -paged_keysize;
+			while(_Iter->Valid() && KeyLength() != _PagedKeySize)_Iter->Prev();
+		}
+		else _PagedKeySize = 0;
+	}
 };
 
 class RocksStorage;
@@ -185,7 +206,7 @@ public:
 		::rocksdb::ColumnFamilyHandle*	_pCF;
 		_RocksDBIntl(){ rt::Zero(*this); }
 		_RocksDBIntl(const _RocksDBIntl& x) = delete;
-		_RocksDBIntl(_RocksDBIntl&& x) = delete;
+		_RocksDBIntl(_RocksDBIntl&& x){ rt::Copy(*this, x); rt::Zero(x); }
 		_RocksDBIntl(RocksStorage* d, ::rocksdb::ColumnFamilyHandle* f){ _pStg=d; _pCF=f; }
 	public:
 		~_RocksDBIntl();
@@ -265,90 +286,89 @@ public:
 		return (_pDB->Get(*opt, _pCF, k, &temp).ok())?
 				rt::String_Ref(temp.data(), temp.length()):rt::String_Ref();
 	}
-	RocksCursor Find(const SliceValue& begin, const ReadOptions* opt = ReadOptionsDefault) const
+	RocksCursor Seek(const SliceValue& begin, const ReadOptions* opt = ReadOptionsDefault) const
 	{	::rocksdb::Iterator* it = rt::_CastToNonconst(_pDB)->NewIterator(*opt, _pCF);
 		ASSERT(it);
 		it->Seek(begin);
-		return RocksCursor(it);
+		return RocksCursor(it, 0);
 	}
 	RocksCursor First(const ReadOptions* opt = ReadOptionsDefault) const
 	{	::rocksdb::Iterator* it = rt::_CastToNonconst(_pDB)->NewIterator(*opt, _pCF);
 		ASSERT(it);
 		it->SeekToFirst();
-		return RocksCursor(it);
+		return RocksCursor(it, 0);
 	}
 	RocksCursor Last(const ReadOptions* opt = ReadOptionsDefault) const
 	{	::rocksdb::Iterator* it = rt::_CastToNonconst(_pDB)->NewIterator(*opt, _pCF);
 		ASSERT(it);
 		it->SeekToLast();
-		return RocksCursor(it);
+		return RocksCursor(it, 0);
 	}
 	bool Delete(const SliceValue& k, const WriteOptions* opt = WriteOptionsDefault){ ASSERT(_pDB); return _pDB->Delete(*opt, _pCF, k).ok(); }
-	template<typename func_visit>
-	SIZE_T ScanBackward(const func_visit& v, const SliceValue& begin, const ReadOptions* opt = ReadOptionsDefault) const
+
+protected:
+	template<int paged_key_size, typename func_visit>
+	SIZE_T _ScanBackward(const func_visit& v, const SliceValue& begin, const ReadOptions* opt = ReadOptionsDefault) const
 	{	ASSERT(_pDB);
-		RocksCursor it = _pDB->NewIterator(*opt, _pCF);
+		RocksCursor it(_pDB->NewIterator(*opt, _pCF), paged_key_size);
 		ASSERT(!it.IsEmpty());
 		SIZE_T ret = 0;
-		for(it.iter->Seek(begin); it.IsValid(); it.Prev())
+		for(it._Iter->Seek(begin); it.IsValid(); it.Prev())
 		{	ret++;
 			if(!rt::_details::_CallLambda<bool, decltype(v(it))>(true, v, it).retval)
 				break;
 		}
 		return ret;
 	}
-	template<typename func_visit>
-	SIZE_T ScanBackward(const func_visit& v, const ReadOptions* opt = ReadOptionsDefault) const
+	template<int paged_key_size, typename func_visit>
+	SIZE_T _ScanBackward(const func_visit& v, const ReadOptions* opt = ReadOptionsDefault) const
 	{	ASSERT(_pDB);
-		RocksCursor it = _pDB->NewIterator(*opt, _pCF);
+		RocksCursor it(_pDB->NewIterator(*opt, _pCF), paged_key_size);
 		ASSERT(!it.IsEmpty());
 		SIZE_T ret = 0;
-		for(it.iter->SeekToLast(); it.IsValid(); it.Prev())
+		for(it._Iter->SeekToLast(); it.IsValid(); it.Prev())
 		{	ret++;
 			if(!rt::_details::_CallLambda<bool, decltype(v(it))>(true, v, it).retval)
 				break;
 		}
 		return ret;
 	}
-	template<typename func_visit>
-	SIZE_T Scan(const func_visit& v, const SliceValue& begin, const ReadOptions* opt = ReadOptionsDefault) const
+	template<int paged_key_size, typename func_visit>
+	SIZE_T _Scan(const func_visit& v, const SliceValue& begin, const ReadOptions* opt = ReadOptionsDefault) const
 	{	ASSERT(_pDB);
-		RocksCursor it = _pDB->NewIterator(*opt, _pCF);
+		RocksCursor it(_pDB->NewIterator(*opt, _pCF), paged_key_size);
 		ASSERT(!it.IsEmpty());
 		SIZE_T ret = 0;
-		for(it.iter->Seek(begin); it.IsValid(); it.Next())
+		for(it._Iter->Seek(begin); it.IsValid(); it.Next())
 		{	ret++;
 			if(!rt::_details::_CallLambda<bool, decltype(v(it))>(true, v, it).retval)
 				break;
 		}
 		return ret;
 	}
-	template<typename func_visit>
-	SIZE_T Scan(const func_visit& v, const ReadOptions* opt = ReadOptionsDefault) const
+	template<int paged_key_size, typename func_visit>
+	SIZE_T _Scan(const func_visit& v, const ReadOptions* opt = ReadOptionsDefault) const
 	{	ASSERT(_pDB);
-		RocksCursor it = _pDB->NewIterator(*opt, _pCF);
+		RocksCursor it(_pDB->NewIterator(*opt, _pCF), paged_key_size);
 		ASSERT(!it.IsEmpty());
 		SIZE_T ret = 0;
-		for(it.iter->SeekToFirst(); it.IsValid(); it.Next())
+		for(it._Iter->SeekToFirst(); it.IsValid(); it.Next())
 		{	ret++;
 			if(!rt::_details::_CallLambda<bool, decltype(v(it))>(true, v, it).retval)
 				break;
 		}
 		return ret;
 	}
+
+public:
 	template<typename func_visit>
-	SIZE_T ScanPrefix(const func_visit& v, const SliceValue& prefix, const ReadOptions* opt = ReadOptionsDefault) const
-	{	ASSERT(_pDB);
-		RocksCursor it = _pDB->NewIterator(*opt, _pCF);
-		ASSERT(!it.IsEmpty());
-		SIZE_T ret = 0;
-		for(it.iter->Seek(prefix); it.IsValid() && it.Key().starts_with(prefix); it.Next())
-		{	ret++;
-			if(!rt::_details::_CallLambda<bool, decltype(v(it))>(true, v, it).retval)
-				break;
-		}
-		return ret;
-	}
+	SIZE_T ScanBackward(const func_visit& v, const SliceValue& begin, const ReadOptions* opt = ReadOptionsDefault) const { return _ScanBackward<0>(v, begin, opt); }
+	template<typename func_visit>
+	SIZE_T ScanBackward(const func_visit& v, const ReadOptions* opt = ReadOptionsDefault) const{ return _ScanBackward<0>(v, opt); }
+	template<typename func_visit>
+	SIZE_T Scan(const func_visit& v, const SliceValue& begin, const ReadOptions* opt = ReadOptionsDefault) const { return _Scan<0>(v, begin, opt); }
+	template<typename func_visit>
+	SIZE_T Scan(const func_visit& v, const ReadOptions* opt = ReadOptionsDefault) const { return _Scan<0>(v, opt); }
 };
 
 enum RocksStorageWriteRobustness
@@ -606,7 +626,7 @@ protected:
 	bool	GetPaged(const T_KEYVAL& b, std::string& ws, void* p_metadata) const
 			{
 				ws.clear();
-				auto it = _SC::Find(b);
+				auto it = _SC::Seek(b);
 				if(!it.IsValid())return false;
 				auto& key = it.template Key<HashKeyPaged>();
 				if(key.Hash != b)return false;
@@ -649,7 +669,7 @@ protected:
 				}
 
 				UINT page_co = first_page->GetPageCount();
-				auto it = _SC::Find(HashKeyPaged(b,1));
+				auto it = _SC::Seek(HashKeyPaged(b,1));
 				for(T_PAGE p=1; p<page_co; p++, it++)
 				{	
 					if(!it.IsValid())return false;
@@ -803,6 +823,32 @@ public:
 			{	std::string workspace;
 				return LoadAllPages(b, out, workspace);
 			}
+	RocksCursor Seek(const SliceValue& begin, const ReadOptions* opt = RocksDB::ReadOptionsDefault) const
+	{	::rocksdb::Iterator* it = rt::_CastToNonconst(_SC::_pDB)->NewIterator(*opt, _SC::_pCF);
+		ASSERT(it);
+		it->Seek(begin);
+		return RocksCursor(it, sizeof(T_KEYVAL));
+	}
+	RocksCursor First(const ReadOptions* opt = RocksDB::ReadOptionsDefault) const
+	{	::rocksdb::Iterator* it = rt::_CastToNonconst(_SC::_pDB)->NewIterator(*opt, _SC::_pCF);
+		ASSERT(it);
+		it->SeekToFirst();
+		return RocksCursor(it, sizeof(T_KEYVAL));
+	}
+	RocksCursor Last(const ReadOptions* opt = RocksDB::ReadOptionsDefault) const
+	{	::rocksdb::Iterator* it = rt::_CastToNonconst(_SC::_pDB)->NewIterator(*opt, _SC::_pCF);
+		ASSERT(it);
+		it->SeekToLast();
+		return RocksCursor(it, -(int)sizeof(T_KEYVAL));
+	}
+	template<typename func_visit>
+	SIZE_T ScanBackward(const func_visit& v, const SliceValue& begin, const ReadOptions* opt = RocksDB::ReadOptionsDefault) const { return _SC::_ScanBackward<-(int)sizeof(T_KEYVAL)>(v, begin, opt); }
+	template<typename func_visit>
+	SIZE_T ScanBackward(const func_visit& v, const ReadOptions* opt = RocksDB::ReadOptionsDefault) const{ return _SC::_ScanBackward<-(int)sizeof(T_KEYVAL)>(v, opt); }
+	template<typename func_visit>
+	SIZE_T Scan(const func_visit& v, const SliceValue& begin, const ReadOptions* opt = RocksDB::ReadOptionsDefault) const { return _SC::_Scan<sizeof(T_KEYVAL)>(v, begin, opt); }
+	template<typename func_visit>
+	SIZE_T Scan(const func_visit& v, const ReadOptions* opt = RocksDB::ReadOptionsDefault) const { return _SC::_Scan<sizeof(T_KEYVAL)>(v, opt); }
 };
 
 template<typename T_KEYVAL, typename T_METADATA, int PAGING_SIZE = 64*1024, typename T_PAGE = WORD, typename T_VALUESIZE = UINT, class DB_CLS = RocksDB>
@@ -894,6 +940,7 @@ public:
 									char*	varname##_buf = (char*)alloca(varname##_strexp.GetLength());	\
 									UINT	varname##_strlen = (UINT)varname##_strexp.CopyTo(varname##_buf); \
 									SliceValue varname(varname##_buf, varname##_strlen); \
+
 
 template<typename T>
 inline void NegateFirstBit(T& out)

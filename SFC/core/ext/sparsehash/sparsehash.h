@@ -38,8 +38,8 @@
  * @ingroup ext
  *  @{
  */
-#include "../../../../SFC/core/rt/string_type.h"
-#include "../../../../SFC/core/rt/buffer_type.h"
+#include "../../rt/string_type.h"
+#include "../../rt/buffer_type.h"
 #include "src/sparsehash/dense_hash_map"
 #include "src/sparsehash/dense_hash_set"
 #include "src/sparsehash/sparse_hash_map"

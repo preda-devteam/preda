@@ -8,39 +8,38 @@
 //engine and compile_env might be compiled by different compiler, thus result in different vtable layout
 //We are not supposed to directly overload virtual function from runtime_interface
 //Therefore, __float struct will overload functions in this wrapper struct
-#define FLOATTEMP(_BIT_WIDTH) PrecisionFloatTemp<_BIT_WIDTH>
 #define ____FLOAT_ALL_FUNCTION(_BIT_WIDTH)\
-static void float_zero(FLOATTEMP(_BIT_WIDTH)& _fStruct){\
+static void float_zero(PrecisionFloatInternal<_BIT_WIDTH>& _fStruct){\
 	PREDA_CALL(Float_Zero_##_BIT_WIDTH, &_fStruct);\
 }\
-static void ToString(const FLOATTEMP(_BIT_WIDTH)& _fStruct, char* buf){ \
+static void ToString(const PrecisionFloatInternal<_BIT_WIDTH>& _fStruct, char* buf){ \
 	PREDA_CALL(ConvertToString_##_BIT_WIDTH, &_fStruct, buf); \
 }\
-static void ConvertFromString(FLOATTEMP(_BIT_WIDTH)& _fStruct, const char* float_literal){ \
+static void ConvertFromString(PrecisionFloatInternal<_BIT_WIDTH>& _fStruct, const char* float_literal){ \
 	PREDA_CALL(ConvertFromString_##_BIT_WIDTH, &_fStruct, float_literal); \
 }\
-static uint32_t GetConvertToStringLen(const FLOATTEMP(_BIT_WIDTH)& _fStruct){ \
+static uint32_t GetConvertToStringLen(const PrecisionFloatInternal<_BIT_WIDTH>& _fStruct){ \
 	return PREDA_CALL(GetConvertToStringLen_##_BIT_WIDTH, &_fStruct); \
 }\
-static void float_negate(const FLOATTEMP(_BIT_WIDTH)& a, FLOATTEMP(_BIT_WIDTH)& result){ \
+static void float_negate(const PrecisionFloatInternal<_BIT_WIDTH>& a, PrecisionFloatInternal<_BIT_WIDTH>& result){ \
 	PREDA_CALL(Float_Negate_##_BIT_WIDTH, &a, &result); \
 }\
-static void float_add(const FLOATTEMP(_BIT_WIDTH)& a, const FLOATTEMP(_BIT_WIDTH)& b, FLOATTEMP(_BIT_WIDTH)& result){ \
+static void float_add(const PrecisionFloatInternal<_BIT_WIDTH>& a, const PrecisionFloatInternal<_BIT_WIDTH>& b, PrecisionFloatInternal<_BIT_WIDTH>& result){ \
 	PREDA_CALL(Float_Add_##_BIT_WIDTH, &a, &b, &result); \
 }\
-static void float_sub(const FLOATTEMP(_BIT_WIDTH)& a, const FLOATTEMP(_BIT_WIDTH)& b, FLOATTEMP(_BIT_WIDTH)& result){ \
+static void float_sub(const PrecisionFloatInternal<_BIT_WIDTH>& a, const PrecisionFloatInternal<_BIT_WIDTH>& b, PrecisionFloatInternal<_BIT_WIDTH>& result){ \
 	PREDA_CALL(Float_Sub_##_BIT_WIDTH, &a, &b, &result); \
 }\
-static void float_mul(const FLOATTEMP(_BIT_WIDTH)& a, const  FLOATTEMP(_BIT_WIDTH)& b, FLOATTEMP(_BIT_WIDTH)& result){ \
+static void float_mul(const PrecisionFloatInternal<_BIT_WIDTH>& a, const  PrecisionFloatInternal<_BIT_WIDTH>& b, PrecisionFloatInternal<_BIT_WIDTH>& result){ \
 	PREDA_CALL(Float_Mul_##_BIT_WIDTH, &a, &b, &result); \
 }\
-static void float_div(const FLOATTEMP(_BIT_WIDTH)& a, const  FLOATTEMP(_BIT_WIDTH)& b, FLOATTEMP(_BIT_WIDTH)& result){ \
+static void float_div(const PrecisionFloatInternal<_BIT_WIDTH>& a, const  PrecisionFloatInternal<_BIT_WIDTH>& b, PrecisionFloatInternal<_BIT_WIDTH>& result){ \
 	PREDA_CALL(Float_Div_##_BIT_WIDTH, &a, &b, &result); \
 }\
-static int float_compare(const FLOATTEMP(_BIT_WIDTH)& a, const FLOATTEMP(_BIT_WIDTH)& b){ \
+static int float_compare(const PrecisionFloatInternal<_BIT_WIDTH>& a, const PrecisionFloatInternal<_BIT_WIDTH>& b){ \
 	return 	PREDA_CALL(Float_Compare_##_BIT_WIDTH, &a, &b); \
 }\
-static int float_isZero(const FLOATTEMP(_BIT_WIDTH)& a){ \
+static int float_isZero(const PrecisionFloatInternal<_BIT_WIDTH>& a){ \
 	return 	PREDA_CALL(Float_IsZero_##_BIT_WIDTH, &a); \
 }
 
@@ -66,7 +65,7 @@ struct ____float{
     using this_type = ____float<bitWidth>;
     using is_value_type = std::true_type;
     using is_fixed_size = std::true_type;
-    using internal_type = prlrt::PrecisionFloatTemp<bitWidth>;
+    using internal_type = prlrt::PrecisionFloatInternal<bitWidth>;
     using fixed_size_in_bytes = std::integral_constant<serialize_size_type, serialize_size_type(sizeof(internal_type))>;
 	using type_identifier_type = simple_type_type_identifier<____get_type_identifier_enum_of_float_type<bitWidth>()>;
 	static constexpr uint32_t get_type_identifier_size()
@@ -201,7 +200,7 @@ struct ____float{
 
 };
 }
-#undef FLOATTEMP
+
 #undef ____FLOAT_ALL_FUNCTION
 #undef EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT
 using __prlt_float256 = prlrt::____float<256>;

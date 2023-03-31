@@ -142,6 +142,16 @@ void CRuntimeInterface::BigintMod(prlrt::BigintPtr self, const prlrt::BigintPtr 
 	self->Mod(a, b);
 }
 
+void CRuntimeInterface::BigintShiftRightInplace(prlrt::BigintPtr self, int a)
+{
+	self->ShiftRightInplace(a);
+}
+
+void CRuntimeInterface::BigintShiftLeftInplace(prlrt::BigintPtr self, int a)
+{
+	self->ShiftLeftInplace(a);
+}
+
 void CRuntimeInterface::BigintNegate(prlrt::BigintPtr self, const prlrt::BigintPtr a)
 {
 	self->Negate(a);
@@ -150,6 +160,11 @@ void CRuntimeInterface::BigintNegate(prlrt::BigintPtr self, const prlrt::BigintP
 void CRuntimeInterface::BigintNegateInplace(prlrt::BigintPtr self)
 {
 	self->NegateInplace();
+}
+
+bool CRuntimeInterface::BigintIsNegative(prlrt::BigintPtr self)
+{
+	return self->IsNegative();
 }
 
 int CRuntimeInterface::BigintCompare(prlrt::BigintPtr self, const prlrt::BigintPtr a)
@@ -213,6 +228,41 @@ bool CRuntimeInterface::StringToAddress(void *pAddress, const char *data, uint32
 	_details::AddressInplaceBuffer buf((uint8_t*)pAddress);
 	if (!m_pDB->m_pRuntimeAPI->JsonParseCoreType(rvm::NativeTypeId::Address, &cs, &buf))
 		return false;
+	return true;
+}
+
+uint32_t CRuntimeInterface::GetAddressToStringLength()
+{
+	return (uint32_t)(rvm::_details::ADDRESS_BASE32_LEN + 10); //extra space for "\"" + "\"" + ":ed25519"
+}
+
+bool CRuntimeInterface::AddressToString(const void* pData, uint32_t dataLen, char* out)
+{
+	rt::String result = "\"";
+	rvm::Address addr;
+	memcpy(&addr, pData, dataLen);
+	char addr_buf[rvm::_details::ADDRESS_BASE32_LEN];
+	rvm::_details::ADDRESS_TO_STRING(addr, addr_buf);
+	result += rt::String(addr_buf, rvm::_details::ADDRESS_BASE32_LEN)  + rt::SS(":") + oxd::SecuritySuite::IdToString(addr._SSID) + '"';
+	memcpy(out, result.Begin(), result.GetLength());
+	return true;
+}
+
+uint32_t CRuntimeInterface::GetHashToStringLength()
+{
+	return (uint32_t)os::Base32EncodeLength(RVM_HASH_SIZE) + 2;
+}
+
+bool CRuntimeInterface::HashToString(const void* pData, uint32_t dataLen, char* out)
+{
+	rt::String result = "\"";
+	if(dataLen != sizeof(rvm::HashValue))
+	{
+		return false;
+	}
+	rt::tos::Base32CrockfordLowercaseOnStack<> str(pData, dataLen);
+	result += str + '"';
+	memcpy(out, result.Begin(), result.GetLength());
 	return true;
 }
 
@@ -407,66 +457,66 @@ bool CRuntimeInterface::BurnGasFunctionCall()
 }
 
 #define PREDA_FLOAT_METHOD_IMPL(_FLOAT_TYPE, _SIZE)\
-void CRuntimeInterface::ConvertToString_##_SIZE(const ::prlrt::PrecisionFloatTemp<_SIZE>* pftemp, char* buf){\
+void CRuntimeInterface::ConvertToString_##_SIZE(const ::prlrt::PrecisionFloatInternal<_SIZE>* pftemp, char* buf){\
 	static_assert(sizeof(std::remove_pointer_t<decltype(pftemp)>) == sizeof(_FLOAT_TYPE), "Size of Precision Float inconsistent");\
 	_FLOAT_TYPE* pfloat = (_FLOAT_TYPE*)pftemp;\
 	std::string float_literal = pfloat->ToString();\
 	memcpy(buf, float_literal.data(), float_literal.length());\
 }\
-uint32_t CRuntimeInterface::GetConvertToStringLen_##_SIZE(const ::prlrt::PrecisionFloatTemp<_SIZE>* pftemp){\
+uint32_t CRuntimeInterface::GetConvertToStringLen_##_SIZE(const ::prlrt::PrecisionFloatInternal<_SIZE>* pftemp){\
 	static_assert(sizeof(std::remove_pointer_t<decltype(pftemp)>) == sizeof(_FLOAT_TYPE), "Size of Precision Float inconsistent");\
 	_FLOAT_TYPE* pfloat = (_FLOAT_TYPE*)pftemp;\
 	return (uint32_t)pfloat->ToString().length();\
 }\
-void CRuntimeInterface::ConvertFromString_##_SIZE(::prlrt::PrecisionFloatTemp<_SIZE>* pftemp, const char* float_literal){\
+void CRuntimeInterface::ConvertFromString_##_SIZE(::prlrt::PrecisionFloatInternal<_SIZE>* pftemp, const char* float_literal){\
 	static_assert(sizeof(std::remove_pointer_t<decltype(pftemp)>) == sizeof(_FLOAT_TYPE), "Size of Precision Float inconsistent");\
 	_FLOAT_TYPE pfloat(float_literal);\
-	*pftemp = *((::prlrt::PrecisionFloatTemp<_SIZE>*)&pfloat);\
+	*pftemp = *((::prlrt::PrecisionFloatInternal<_SIZE>*)&pfloat);\
 }\
-void CRuntimeInterface::Float_Add_##_SIZE(const ::prlrt::PrecisionFloatTemp<_SIZE>* a, const ::prlrt::PrecisionFloatTemp<_SIZE>* b, ::prlrt::PrecisionFloatTemp<_SIZE>* result){\
+void CRuntimeInterface::Float_Add_##_SIZE(const ::prlrt::PrecisionFloatInternal<_SIZE>* a, const ::prlrt::PrecisionFloatInternal<_SIZE>* b, ::prlrt::PrecisionFloatInternal<_SIZE>* result){\
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_FLOAT_TYPE), "Size of Precision Float inconsistent");\
 	static_assert(sizeof(std::remove_pointer_t<decltype(b)>) == sizeof(_FLOAT_TYPE), "Size of Precision Float inconsistent");\
 	memcpy(result->_Data, a->_Data, sizeof(result->_Data)/sizeof(uint8_t));\
 	((_FLOAT_TYPE*)result)->Add(*((_FLOAT_TYPE*)b));\
 }\
-void CRuntimeInterface::Float_Sub_##_SIZE(const ::prlrt::PrecisionFloatTemp<_SIZE>* a, const ::prlrt::PrecisionFloatTemp<_SIZE>* b, ::prlrt::PrecisionFloatTemp<_SIZE>* result){\
+void CRuntimeInterface::Float_Sub_##_SIZE(const ::prlrt::PrecisionFloatInternal<_SIZE>* a, const ::prlrt::PrecisionFloatInternal<_SIZE>* b, ::prlrt::PrecisionFloatInternal<_SIZE>* result){\
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_FLOAT_TYPE), "Size of Precision Float inconsistent");\
 	static_assert(sizeof(std::remove_pointer_t<decltype(b)>) == sizeof(_FLOAT_TYPE), "Size of Precision Float inconsistent");\
 	memcpy(result->_Data, a->_Data, sizeof(result->_Data)/sizeof(uint8_t));\
 	((_FLOAT_TYPE*)result)->Sub(*((_FLOAT_TYPE*)b));\
 }\
-void CRuntimeInterface::Float_Mul_##_SIZE(const ::prlrt::PrecisionFloatTemp<_SIZE>* a, const ::prlrt::PrecisionFloatTemp<_SIZE>* b, ::prlrt::PrecisionFloatTemp<_SIZE>* result){\
+void CRuntimeInterface::Float_Mul_##_SIZE(const ::prlrt::PrecisionFloatInternal<_SIZE>* a, const ::prlrt::PrecisionFloatInternal<_SIZE>* b, ::prlrt::PrecisionFloatInternal<_SIZE>* result){\
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_FLOAT_TYPE), "Size of Precision Float inconsistent");\
 	static_assert(sizeof(std::remove_pointer_t<decltype(b)>) == sizeof(_FLOAT_TYPE), "Size of Precision Float inconsistent");\
 	memcpy(result->_Data, a->_Data, sizeof(result->_Data)/sizeof(uint8_t));\
 	((_FLOAT_TYPE*)result)->Mul(*((_FLOAT_TYPE*)b));\
 }\
-void CRuntimeInterface::Float_Div_##_SIZE(const ::prlrt::PrecisionFloatTemp<_SIZE>* a, const ::prlrt::PrecisionFloatTemp<_SIZE>* b, ::prlrt::PrecisionFloatTemp<_SIZE>* result){\
+void CRuntimeInterface::Float_Div_##_SIZE(const ::prlrt::PrecisionFloatInternal<_SIZE>* a, const ::prlrt::PrecisionFloatInternal<_SIZE>* b, ::prlrt::PrecisionFloatInternal<_SIZE>* result){\
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_FLOAT_TYPE), "Size of Precision Float inconsistent");\
 	static_assert(sizeof(std::remove_pointer_t<decltype(b)>) == sizeof(_FLOAT_TYPE), "Size of Precision Float inconsistent");\
 	memcpy(result->_Data, a->_Data, sizeof(result->_Data)/sizeof(uint8_t));\
 	((_FLOAT_TYPE*)result)->Div(*((_FLOAT_TYPE*)b));\
 }\
-void CRuntimeInterface::Float_Zero_##_SIZE(::prlrt::PrecisionFloatTemp<_SIZE>* a){\
+void CRuntimeInterface::Float_Zero_##_SIZE(::prlrt::PrecisionFloatInternal<_SIZE>* a){\
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_FLOAT_TYPE), "Size of Precision Float inconsistent");\
 	_FLOAT_TYPE pfloat(0);\
-	*a = *((::prlrt::PrecisionFloatTemp<_SIZE>*)&pfloat);\
+	*a = *((::prlrt::PrecisionFloatInternal<_SIZE>*)&pfloat);\
 }\
-bool CRuntimeInterface::Float_IsZero_##_SIZE(const ::prlrt::PrecisionFloatTemp<_SIZE>* a){\
+bool CRuntimeInterface::Float_IsZero_##_SIZE(const ::prlrt::PrecisionFloatInternal<_SIZE>* a){\
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_FLOAT_TYPE), "Size of Precision Float inconsistent");\
 	_FLOAT_TYPE* pfloat_a = (_FLOAT_TYPE*)a;\
 	double result;\
 	pfloat_a->ToNumber(result);\
 	return result == 0.0;\
 }\
-void CRuntimeInterface::Float_Negate_##_SIZE(const ::prlrt::PrecisionFloatTemp<_SIZE>* a, ::prlrt::PrecisionFloatTemp<_SIZE>* result)\
+void CRuntimeInterface::Float_Negate_##_SIZE(const ::prlrt::PrecisionFloatInternal<_SIZE>* a, ::prlrt::PrecisionFloatInternal<_SIZE>* result)\
 {\
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_FLOAT_TYPE), "Size of Precision Float inconsistent");\
 	memcpy(result->_Data, a->_Data, sizeof(result->_Data)/sizeof(uint8_t));\
 	_FLOAT_TYPE pfloat_b(-1);\
 	((_FLOAT_TYPE*)result)->Mul(pfloat_b);\
 }\
-int CRuntimeInterface::Float_Compare_##_SIZE(const ::prlrt::PrecisionFloatTemp<_SIZE>* a, const ::prlrt::PrecisionFloatTemp<_SIZE>* b)\
+int CRuntimeInterface::Float_Compare_##_SIZE(const ::prlrt::PrecisionFloatInternal<_SIZE>* a, const ::prlrt::PrecisionFloatInternal<_SIZE>* b)\
 {\
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_FLOAT_TYPE), "Size of Precision Float inconsistent");\
 	_FLOAT_TYPE pfloat_a;\
@@ -490,82 +540,82 @@ PREDA_FLOAT_METHOD_IMPL(float_hp, 1024)
 
 
 #define LONGINT_NEGATE_FUNC(_SIZE) \
-void CRuntimeInterface::LongInt_Negate_##_SIZE(const ::prlrt::LongIntTemp<_SIZE>* a, ::prlrt::LongIntTemp<_SIZE>* result){ \
+void CRuntimeInterface::LongInt_Negate_##_SIZE(const ::prlrt::LongIntInternal<_SIZE>* a, ::prlrt::LongIntInternal<_SIZE>* result){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(LongInt_##_SIZE), "Size of DataType inconsistent"); \
 	memcpy(result->_Data, a->_Data, sizeof(result->_Data)/sizeof(uint8_t)); \
 	((LongInt_##_SIZE*)result)->ChangeSign(); } \
-bool CRuntimeInterface::LongInt_IsSign_##_SIZE(const ::prlrt::LongIntTemp<_SIZE>* a){ \
+bool CRuntimeInterface::LongInt_IsSign_##_SIZE(const ::prlrt::LongIntInternal<_SIZE>* a){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(LongInt_##_SIZE), "Size of DataType inconsistent"); \
 	return ((LongInt_##_SIZE*)a)->IsSign(); }
 #define LONGINTIMPLFUNC(_SIZE, _INT_TYPE) \
-void CRuntimeInterface::_INT_TYPE##_Zero_##_SIZE(::prlrt::LongIntTemp<_SIZE>* a){ \
+void CRuntimeInterface::_INT_TYPE##_Zero_##_SIZE(::prlrt::LongIntInternal<_SIZE>* a){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(LongInt_##_SIZE), "Size of DataType inconsistent"); \
 	_INT_TYPE##_##_SIZE b(0); \
-	*a = *((::prlrt::LongIntTemp<_SIZE>*)&b); } \
-void CRuntimeInterface::_INT_TYPE##_fromInt_##_SIZE(::prlrt::LongIntTemp<_SIZE>* a, int64_t in){ \
+	*a = *((::prlrt::LongIntInternal<_SIZE>*)&b); } \
+void CRuntimeInterface::_INT_TYPE##_fromInt_##_SIZE(::prlrt::LongIntInternal<_SIZE>* a, int64_t in){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(LongInt_##_SIZE), "Size of DataType inconsistent"); \
 	((_INT_TYPE##_##_SIZE*)a)->FromInt((ttmath::sint)in); } \
-void CRuntimeInterface::_INT_TYPE##_fromUInt_##_SIZE(::prlrt::LongIntTemp<_SIZE>* a, uint64_t in){ \
+void CRuntimeInterface::_INT_TYPE##_fromUInt_##_SIZE(::prlrt::LongIntInternal<_SIZE>* a, uint64_t in){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(LongInt_##_SIZE), "Size of DataType inconsistent"); \
 	((_INT_TYPE##_##_SIZE*)a)->FromInt((ttmath::uint)in); } \
-int CRuntimeInterface::_INT_TYPE##_toInt64_##_SIZE(const ::prlrt::LongIntTemp<_SIZE>* a, int64_t* result){ \
+int CRuntimeInterface::_INT_TYPE##_toInt64_##_SIZE(const ::prlrt::LongIntInternal<_SIZE>* a, int64_t* result){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(LongInt_##_SIZE), "Size of DataType inconsistent"); \
 	return ((_INT_TYPE##_##_SIZE*)a)->ToInt(*(ttmath::sint*)result); } \
-int CRuntimeInterface::_INT_TYPE##_toUInt64_##_SIZE(const ::prlrt::LongIntTemp<_SIZE>* a, uint64_t* result){ \
+int CRuntimeInterface::_INT_TYPE##_toUInt64_##_SIZE(const ::prlrt::LongIntInternal<_SIZE>* a, uint64_t* result){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(LongInt_##_SIZE), "Size of DataType inconsistent"); \
 	return ((_INT_TYPE##_##_SIZE*)a)->ToUInt(*(ttmath::uint*)result); } \
-void CRuntimeInterface::_INT_TYPE##_rightShift_##_SIZE(::prlrt::LongIntTemp<_SIZE>* a, int64_t shift){ \
+void CRuntimeInterface::_INT_TYPE##_rightShift_##_SIZE(::prlrt::LongIntInternal<_SIZE>* a, int64_t shift){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(LongInt_##_SIZE), "Size of DataType inconsistent"); \
 	*((_INT_TYPE##_##_SIZE*)a) >>= shift; } \
-void CRuntimeInterface::_INT_TYPE##_leftShift_##_SIZE(::prlrt::LongIntTemp<_SIZE>* a, int64_t shift){ \
+void CRuntimeInterface::_INT_TYPE##_leftShift_##_SIZE(::prlrt::LongIntInternal<_SIZE>* a, int64_t shift){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(LongInt_##_SIZE), "Size of DataType inconsistent"); \
 	*((_INT_TYPE##_##_SIZE*)a) <<= shift; } \
-void CRuntimeInterface::_INT_TYPE##_ConvertFromString_##_SIZE(::prlrt::LongIntTemp<_SIZE>* a, const char* longint_literal){ \
+void CRuntimeInterface::_INT_TYPE##_ConvertFromString_##_SIZE(::prlrt::LongIntInternal<_SIZE>* a, const char* longint_literal){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(LongInt_##_SIZE), "Size of DataType inconsistent"); \
 	_INT_TYPE##_##_SIZE b(longint_literal); \
-	*a = *((::prlrt::LongIntTemp<_SIZE>*)&b); } \
-void CRuntimeInterface::_INT_TYPE##_ConvertFromHexString_##_SIZE(::prlrt::LongIntTemp<_SIZE>* a, const char* longint_literal){ \
+	*a = *((::prlrt::LongIntInternal<_SIZE>*)&b); } \
+void CRuntimeInterface::_INT_TYPE##_ConvertFromHexString_##_SIZE(::prlrt::LongIntInternal<_SIZE>* a, const char* longint_literal){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	_INT_TYPE##_##_SIZE b; \
 	b.FromString(longint_literal, 16); \
-	*a = *((::prlrt::LongIntTemp<_SIZE>*)&b); } \
-void CRuntimeInterface::_INT_TYPE##_ConvertToString_##_SIZE(const ::prlrt::LongIntTemp<_SIZE>* a, char* buf){ \
+	*a = *((::prlrt::LongIntInternal<_SIZE>*)&b); } \
+void CRuntimeInterface::_INT_TYPE##_ConvertToString_##_SIZE(const ::prlrt::LongIntInternal<_SIZE>* a, char* buf){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	std::string result; \
 	((_INT_TYPE##_##_SIZE*)a)->ToString(result); \
 	memcpy(buf, result.data(), result.length()); } \
-uint32_t CRuntimeInterface::_INT_TYPE##_GetConvertToStringLen_##_SIZE(const ::prlrt::LongIntTemp<_SIZE>* a){ \
+uint32_t CRuntimeInterface::_INT_TYPE##_GetConvertToStringLen_##_SIZE(const ::prlrt::LongIntInternal<_SIZE>* a){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	return uint32_t(((_INT_TYPE##_##_SIZE*)a)->ToString().length()); } \
-bool CRuntimeInterface::_INT_TYPE##_IsZero_##_SIZE(const ::prlrt::LongIntTemp<_SIZE>* a) { \
+bool CRuntimeInterface::_INT_TYPE##_IsZero_##_SIZE(const ::prlrt::LongIntInternal<_SIZE>* a) { \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	return ((_INT_TYPE##_##_SIZE*)a)->IsZero(); } \
-void CRuntimeInterface::_INT_TYPE##_Add_##_SIZE(const ::prlrt::LongIntTemp<_SIZE>* a, const ::prlrt::LongIntTemp<_SIZE>* b, ::prlrt::LongIntTemp<_SIZE>* result){ \
+void CRuntimeInterface::_INT_TYPE##_Add_##_SIZE(const ::prlrt::LongIntInternal<_SIZE>* a, const ::prlrt::LongIntInternal<_SIZE>* b, ::prlrt::LongIntInternal<_SIZE>* result){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	static_assert(sizeof(std::remove_pointer_t<decltype(b)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	memcpy(result->_Data, a->_Data, sizeof(result->_Data)/sizeof(uint8_t)); \
 	((_INT_TYPE##_##_SIZE*)result)->Add(*((_INT_TYPE##_##_SIZE*)b)); } \
-void CRuntimeInterface::_INT_TYPE##_Sub_##_SIZE(const ::prlrt::LongIntTemp<_SIZE>* a, const ::prlrt::LongIntTemp<_SIZE>* b, ::prlrt::LongIntTemp<_SIZE>* result){ \
+void CRuntimeInterface::_INT_TYPE##_Sub_##_SIZE(const ::prlrt::LongIntInternal<_SIZE>* a, const ::prlrt::LongIntInternal<_SIZE>* b, ::prlrt::LongIntInternal<_SIZE>* result){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	static_assert(sizeof(std::remove_pointer_t<decltype(b)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	memcpy(result->_Data, a->_Data, sizeof(result->_Data)/sizeof(uint8_t)); \
 	((_INT_TYPE##_##_SIZE*)result)->Sub(*((_INT_TYPE##_##_SIZE*)b)); } \
-void CRuntimeInterface::_INT_TYPE##_Mul_##_SIZE(const ::prlrt::LongIntTemp<_SIZE>* a, const ::prlrt::LongIntTemp<_SIZE>* b, ::prlrt::LongIntTemp<_SIZE>* result){ \
+void CRuntimeInterface::_INT_TYPE##_Mul_##_SIZE(const ::prlrt::LongIntInternal<_SIZE>* a, const ::prlrt::LongIntInternal<_SIZE>* b, ::prlrt::LongIntInternal<_SIZE>* result){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	static_assert(sizeof(std::remove_pointer_t<decltype(b)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	memcpy(result->_Data, a->_Data, sizeof(result->_Data)/sizeof(uint8_t)); \
 	((_INT_TYPE##_##_SIZE*)result)->Mul(*((_INT_TYPE##_##_SIZE*)b)); } \
-void CRuntimeInterface::_INT_TYPE##_Div_##_SIZE(const ::prlrt::LongIntTemp<_SIZE>* a, const ::prlrt::LongIntTemp<_SIZE>* b, ::prlrt::LongIntTemp<_SIZE>* result){ \
+void CRuntimeInterface::_INT_TYPE##_Div_##_SIZE(const ::prlrt::LongIntInternal<_SIZE>* a, const ::prlrt::LongIntInternal<_SIZE>* b, ::prlrt::LongIntInternal<_SIZE>* result){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	static_assert(sizeof(std::remove_pointer_t<decltype(b)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	memcpy(result->_Data, a->_Data, sizeof(result->_Data)/sizeof(uint8_t)); \
 	((_INT_TYPE##_##_SIZE*)result)->Div(*((_INT_TYPE##_##_SIZE*)b)); } \
-void CRuntimeInterface::_INT_TYPE##_Mod_##_SIZE(const ::prlrt::LongIntTemp<_SIZE>* a, const ::prlrt::LongIntTemp<_SIZE>* b, ::prlrt::LongIntTemp<_SIZE>* result){ \
+void CRuntimeInterface::_INT_TYPE##_Mod_##_SIZE(const ::prlrt::LongIntInternal<_SIZE>* a, const ::prlrt::LongIntInternal<_SIZE>* b, ::prlrt::LongIntInternal<_SIZE>* result){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	static_assert(sizeof(std::remove_pointer_t<decltype(b)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	_INT_TYPE##_##_SIZE remainder = (*(_INT_TYPE##_##_SIZE*)a) % (*((_INT_TYPE##_##_SIZE*)b)); \
 	memcpy(result->_Data, &remainder, sizeof(result->_Data)/sizeof(uint8_t)); } \
-int CRuntimeInterface::_INT_TYPE##_Compare_##_SIZE(const ::prlrt::LongIntTemp<_SIZE>* a, const ::prlrt::LongIntTemp<_SIZE>* b){ \
+int CRuntimeInterface::_INT_TYPE##_Compare_##_SIZE(const ::prlrt::LongIntInternal<_SIZE>* a, const ::prlrt::LongIntInternal<_SIZE>* b){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	static_assert(sizeof(std::remove_pointer_t<decltype(b)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	_INT_TYPE##_##_SIZE* a_math = (_INT_TYPE##_##_SIZE*)a; \
@@ -573,10 +623,10 @@ int CRuntimeInterface::_INT_TYPE##_Compare_##_SIZE(const ::prlrt::LongIntTemp<_S
 	if(*a_math > *b_math) return 1; \
 	else if(*a_math < *b_math) return -1; \
 	return 0;} \
-void CRuntimeInterface::_INT_TYPE##_SetMax_##_SIZE(::prlrt::LongIntTemp<_SIZE>* a){ \
+void CRuntimeInterface::_INT_TYPE##_SetMax_##_SIZE(::prlrt::LongIntInternal<_SIZE>* a){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	((_INT_TYPE##_##_SIZE*)a)->SetMax(); } \
-void CRuntimeInterface::_INT_TYPE##_SetMin_##_SIZE(::prlrt::LongIntTemp<_SIZE>* a){ \
+void CRuntimeInterface::_INT_TYPE##_SetMin_##_SIZE(::prlrt::LongIntInternal<_SIZE>* a){ \
 	static_assert(sizeof(std::remove_pointer_t<decltype(a)>) == sizeof(_INT_TYPE##_##_SIZE), "Size of DataType inconsistent"); \
 	((_INT_TYPE##_##_SIZE*)a)->SetMin(); }
 #pragma warning(push)

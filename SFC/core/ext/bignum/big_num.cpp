@@ -595,7 +595,7 @@ void BN_Add(const BN_Ref& a, const BN_Ref& b, ext::BigNumMutable& ret) // ret = 
 		ret.SetSign(false);
 		break;
 	case SIGNS_POS_NEG: BN_Sub(a, b.Abs(), ret); break;
-	case SIGNS_NEG_POS: BN_Sub(a.Abs(), b, ret); break;
+	case SIGNS_NEG_POS: BN_Sub(b, a.Abs(), ret); break;
 	case SIGNS_NEG_NEG: 
 		BN_AbsAdd(b, a, ret);
 		ret.SetSign(true);
@@ -622,7 +622,7 @@ void BN_Sub(const BN_Ref& a, const BN_Ref& b, ext::BigNumMutable& ret) // ret = 
 		BN_AbsAdd(a, b, ret);
 		break;
 	case SIGNS_NEG_POS:
-		ret.SetSign(false);
+		ret.SetSign(true);
 		BN_AbsAdd(a, b, ret);
 		break;
 	case SIGNS_NEG_NEG:	
@@ -632,7 +632,7 @@ void BN_Sub(const BN_Ref& a, const BN_Ref& b, ext::BigNumMutable& ret) // ret = 
 			BN_AbsSub(b, a, ret);
 		}
 		else
-		{	ret.SetSign(false);
+		{	ret.SetSign(true);
 			BN_AbsSub(a, b, ret);
 		}
 		break;

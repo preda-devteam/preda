@@ -250,6 +250,10 @@ public:
 	{	struct _func{ static void delete_func(LPVOID x){ _SafeFree32AL_ConstPtr(x); } };
 		DeleteObject(ptr,TTL_msec,_func::delete_func);
 	}
+	static void Delete8AL(LPVOID ptr, int TTL_msec)
+	{	struct _func{ static void delete_func(LPVOID x){ _SafeFree8AL_ConstPtr(x); } };
+		DeleteObject(ptr,TTL_msec,_func::delete_func);
+	}
 	static void Delete(LPVOID ptr, int TTL_msec, LPFUNC_DELETION dfunc )
 	{	DeleteObject(ptr,TTL_msec,dfunc);
 	}
@@ -260,6 +264,7 @@ public:
 #define _SafeDel_Delayed(x, TTL_msec)		{ if(x){ os::DelayedGarbageCollection::DeleteObj(x,TTL_msec); x=nullptr; } }
 #define _SafeDelArray_Delayed(x,TTL_msec)	{ if(x){ os::DelayedGarbageCollection::DeleteArray(x,TTL_msec); x=nullptr; } }
 #define _SafeFree32AL_Delayed(x,TTL_msec)	{ if(x){ os::DelayedGarbageCollection::Delete32AL(x,TTL_msec); x=nullptr; } }
+#define _SafeFree8AL_Delayed(x,TTL_msec)	{ if(x){ os::DelayedGarbageCollection::Delete8AL(x,TTL_msec); x=nullptr; } }
 #define _SafeRelease_Delayed(x, TTL_msec)	{ if(x){ os::DelayedGarbageCollection::ReleaseObj(x,TTL_msec); x=nullptr; } }
 
 

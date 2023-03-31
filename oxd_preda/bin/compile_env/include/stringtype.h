@@ -253,9 +253,10 @@ namespace prlrt {
 			ptr->set(*rhs.ptr.get());
 		}
 
-		void __prli_append(const __prlt_string &rhs)
+		__prlt_string __prli_append(const __prlt_string &rhs)
 		{
 			ptr->append(*rhs.ptr.get());
+			return *this;
 		}
 
 		// serialization-related interface

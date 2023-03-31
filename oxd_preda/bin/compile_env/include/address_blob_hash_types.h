@@ -129,6 +129,20 @@ namespace prlrt {
 		{
 			return PREDA_CALL(IsDomainAddress, this);
 		}
+		explicit operator __prlt_string() const
+		{
+			return __prlt_string(ToString().c_str());
+		}
+		std::string ToString() const
+		{
+			uint32_t len = PREDA_CALL(GetAddressToStringLength);
+			uint32_t dataLen = get_serialize_size();
+			std::vector<char> strBuf(len, '\0');
+			std::vector<uint8_t> dataBuf(dataLen);
+			serialize_out(&dataBuf[0], true);
+			PREDA_CALL(AddressToString, &dataBuf[0], dataLen, &strBuf[0]);
+			return std::string(&strBuf[0], len);
+		}
 	};
 
 	struct  __prlt_blob : public fixed_size_value_type<36, type_identifier_enum::___blob>
@@ -146,6 +160,20 @@ namespace prlrt {
 		__prlt_hash(const __prlt_string &rhs)
 		{
 			PREDA_CALL(CalculateHash, this, (const uint8_t*)rhs.ptr->str.c_str(), uint32_t(rhs.ptr->str.length()));
+		}
+		explicit operator __prlt_string() const
+		{
+			return __prlt_string(ToString().c_str());
+		}
+		std::string ToString() const
+		{
+			uint32_t len = PREDA_CALL(GetHashToStringLength);
+			uint32_t dataLen = get_serialize_size();
+			std::vector<char> strBuf(len + 1, '\0');
+			std::vector<uint8_t> dataBuf(dataLen);
+			serialize_out(&dataBuf[0], true);
+			PREDA_CALL(HashToString, &dataBuf[0], dataLen, &strBuf[0]);
+			return std::string(&strBuf[0], len);
 		}
 	};
 }

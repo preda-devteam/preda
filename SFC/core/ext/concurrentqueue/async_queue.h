@@ -40,7 +40,7 @@
  *  @{
  */
 
-#include "../../../../SFC/essentials.h"
+#include "../../../essentials.h"
 #include "blockingconcurrentqueue.h"
 #include "readerwriterqueue.h"
 

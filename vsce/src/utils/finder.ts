@@ -2,9 +2,9 @@ import * as vscode from "vscode";
 import { existsSync } from "fs-extra";
 
 const path = require("path");
-const isWin = process.platform === "win32";
+export const isWin = process.platform === "win32";
 
-export const getCurrentActiveFileAndFolder = (uri: vscode.Uri) => {
+export const getCurrentActiveFileAndFolder = (uri?: vscode.Uri) => {
   // the path of the folder
   let currentFilePath = uri?.fsPath;
   // command line to get the current TAB path

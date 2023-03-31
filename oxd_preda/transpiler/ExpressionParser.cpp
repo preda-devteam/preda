@@ -643,55 +643,54 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 		std::string operatorString;
 		bool modifiesFirstOperand;
 		unsigned char numFixedSubexpressions;
-		bool requiresFirstTwoOperandsOfSameType;
 		ExpressionResultType resultType;
 	};
 
 	static const ExpressionDesc predaExpressions[uint8_t(transpiler::PredaExpressionTypes::Max)] =
 	{
-		{transpiler::OperatorTypeBitMask::PostIncrementBit,			"++",	true,	1,	false,	ExpressionResultType::Void},										//		PostIncrement = 0,
-		{transpiler::OperatorTypeBitMask::PostDecrementBit,			"--",	true,	1,	false,	ExpressionResultType::Void},										//		PostDecrement,
-		{transpiler::OperatorTypeBitMask::BracketBit,				"[]",	false,	2,	false,	ExpressionResultType::Custom},										//		Bracket,
-		{transpiler::OperatorTypeBitMask::ParenthesesBit,			"()",	false,	1,	false,	ExpressionResultType::Custom},										//		Parentheses,
-		{transpiler::OperatorTypeBitMask::DotBit,					".",	false,	1,	false,	ExpressionResultType::Custom},										//		Dot,
-		{transpiler::OperatorTypeBitMask(0),						"",		false,	1,	false,	ExpressionResultType::SameAsFirstOperand},							//		SurroundWithParentheses,
-		{transpiler::OperatorTypeBitMask::PreIncrementBit,			"++",	true,	1,	false,	ExpressionResultType::Void},										//		PreIncrement,
-		{transpiler::OperatorTypeBitMask::PreDecrementBit,			"--",	true,	1,	false,	ExpressionResultType::Void},										//		PreDecrement,
-		{transpiler::OperatorTypeBitMask::UnaryPlusBit,				"+",	false,	1,	false,	ExpressionResultType::SameAsFirstOperand},							//		UnaryPlus,
-		{transpiler::OperatorTypeBitMask::UnaryMinusBit,			"-",	false,	1,	false,	ExpressionResultType::SameAsFirstOperand},							//		UnaryMinus,
-		{transpiler::OperatorTypeBitMask::LogicalNotBit,			"!",	false,	1,	false,	ExpressionResultType::SameAsFirstOperand},							//		LogicalNot,
-		{transpiler::OperatorTypeBitMask::BitwiseNotBit,			"~",	false,	1,	false,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseNot,
-		{transpiler::OperatorTypeBitMask::MultiplyBit,				"*",	false,	2,	true,	ExpressionResultType::SameAsFirstOperand},							//		Multiply,
-		{transpiler::OperatorTypeBitMask::DivideBit,				"/",	false,	2,	true,	ExpressionResultType::SameAsFirstOperand},							//		Divide,
-		{transpiler::OperatorTypeBitMask::ModuloBit,				"%",	false,	2,	true,	ExpressionResultType::SameAsFirstOperand},							//		Modulo,
-		{transpiler::OperatorTypeBitMask::AddBit,					"+",	false,	2,	true,	ExpressionResultType::SameAsFirstOperand},							//		Add,
-		{transpiler::OperatorTypeBitMask::SubtractBit,				"-",	false,	2,	true,	ExpressionResultType::SameAsFirstOperand},							//		Subtract,
-		{transpiler::OperatorTypeBitMask::ShiftLeftBit,				"<<",	false,	2,	false,	ExpressionResultType::SameAsFirstOperand},							//		ShiftLeft,
-		{transpiler::OperatorTypeBitMask::ShiftRightBit,			">>",	false,	2,	false,	ExpressionResultType::SameAsFirstOperand},							//		ShiftRight,
-		{transpiler::OperatorTypeBitMask::LessThanBit,				"<",	false,	2,	true,	ExpressionResultType::Bool},										//		LessThan,
-		{transpiler::OperatorTypeBitMask::GreaterThanBit,			">",	false,	2,	true,	ExpressionResultType::Bool},										//		GreaterThan,
-		{transpiler::OperatorTypeBitMask::LessThanOrEqualBit,		"<=",	false,	2,	true,	ExpressionResultType::Bool},										//		LessThanOrEqual,
-		{transpiler::OperatorTypeBitMask::GreaterThanOrEqualBit,	">=",	false,	2,	true,	ExpressionResultType::Bool},										//		GreaterThanOrEqual,
-		{transpiler::OperatorTypeBitMask::EqualBit,					"==",	false,	2,	true,	ExpressionResultType::Bool},										//		Equal,
-		{transpiler::OperatorTypeBitMask::NotEqualBit,				"!=",	false,	2,	true,	ExpressionResultType::Bool},										//		NotEqual,
-		{transpiler::OperatorTypeBitMask::BitwiseAndBit,			"&",	false,	2,	true,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseAnd,
-		{transpiler::OperatorTypeBitMask::BitwiseXorBit,			"^",	false,	2,	true,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseXor,
-		{transpiler::OperatorTypeBitMask::BitwiseOrBit,				"|",	false,	2,	true,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseOr,
-		{transpiler::OperatorTypeBitMask::LogicalAndBit,			"&&",	false,	2,	true,	ExpressionResultType::Bool},										//		LogicalAnd,
-		{transpiler::OperatorTypeBitMask::LogicalOrBit,				"||",	false,	2,	true,	ExpressionResultType::Bool},										//		LogicalOr,
-		{transpiler::OperatorTypeBitMask(0),						"?:",	false,	3,	false,	ExpressionResultType::Custom},										//		TernaryConditional,
-		{transpiler::OperatorTypeBitMask::AssignmentBit,			"=",	true,	2,	true,	ExpressionResultType::Void},										//		Assignment,
-		{transpiler::OperatorTypeBitMask::AssignmentAddBit,			"+=",	true,	2,	true,	ExpressionResultType::Void},										//		AssignmentAdd,
-		{transpiler::OperatorTypeBitMask::AssignmentSubtractBit,	"-=",	true,	2,	true,	ExpressionResultType::Void},										//		AssignmentSubtract,
-		{transpiler::OperatorTypeBitMask::AssignmentMultiplyBit,	"*=",	true,	2,	true,	ExpressionResultType::Void},										//		AssignmentMultiply,
-		{transpiler::OperatorTypeBitMask::AssignmentDivideBit,		"/=",	true,	2,	true,	ExpressionResultType::Void},										//		AssignmentDivide,
-		{transpiler::OperatorTypeBitMask::AssignmentModuloBit,		"%=",	true,	2,	true,	ExpressionResultType::Void},										//		AssignmentModulo,
-		{transpiler::OperatorTypeBitMask::AssignmentShiftLeftBit,	"<<=",	true,	2,	true,	ExpressionResultType::Void},										//		AssignmentShiftLeft,
-		{transpiler::OperatorTypeBitMask::AssignmentShiftRightBit,	">>=",	true,	2,	true,	ExpressionResultType::Void},										//		AssignmentShiftRight,
-		{transpiler::OperatorTypeBitMask::AssignmentBitwiseAndBit,	"&=",	true,	2,	true,	ExpressionResultType::Void},										//		AssignmentBitwiseAnd,
-		{transpiler::OperatorTypeBitMask::AssignmentBitwiseXorBit,	"^=",	true,	2,	true,	ExpressionResultType::Void},										//		AssignmentBitwiseXor,
-		{transpiler::OperatorTypeBitMask::AssignmentBitwiseOrBit,	"|=",	true,	2,	true,	ExpressionResultType::Void},										//		AssignmentBitwiseOr,
-		{transpiler::OperatorTypeBitMask(0),						"",		false,	2,	true,	ExpressionResultType::Custom}										//		Primary,
+		{transpiler::OperatorTypeBitMask::PostIncrementBit,			"++",	true,	1,	ExpressionResultType::Void},										//		PostIncrement = 0,
+		{transpiler::OperatorTypeBitMask::PostDecrementBit,			"--",	true,	1,	ExpressionResultType::Void},										//		PostDecrement,
+		{transpiler::OperatorTypeBitMask::BracketBit,				"[]",	false,	2,	ExpressionResultType::Custom},										//		Bracket,
+		{transpiler::OperatorTypeBitMask::ParenthesesBit,			"()",	false,	1,	ExpressionResultType::Custom},										//		Parentheses,
+		{transpiler::OperatorTypeBitMask::DotBit,					".",	false,	1,	ExpressionResultType::Custom},										//		Dot,
+		{transpiler::OperatorTypeBitMask(0),						"",		false,	1,	ExpressionResultType::SameAsFirstOperand},							//		SurroundWithParentheses,
+		{transpiler::OperatorTypeBitMask::PreIncrementBit,			"++",	true,	1,	ExpressionResultType::Void},										//		PreIncrement,
+		{transpiler::OperatorTypeBitMask::PreDecrementBit,			"--",	true,	1,	ExpressionResultType::Void},										//		PreDecrement,
+		{transpiler::OperatorTypeBitMask::UnaryPlusBit,				"+",	false,	1,	ExpressionResultType::SameAsFirstOperand},							//		UnaryPlus,
+		{transpiler::OperatorTypeBitMask::UnaryMinusBit,			"-",	false,	1,	ExpressionResultType::SameAsFirstOperand},							//		UnaryMinus,
+		{transpiler::OperatorTypeBitMask::LogicalNotBit,			"!",	false,	1,	ExpressionResultType::SameAsFirstOperand},							//		LogicalNot,
+		{transpiler::OperatorTypeBitMask::BitwiseNotBit,			"~",	false,	1,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseNot,
+		{transpiler::OperatorTypeBitMask::MultiplyBit,				"*",	false,	2,	ExpressionResultType::Custom},										//		Multiply,
+		{transpiler::OperatorTypeBitMask::DivideBit,				"/",	false,	2,	ExpressionResultType::Custom},										//		Divide,
+		{transpiler::OperatorTypeBitMask::ModuloBit,				"%",	false,	2,	ExpressionResultType::Custom},										//		Modulo,
+		{transpiler::OperatorTypeBitMask::AddBit,					"+",	false,	2,	ExpressionResultType::Custom},										//		Add,
+		{transpiler::OperatorTypeBitMask::SubtractBit,				"-",	false,	2,	ExpressionResultType::Custom},										//		Subtract,
+		{transpiler::OperatorTypeBitMask::ShiftLeftBit,				"<<",	false,	2,	ExpressionResultType::SameAsFirstOperand},							//		ShiftLeft,
+		{transpiler::OperatorTypeBitMask::ShiftRightBit,			">>",	false,	2,	ExpressionResultType::SameAsFirstOperand},							//		ShiftRight,
+		{transpiler::OperatorTypeBitMask::LessThanBit,				"<",	false,	2,	ExpressionResultType::Bool},										//		LessThan,
+		{transpiler::OperatorTypeBitMask::GreaterThanBit,			">",	false,	2,	ExpressionResultType::Bool},										//		GreaterThan,
+		{transpiler::OperatorTypeBitMask::LessThanOrEqualBit,		"<=",	false,	2,	ExpressionResultType::Bool},										//		LessThanOrEqual,
+		{transpiler::OperatorTypeBitMask::GreaterThanOrEqualBit,	">=",	false,	2,	ExpressionResultType::Bool},										//		GreaterThanOrEqual,
+		{transpiler::OperatorTypeBitMask::EqualBit,					"==",	false,	2,	ExpressionResultType::Bool},										//		Equal,
+		{transpiler::OperatorTypeBitMask::NotEqualBit,				"!=",	false,	2,	ExpressionResultType::Bool},										//		NotEqual,
+		{transpiler::OperatorTypeBitMask::BitwiseAndBit,			"&",	false,	2,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseAnd,
+		{transpiler::OperatorTypeBitMask::BitwiseXorBit,			"^",	false,	2,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseXor,
+		{transpiler::OperatorTypeBitMask::BitwiseOrBit,				"|",	false,	2,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseOr,
+		{transpiler::OperatorTypeBitMask::LogicalAndBit,			"&&",	false,	2,	ExpressionResultType::Bool},										//		LogicalAnd,
+		{transpiler::OperatorTypeBitMask::LogicalOrBit,				"||",	false,	2,	ExpressionResultType::Bool},										//		LogicalOr,
+		{transpiler::OperatorTypeBitMask(0),						"?:",	false,	3,	ExpressionResultType::Custom},								//		TernaryConditional,
+		{transpiler::OperatorTypeBitMask::AssignmentBit,			"=",	true,	2,	ExpressionResultType::Void},										//		Assignment,
+		{transpiler::OperatorTypeBitMask::AssignmentAddBit,			"+=",	true,	2,	ExpressionResultType::Void},										//		AssignmentAdd,
+		{transpiler::OperatorTypeBitMask::AssignmentSubtractBit,	"-=",	true,	2,	ExpressionResultType::Void},										//		AssignmentSubtract,
+		{transpiler::OperatorTypeBitMask::AssignmentMultiplyBit,	"*=",	true,	2,	ExpressionResultType::Void},										//		AssignmentMultiply,
+		{transpiler::OperatorTypeBitMask::AssignmentDivideBit,		"/=",	true,	2,	ExpressionResultType::Void},										//		AssignmentDivide,
+		{transpiler::OperatorTypeBitMask::AssignmentModuloBit,		"%=",	true,	2,	ExpressionResultType::Void},										//		AssignmentModulo,
+		{transpiler::OperatorTypeBitMask::AssignmentShiftLeftBit,	"<<=",	true,	2,	ExpressionResultType::Void},										//		AssignmentShiftLeft,
+		{transpiler::OperatorTypeBitMask::AssignmentShiftRightBit,	">>=",	true,	2,	ExpressionResultType::Void},										//		AssignmentShiftRight,
+		{transpiler::OperatorTypeBitMask::AssignmentBitwiseAndBit,	"&=",	true,	2,	ExpressionResultType::Void},										//		AssignmentBitwiseAnd,
+		{transpiler::OperatorTypeBitMask::AssignmentBitwiseXorBit,	"^=",	true,	2,	ExpressionResultType::Void},										//		AssignmentBitwiseXor,
+		{transpiler::OperatorTypeBitMask::AssignmentBitwiseOrBit,	"|=",	true,	2,	ExpressionResultType::Void},										//		AssignmentBitwiseOr,
+		{transpiler::OperatorTypeBitMask(0),						"",		false,	2,	ExpressionResultType::Custom}										//		Primary,
 	};
 
 	static_assert(sizeof(predaExpressions) / sizeof(predaExpressions[0]) == uint8_t(transpiler::PredaExpressionTypes::Max), "predaExpressions has wrong size");
@@ -718,17 +717,6 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 			m_pErrorPortal->SetAnchor(subExpressions[0]->start);
 			m_pErrorPortal->AddUnsupportedOperatorError(subExpRes[0].type.baseConcreteType, curExprDesc.operatorString);
 			return false;
-		}
-
-		// Check if the first two operands are of same type
-		if (curExprDesc.numFixedSubexpressions >= 2 && curExprDesc.requiresFirstTwoOperandsOfSameType)
-		{
-			if (subExpRes[0].type.baseConcreteType != subExpRes[1].type.baseConcreteType)
-			{
-				m_pErrorPortal->SetAnchor(subExpressions[0]->start);
-				m_pErrorPortal->AddTypeMismatchError(subExpRes[0].type.baseConcreteType, subExpRes[1].type.baseConcreteType);
-				return false;
-			}
 		}
 
 		// Check if the operator is modifies the first operand and it is const
@@ -798,7 +786,6 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 	case transpiler::PredaExpressionTypes::Modulo:
 	case transpiler::PredaExpressionTypes::Add:
 	case transpiler::PredaExpressionTypes::Subtract:
-	case transpiler::PredaExpressionTypes::ShiftLeft:
 	case transpiler::PredaExpressionTypes::BitwiseAnd:
 	case transpiler::PredaExpressionTypes::BitwiseXor:
 	case transpiler::PredaExpressionTypes::BitwiseOr:
@@ -816,13 +803,39 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 	case transpiler::PredaExpressionTypes::AssignmentMultiply:
 	case transpiler::PredaExpressionTypes::AssignmentDivide:
 	case transpiler::PredaExpressionTypes::AssignmentModulo:
-	case transpiler::PredaExpressionTypes::AssignmentShiftLeft:
-	case transpiler::PredaExpressionTypes::AssignmentShiftRight:
 	case transpiler::PredaExpressionTypes::AssignmentBitwiseAnd:
 	case transpiler::PredaExpressionTypes::AssignmentBitwiseXor:
 	case transpiler::PredaExpressionTypes::AssignmentBitwiseOr:
-		outResult.text = subExpRes[0].text + " " + ctx->children[1]->getText() + " " + subExpRes[1].text;
+	case transpiler::PredaExpressionTypes::ShiftLeft:
+	case transpiler::PredaExpressionTypes::AssignmentShiftLeft:
+	case transpiler::PredaExpressionTypes::AssignmentShiftRight:
+	{
+		if (subExpRes[0].type.baseConcreteType == subExpRes[1].type.baseConcreteType)
+		{
+			outResult.text = subExpRes[0].text + " " + ctx->children[1]->getText() + " " + subExpRes[1].text;
+			if (predaExpressions[ctx->expressionType].resultType == ExpressionResultType::Custom)
+			{
+				outResult.type.baseConcreteType = subExpRes[0].type.baseConcreteType;
+			}
+		}
+		else
+		{
+			transpiler::PredaTranspilerContext::OperatorProcessor::expressionPack exprPack({ subExpRes[0].text, subExpRes[1].text, subExpRes[0].type.baseConcreteType, subExpRes[1].type.baseConcreteType, ctx->children[1]->getText(), predaExpressions[ctx->expressionType].operatorBitMask });
+			ConcreteTypePtr resultType;
+			if (!m_pTranspilerCtx->opProcessor.processOperation(exprPack, outResult.text, resultType))
+			{
+				m_pErrorPortal->SetAnchor(subExpressions[0]->start);
+				m_pErrorPortal->AddTypeMismatchError(subExpRes[0].type.baseConcreteType, subExpRes[1].type.baseConcreteType);
+				return false;
+			}
+			if (predaExpressions[ctx->expressionType].resultType == ExpressionResultType::Custom)
+			{
+				outResult.type.baseConcreteType = resultType;
+			}
+
+		}
 		return true;
+	}
 	case transpiler::PredaExpressionTypes::ShiftRight:
 		// shift right has to be handled individually, for compatibility with nested template type, e.g. array<array<int32>>, the grammar for shift right is defined as '>' '>' instead of '>>'.
 		// Hence we need to check that there's no extra characters between these two '>'s.
@@ -831,7 +844,20 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 			m_pErrorPortal->AddSyntaxError((uint32_t)((antlr4::tree::TerminalNode*)ctx->children[2])->getSymbol()->getLine(), (uint32_t)((antlr4::tree::TerminalNode*)ctx->children[2])->getSymbol()->getCharPositionInLine(), "unexpected '>'");
 			return false;
 		}
-		outResult.text = subExpRes[0].text + " >> " + subExpRes[1].text;
+		if (!subExpRes[0].bIsTypeName)
+		{
+			transpiler::PredaTranspilerContext::OperatorProcessor::expressionPack exprPack({ subExpRes[0].text, subExpRes[1].text, subExpRes[0].type.baseConcreteType, subExpRes[1].type.baseConcreteType, " >> " , predaExpressions[ctx->expressionType].operatorBitMask});
+			if (!m_pTranspilerCtx->opProcessor.processOperation(exprPack, outResult.text, outResult.type.baseConcreteType))
+			{
+				m_pErrorPortal->SetAnchor(subExpressions[0]->start);
+				m_pErrorPortal->AddTypeMismatchError(subExpRes[0].type.baseConcreteType, subExpRes[1].type.baseConcreteType);
+				return false;
+			}
+		}
+		else
+		{
+			outResult.text = subExpRes[0].text + " >> " + subExpRes[1].text;
+		}
 		return true;
 
 	// The special cases

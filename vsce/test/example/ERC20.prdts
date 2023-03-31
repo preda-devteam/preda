@@ -1,0 +1,55 @@
+random.reseed
+allocate.address 1024
+chain.gaslimit 256
+
+chain.deploy ERC20.prd
+
+log this is normal log
+log.highlight this is highlight log
+
+log.highlight ERC20 test
+log Perparing test transactions
+
+state.set address.ERC20 @all { balance:"10000000000000" }
+state.set*10 address.ERC20 @random { balance:"20000000000000" }
+state.set address.ERC20 @0 { balance:"50000000000000" }
+state.set address.ERC20 @10 { balance:"50000000000000" }
+state.set address.ERC20 @20 { balance:"50000000000000" }
+
+txn1 = ERC20.transfer @0 { to:"$@20$", amount:"1000" }
+txn2[] = ERC20.transfer*$~count$ @random { to:"$@random$", amount:"$random(1000, 2000)*100$" }
+
+//log test jsonify 10th user address state
+//log.addrstate @10
+chain.info
+//log Executing
+//log test jsonify all address states
+//log.addrstate @all
+
+stopwatch.restart
+chain.run
+stopwatch.report
+
+chain.info
+
+viz.trace txn2[0]
+//viz.txn txn1
+//viz.txn txn2[10]
+
+//log test jsonify global & all blocks 
+//log.block @global
+//log test jsonify shard#0 & all blocks 
+//log.block @0
+//log test jsonify all shards & all blocks 
+//log.block @all
+//log test jsonify shard#2 & second blocks 
+//log.block @2:1
+//log test jsonify shard#1 & out of range block height
+//log.block @1:100000
+//log test jsonify out of range shard index & second block
+//log.block @1000000:1
+//log test jsonify global shard & first block
+//log.block @g:0
+//log test jsonify global shard & out of range block height
+//log.block @g:100000
+

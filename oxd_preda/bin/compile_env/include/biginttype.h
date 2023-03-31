@@ -68,7 +68,64 @@ namespace prlrt {
 			PREDA_CALL(BigintAssignInt64, _v, rhs._v);
 			//TODO: check global memory overflow
 		}
+		template<short Size>
+		__prlt_bigint(const ____longint<Size>& rhs)
+		{
+			_v = PREDA_CALL(CreateBigint);
+			bool sign = false;
+			____ulongint<Size> tmpLongInt;
+			if(rhs.isNegative())
+			{
+				if (memcmp(rhs._fStruct._Data, ____get_min_value_of_longint<Size>()._Data, sizeof(rhs._fStruct)) == 0)
+				{
+					tmpLongInt._fStruct = ____get_max_value_of_longint<Size>();
+					tmpLongInt++;
+				}
+				else
+				{
+					tmpLongInt = -rhs;
+				}
+				sign = true;
+			}
+			else
+			{
+				tmpLongInt = rhs;
+			}
+			constexpr uint8_t len = Size / 64;
+			for(uint8_t i = 0; i < len; i++)
+			{
+				uint64_t cur_word = *(uint64_t*)(tmpLongInt._fStruct._Data + i * sizeof(uint64_t)/sizeof(uint8_t));
+				if(cur_word > 0)
+				{
+					____uint<uint64_t> u64(cur_word);
+					this_type tmp(u64);
+					PREDA_CALL(BigintShiftLeftInplace, tmp._v, 64 * i);
+					*this += tmp;
+				}
+			}
+			if(sign)
+			{
+				PREDA_CALL(BigintNegateInplace, _v);
+			}
+		}
 
+		template<short Size>
+		__prlt_bigint(const ____ulongint<Size>& rhs)
+		{
+			_v = PREDA_CALL(CreateBigint);
+			constexpr uint8_t len = Size / 64;
+			for(uint8_t i = 0; i < len; i++)
+			{
+				uint64_t cur_word = *(uint64_t*)(rhs._fStruct._Data + i * sizeof(uint64_t)/sizeof(uint8_t));
+				if(cur_word > 0)
+				{
+					____uint<uint64_t> u64(cur_word);
+					this_type tmp(u64);
+					PREDA_CALL(BigintShiftLeftInplace, tmp._v, 64 * i);
+					*this += tmp;
+				}
+			}
+		}
 		~__prlt_bigint()
 		{
 			PREDA_CALL(ReleaseBigint, _v);
@@ -80,6 +137,12 @@ namespace prlrt {
 			PREDA_CALL(BigintAssign, _v, rhs._v);
 			//TODO: check global memory overflow
 		}
+
+		bool IsNegative() const
+		{
+			return PREDA_CALL(BigintIsNegative, _v);
+		}
+
 		void operator=(const this_type &rhs)
 		{
 			PREDA_CALL(BigintAssign, _v, rhs._v);
@@ -137,6 +200,10 @@ namespace prlrt {
 		this_type operator/(const this_type& rhs) const
 		{
 			this_type ret;
+			if (rhs == __prlt_bigint(0))
+			{
+				throw preda_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
+			}
 			PREDA_CALL(BigintDiv, ret._v, _v, rhs._v, 0);
 			ret.test_overflow();
 			//TODO: check global memory overflow
@@ -157,6 +224,10 @@ namespace prlrt {
 		this_type operator%(const this_type& rhs) const
 		{
 			this_type ret;
+			if (rhs == __prlt_bigint(0))
+			{
+				throw preda_exception("mod by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
+			}
 			PREDA_CALL(BigintMod, ret._v, _v, rhs._v);
 			ret.test_overflow();
 			//TODO: check global memory overflow
@@ -247,7 +318,66 @@ namespace prlrt {
 			}
 			return ____int<T_OtherInternal>(T_OtherInternal(v));
 		}
-
+		template<short Size>
+		explicit operator ____longint<Size>() const
+		{
+			static ____longint<Size> longintMax(____get_max_value_of_longint<Size>());
+			this_type longintBNmax(longintMax);
+			this_type longintBNmin = -(longintBNmax + 1);
+			____longint<Size> result;
+			if(*this > longintBNmax)
+			{
+				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+			}
+			else if(*this < longintBNmin)
+			{
+				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+			}
+			constexpr uint8_t len = Size / 64;
+			bool sign = IsNegative();
+			this_type positive_bint;
+			if (sign)
+			{
+				PREDA_CALL(BigintNegate, positive_bint._v, _v);
+			}
+			else
+			{
+				positive_bint = *this;
+			}
+			for(int i = len - 1; i >= 0; i--)
+			{
+				this_type tmp = positive_bint;
+				PREDA_CALL(BigintShiftRightInplace, tmp._v, 64 * i);
+				*(uint64_t*)(result._fStruct._Data + i * sizeof(uint64_t)/sizeof(uint8_t)) =  ____uint<uint64_t>(tmp)._v;
+				PREDA_CALL(BigintShiftLeftInplace, tmp._v, 64 * i);
+				positive_bint -= tmp;
+			}
+			if(sign)
+			{
+				return -result;
+			}
+			return result;
+		}
+		template<short Size>
+		explicit operator ____ulongint<Size>() const
+		{
+			//converting bigint to uint64 will throw if overflown, this won't work for underflown
+			____ulongint<Size> result;
+			if(IsNegative())
+			{
+				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+			}
+			constexpr uint8_t len = Size / 64;
+			for(int i = len - 1; i >= 0; i--)
+			{
+				this_type tmp = *this;
+				PREDA_CALL(BigintShiftRightInplace, tmp._v, 64 * i);
+				*(uint64_t*)(result._fStruct._Data + i * sizeof(uint64_t)/sizeof(uint8_t)) =  ____uint<uint64_t>(tmp)._v;
+				PREDA_CALL(BigintShiftLeftInplace, tmp._v, 64 * i);
+				*this -= tmp;
+			}
+			return result;
+		}
 		void test_overflow() const
 		{
 			if (!PREDA_CALL(BigintIsEmbeddable, _v))

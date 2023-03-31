@@ -452,10 +452,7 @@ ConcreteTypePtr PredaRealListener::ImportContractSymbols(transpiler::IContractSy
 						line += "const ";
 					line += functionSignature.parameters[i]->qualifiedType.baseConcreteType->outputFullName + " &" + functionSignature.parameters[i]->outputName;
 				}
-				line += ")";
-				if ((functionSignature.flags & uint32_t(transpiler::PredaFunctionFlags::IsConst)) != 0)
-					line += " const";
-				line += " {";
+				line += ") {";
 				codeSerializer.AddLine(line);
 				codeSerializer.PushIndent();
 			}
@@ -670,9 +667,18 @@ bool PredaRealListener::ProcessLocalVariableDeclaration(PredaParser::LocalVariab
 		{
 			if (varType != expRes.type.baseConcreteType)
 			{
-				m_errorPortal.SetAnchor(((antlr4::tree::TerminalNode*)ctx->children[2])->getSymbol());
-				m_errorPortal.AddTypeMismatchError(varType, expRes.type.baseConcreteType);
-				return false;
+				std::tuple<transpiler::OperatorTypeBitMask, ConcreteTypePtr, ConcreteTypePtr> k = std::make_tuple(transpiler::OperatorTypeBitMask::AssignmentBit, varType, expRes.type.baseConcreteType);
+				auto iter = m_transpilerCtx.opProcessor.m.find(k);
+				if (iter != m_transpilerCtx.opProcessor.m.end())
+				{
+					expRes.text = varType->outputFullName + "(" + expRes.text + ")";
+				}
+				else
+				{
+					m_errorPortal.SetAnchor(((antlr4::tree::TerminalNode*)ctx->children[2])->getSymbol());
+					m_errorPortal.AddTypeMismatchError(varType, expRes.type.baseConcreteType);
+					return false;
+				}
 			}
 
 			if (expRes.type.baseConcreteType->IsConstTransitive() && expRes.type.bIsConst && !bIsConst)
@@ -1130,7 +1136,7 @@ void PredaRealListener::enterRelayStatement(PredaParser::RelayStatementContext *
 			argumentsString += ", " + expRes.text;
 		}
 
-		opCode = (int32_t)DeclareRelayLambdaFunction(lambdaDefCtx, vParamType, relayType);
+		opCode = (int32_t)DeclareRelayLambdaFunction(lambdaDefCtx, vParamType, relayType, m_curFunc);
 	}
 	else
 	{
@@ -1220,11 +1226,11 @@ void PredaRealListener::enterRelayStatement(PredaParser::RelayStatementContext *
 	}
 }
 
-size_t PredaRealListener::DeclareRelayLambdaFunction(PredaParser::RelayLambdaDefinitionContext *ctx, const std::vector<transpiler::QualifiedConcreteType> &paramTypes, RelayType type)
+size_t PredaRealListener::DeclareRelayLambdaFunction(PredaParser::RelayLambdaDefinitionContext *ctx, const std::vector<transpiler::QualifiedConcreteType> &paramTypes, RelayType type, ForwardDeclaredContractFunction* base)
 {
 	transpiler::FunctionRef ref;
 	m_exportedFunctions.push_back(ref);
-	m_pendingRelayLambdas.emplace_back(ctx, paramTypes, type, m_exportedFunctions.size() - 1);
+	m_pendingRelayLambdas.emplace_back(ctx, paramTypes, type, m_exportedFunctions.size() - 1, base);
 	return m_exportedFunctions.size() - 1;
 }
 
@@ -2091,6 +2097,7 @@ void PredaRealListener::TraverseAllFunctions()
 			PredaParseTreeWalker* oldWalker = m_pWalker;
 			PredaParseTreeWalker newWalker;
 			SetWalker(&newWalker);
+			m_curFunc = &func;
 			m_pWalker->walk(this, func.ctx);
 			SetWalker(oldWalker);
 		}
@@ -2109,6 +2116,7 @@ void PredaRealListener::TraverseAllFunctions()
 			PredaParseTreeWalker* oldWalker = m_pWalker;
 			PredaParseTreeWalker newWalker;
 			SetWalker(&newWalker);
+			m_curFunc = &func;
 			m_pWalker->walk(this, func.ctx);
 			SetWalker(oldWalker);
 		}
@@ -2131,8 +2139,8 @@ void PredaRealListener::DefinePendingRelayLambdas()
 		PredaParser::RelayLambdaDefinitionContext *ctx = lambda.pDefinitionCtx;
 
 		//function name
-		std::string functionName = "__relaylambda_" + std::to_string(lambda.exportFuncSlot);
-
+		std::string functionName = "__relaylambda_" + std::to_string(lambda.exportFuncSlot) + "_" + lambda.baseFunc->declaredFunc.functionIdentifier->inputName;
+		m_curFunc = lambda.baseFunc;
 		m_transpilerCtx.functionCtx.PushFunctionScope(thisType->CreateInnerUnnamedScopeType("function_" + functionName));
 		AUTO_POP_FUNCTION_CONTEXT_LOCAL_SCOPE_STACK;
 

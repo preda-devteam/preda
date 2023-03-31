@@ -207,7 +207,7 @@ public:
 	uint32_t	GetTotalAllocated(){ return _TotalAllocated; }
 	void		AssertIntergrity();
 
-	// To replace the underlying default memory allocation for all SFC classes
+	// To replace the underlying default memory allocation for all related classes
 	void		Apply();
 	void		Unapply();
 };

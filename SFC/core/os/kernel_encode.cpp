@@ -120,14 +120,21 @@ SIZE_T UTF8EncodeLength(LPCU16CHAR pIn, SIZE_T len)	// number of char
 	SIZE_T outlen = 0;
 	for(SIZE_T i=0;i<len;i++)
 	{
-		WORD c = pIn[i];
+		WORD c = (WORD&)pIn[i];
 		if(c <= 0x7f)
-		{	outlen++;	}
-		else if(c > 0x7ff)
-		{	outlen+=3;	}
+			outlen++;
+		else if(c <= 0x7ff)
+			outlen+=2;
+		else if(c <= 0xD7ff)
+			outlen+=3;
 		else
-		{	outlen+=2;	}
+		{	// unicode BMP
+			i++;
+			if(((WORD&)pIn[i] & 0xfc00) == 0xdc00)
+				outlen+=4; // otherwise the previous word will be skipped
+		}
 	}
+
 	return outlen;
 }
 
@@ -136,42 +143,35 @@ SIZE_T UTF8Encode(LPCU16CHAR pIn, SIZE_T len, LPSTR pOut)
 	LPSTR p = pOut;
 	for(SIZE_T i=0;i<len;i++)
 	{
-		WORD c = pIn[i];
-		if(c <= 0x7f)
+		WORD c = (WORD&)pIn[i];
+		if(c <= 0x7fu)
 		{	*p = (char)c;
 			p++;
 		}
-		else if(c > 0x7ff)	// 1110xxxx 	10xxxxxx 	10xxxxxx
-		{	*((DWORD*)p) = 0x8080e0 | ((c>>12)&0xf) | ((c<<2)&0x3f00) | ((0x3f&c)<<16);
-			p+=3;
-		}
-		else	// 110xxxxx 	10xxxxxx
-		{	*((WORD*)p) = 0x80c0 | ((c>>6)&0x1f) | ((0x3f&c)<<8);
+		else if(c <= 0x7ffu)	// 110xxxxx 	10xxxxxx
+		{	*((WORD*)p) = 0x80c0u | ((c>>6)&0x1fu) | ((c&0x3fu)<<8);
 			p+=2;
 		}
+		else if(c <= 0xD7ffu) // 1110xxxx 	10xxxxxx 	10xxxxxx
+		{	*((WORD*)p) = 0x80e0u | ((c>>12)&0xfu) | ((c<<2)&0x3f00u);
+			p[2] = 0x80 | (c&0x3fu);
+			p+=3;
+		}
+		else // unicode BMP W1 = 110110aa aaaaaaaa W2 = 110111 bbbb bbbbbb
+		{					//   11110xxx	10xxxxxx	10xxxxxx	10xxxxxx	
+							//	      0aa     aaaaaa      aabbbb      bbbbbb
+			i++;
+			DWORD b = (WORD&)pIn[i];	
+			if((b & 0xfc00u) == 0xdc00u)
+			{
+				*((DWORD*)p) = 0x808080f0u | ((c>>8)&0x3u) | ((c<<6)&0x3f00u) | ((c&3u)<<20)
+										   | ((b<<10)&0xf0000u) | ((b<<24)&0x3f000000u);
+				p+=4;
+			}
+		}
 	}
-	return (UINT)(p - pOut);
-}
 
-// UTF8 to UTF16
-SIZE_T UTF8DecodeLength(LPCSTR pIn, SIZE_T len)	// number of wchar
-{
-	SIZE_T outlen = 0;
-	for(SIZE_T i=0;i<len;outlen++)
-	{
-		BYTE c = pIn[i];
-		if(c <= 0x7f)
-		{	i++;
-		}
-		else if((c&0xf0) == 0xe0)	// 1110xxxx 	10xxxxxx 	10xxxxxx
-		{	i+=3;
-		}
-		else if((c&0xe0) == 0xc0)	// 110xxxxx 	10xxxxxx
-		{	i+=2;
-		}
-		else i++;	// skip
-	}
-	return outlen;
+	return (UINT)(p - pOut);
 }
 
 SIZE_T UTF8ByteOffset(LPCSTR pIn, SIZE_T len, SIZE_T num_of_utf8_char) // counting number of utf8 chatactors
@@ -186,66 +186,74 @@ SIZE_T UTF8ByteOffset(LPCSTR pIn, SIZE_T len, SIZE_T num_of_utf8_char) // counti
 		if(c <= 0x7f)
 		{	i++;
 		}
-		else if((c&0xf0) == 0xe0)	// 1110xxxx 	10xxxxxx 	10xxxxxx
-		{	i+=3;
-		}
 		else if((c&0xe0) == 0xc0)	// 110xxxxx 	10xxxxxx
 		{	i+=2;
 		}
-		else i++;	// skip
+		else if((c&0xf0) == 0xe0)	// 1110xxxx 	10xxxxxx 	10xxxxxx
+		{	i+=3;
+		}
+		else if((c&0xf8) == 0xf0)	// 11110xxx		10xxxxxx	10xxxxxx	10xxxxxx
+		{	i+=4;
+		}
 	}
 	return i;
 }
 
-U16CHAR	UTF8Decode(LPCSTR& p)
+// UTF8 to UTF16
+SIZE_T UTF8DecodeLength(LPCSTR pIn, SIZE_T len)	// number of wchar
 {
-	BYTE c = p[0];
-	if(c <= 0x7f)
-	{	
-		p++;
-		return c;
-	}
-	
-	U16CHAR ret;
-	if((c&0xf0) == 0xe0)	// 1110xxxx 	10xxxxxx 	10xxxxxx
-	{	
-		ret = ((c&0xf)<<12) | ((p[1]&0x3f)<<6) | (p[2]&0x3f);
-		p+=3;
-	}
-	else if((c&0xe0) == 0xc0)	// 110xxxxx 	10xxxxxx
-	{	
-		ret = ((c&0x1f)<<6) | (p[1]&0x3f);
-		p+=2;
-	}
-	else
+	SIZE_T outlen = 0;
+	for(SIZE_T i=0;i<len;)
 	{
-		p+=4;
-		return '?'; // Unicode BMP
+		BYTE c = pIn[i];
+		if(c <= 0x7fu)
+		{	i++;	outlen++;
+		}
+		else if((c&0xe0u) == 0xc0u)	// 110xxxxx 	10xxxxxx
+		{	i+=2;	outlen++;
+		}
+		else if((c&0xf0u) == 0xe0u)	// 1110xxxx 	10xxxxxx 	10xxxxxx
+		{	i+=3;	outlen++;
+		}
+		else if((c&0xfcu) == 0xf0u)	// 111100xx		10xxxxxx	10xxxxxx	10xxxxxx 
+		{	i+=4;	outlen+=2;
+		}
+		else // (only 111100xx can be convert to unicode BMP)
+			i++;
 	}
-
-	return ret;
+	return outlen;
 }
 
 SIZE_T UTF8Decode(LPCSTR pIn, SIZE_T len, LPU16CHAR pOut)		// number of wchar
 {
 	LPU16CHAR p = pOut;
-	for(SIZE_T i=0;i<len;p++)
+	for(SIZE_T i=0;i<len;)
 	{
 		BYTE c = pIn[i];
 		if(c <= 0x7f)
-		{	*p = c;
+		{	*p++ = c;
 			i++;
 		}
-		else if((c&0xf0) == 0xe0)	// 1110xxxx 	10xxxxxx 	10xxxxxx
-		{	*p = ((c&0xf)<<12) | ((pIn[i+1]&0x3f)<<6) | (pIn[i+2]&0x3f);
-			i+=3;
-		}
 		else if((c&0xe0) == 0xc0)	// 110xxxxx 	10xxxxxx
-		{	*p = ((c&0x1f)<<6) | (pIn[i+1]&0x3f);
+		{	*p++ = ((c&0x1fu)<<6) | (pIn[i+1]&0x3fu);
 			i+=2;
 		}
-		else i++;
+		else if((c&0xf0) == 0xe0)	// 1110xxxx 	10xxxxxx 	10xxxxxx
+		{	*p++ = ((c&0xfu)<<12) | ((pIn[i+1]&0x3fu)<<6) | (pIn[i+2]&0x3fu);
+			i+=3;
+		}
+		else if((c&0xfcu) == 0xf0u)	// unicode BMP W1 = 110110aa aaaaaaaa W2 = 110111 bbbb bbbbbb
+		{							//   11110xxx	10xxxxxx	10xxxxxx	10xxxxxx	
+									//	      0aa     aaaaaa      aabbbb      bbbbbb
+			WORD k = pIn[i+2];
+			*p++ = 0xD800u | ((c&3u)<<8) | ((pIn[i+1]&0x3fu)<<2) | ((k>>4)&3u);
+			*p++ = 0xDC00u | ((k&0xfu)<<6) | (pIn[i+3]&0x3fu);
+			i+=4;
+		}
+		else // (only 111100xx can be convert to unicode BMP)
+			i++;
 	}
+
 	return (UINT)(p - pOut);
 }
 

@@ -236,7 +236,7 @@ namespace os
 			#define ASSERT(x) if(!(x)){ _LOG_ERROR("ASSERTION FAILED: " #x); _LOG_POS; }
 		#else
 			#include <assert.h>
-			#define ASSERT(x) assert(x)
+			#define ASSERT(x) assert(x);
 		#endif
 	#else
 		#define ASSERT(x) {}
