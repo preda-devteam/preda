@@ -5,6 +5,7 @@
 ## Table of content
 
 - [Background](#background)
+- [How to Use](#how-to-use)
 - [Build PREDA](#build-preda)
     - [Init git submodule](#init-git-submodule)
     - [Install Xmake](#install-xmake)
@@ -26,6 +27,10 @@
 ## Background
 
 Sharding blockchains allow payment transactions to be executed in parallel by multiple shards of the chains. In this way, sharding blockchains can improve the transaction throughput and state capacity for payment transactions. In order to extend such capability to general smart contract transactions, we introduce PREDA, Parallel Relay Execution Distributed Architecture, and its language to define how contract states can be efficiently divided into shards and how logic flow of contract functions can be executed asynchronously across all shards. Programmers can use PREDA to implement smart contracts and the sharding blockchain systems that support PREDA can execute transactions invoking PREDA smart contracts in parallel.
+
+## How to Use
+
+Check [docs](docs) folder for toolchain installation guide and user manual as well as language specification.
 
 ## Build PREDA
 
@@ -106,7 +111,7 @@ Total Txn:0/112
 
 ### More tutorials
 
-Learn more about how to use it through the documentation at `docs`.
+Learn more about how to use it through the documentation in [docs](docs).
 
 ## Trouble Shooting
 
