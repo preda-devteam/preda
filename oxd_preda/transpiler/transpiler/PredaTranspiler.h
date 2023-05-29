@@ -5,16 +5,6 @@
 
 namespace transpiler {
 
-	enum class PredaDefinedVariableFlags : uint32_t {
-		ContextClassMask				= 3,
-		ContextClassNone				= 0,
-		ContextClassGlobal				= 1,
-		ContextClassShard				= 2,
-		ContextClassAddress				= 3,
-	};
-
-	static_assert(uint32_t(PredaFunctionFlags::ContextClassMask) == uint32_t(PredaDefinedVariableFlags::ContextClassMask), "ContextClassMask in PredaFunctionFlags and PredaDefinedVariableFlags don't match.");
-
 	// This must 100% reflect the values of $expressionType in the grammar file
 	enum class PredaExpressionTypes : uint8_t {
 		PostIncrement = 0,

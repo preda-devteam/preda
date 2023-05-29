@@ -56,6 +56,12 @@ namespace prlrt {
 			PREDA_CALL(Transaction_GetSelfAddress, (uint8_t*)&value);
 			return value;
 		}
+		__prlt_address __prli_get_sender()
+		{
+			__prlt_address value;
+			PREDA_CALL(Transaction_GetSender, (uint8_t*)&value);
+			return value;
+		}
 		__prlt_uint64 __prli_get_timestamp()
 		{
 			return PREDA_CALL(Transaction_GetTimeStamp, );
@@ -148,18 +154,18 @@ namespace prlrt {
 		{
 		}
 
-		void __prli_print()
+		void __prli_print(uint32_t line)
 		{
-			PREDA_CALL(DebugPrintOutputBuffer, );
+			PREDA_CALL(DebugPrintOutputBuffer, line);
 		}
 
 		template<typename TFirstArg, typename ...Args>
-		void __prli_print(const char *typeExportName, TFirstArg &&first_arg, Args &&...args)
+		void __prli_print(uint32_t line, const char *typeExportName, TFirstArg &&first_arg, Args &&...args)
 		{
 			std::vector<uint8_t> buffer(first_arg.get_serialize_size());
 			first_arg.serialize_out(&buffer[0], true);
 			PREDA_CALL(DebugPrintBufferAppendSerializedData, typeExportName, &buffer[0], (uint32_t)buffer.size());
-			__prli_print(args...);
+			__prli_print(line, args...);
 		}
 
 		void __prli_assert(__prlt_bool condition, __prlt_uint32 line)
@@ -170,6 +176,16 @@ namespace prlrt {
 				throw preda_exception("assertion failure", prlrt::ExceptionType::AssertionFailure);
 			}
 		}
+
+		void __prli_assert(__prlt_bool condition, __prlt_string message, __prlt_uint32 line)
+		{
+			if (!condition._v)
+			{
+				PREDA_CALL(DebugAssertionFailureMessage, line._v, message.ptr->str.c_str(), (uint32_t)message.ptr->str.length());
+				throw preda_exception("assertion failure", prlrt::ExceptionType::AssertionFailure);
+			}
+		}
+
 	};
 
 }

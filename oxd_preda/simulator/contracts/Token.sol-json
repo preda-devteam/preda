@@ -1,8 +1,0 @@
-{
-  "entryFile": "Token.sol",
-  "entryContract": "A",
-  "calldata": "",
-  "sources": {
-    "Token.sol": "./Token.sol"
-  }
-}

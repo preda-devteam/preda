@@ -177,7 +177,7 @@ struct ExecutionContext: public ExecutionState
 	virtual void					CommitNewState(BuildNum version, ContractScopeId contract, uint8_t* state_memory) = 0;  // `state_memory` must be allocated from AllocateStateMemory, or be nullptr to empty the state
 	virtual void					CommitNewState(BuildNum version, ContractScopeId contract, const ScopeKey* key, uint8_t* state_memory) = 0;
 
-	virtual bool					EmitRelayToAddress(BuildNum version, ConstAddress* target, ContractScopeId cid, OpCode opcode, const ConstData* args_serialized, uint32_t gas_redistribution_weight) = 0;
+	virtual bool					EmitRelayToScope(BuildNum version, const uint8_t* scope_key, uint32_t scope_key_size, ContractScopeId cid, OpCode opcode, const ConstData* args_serialized, uint32_t gas_redistribution_weight) = 0;
 	virtual bool					EmitRelayToGlobal(BuildNum version, ContractScopeId cid, OpCode opcode, const ConstData* args_serialized, uint32_t gas_redistribution_weight) = 0;
 	virtual bool					EmitBroadcastToShards(BuildNum version, ContractScopeId cid, OpCode opcode, const ConstData* args_serialized, uint32_t gas_redistribution_weight) = 0; // global scope to all shards
 
@@ -199,7 +199,7 @@ struct BlockchainRuntime
 	virtual ConstString				GetCoreDAppName() const = 0;
 	virtual AggregatedRepository*	GetContractRepository() = 0;  // no need to release
 
-	virtual void					DebugPrint(DebugMessageType type, const ConstString* string, const ExecutionState* ctx_opt = nullptr, const Contract* contract_opt = nullptr) = 0;
+	virtual void					DebugPrint(DebugMessageType type, const ConstString* string, const ExecutionState* ctx_opt = nullptr, const Contract* contract_opt = nullptr, int32_t line = -1) = 0;
 };
 
 
@@ -218,7 +218,7 @@ struct CompiledContracts
 
 struct ExecuteUnit		// multi-instances are allowed, and may run in different threads
 {
-	virtual InvokeResult			Invoke(ExecutionContext* exec, uint32_t gas_limit, BuildNum version, ContractScopeId contract, OpCode opcode, const ConstData* args_serialized) = 0;
+	virtual InvokeResult			Invoke(ExecutionContext* exec, uint32_t gas_limit, const ContractDID *contract_deployment_id, OpCode opcode, const ConstData* args_serialized) = 0;
 	// Deploy the contracts into repository and ready for execution and cross-contract reference
 	virtual InvokeResult			Deploy(	ExecutionContext* exec, uint32_t gas_limit, 
 											CompiledContracts* linked, 
@@ -227,6 +227,7 @@ struct ExecuteUnit		// multi-instances are allowed, and may run in different thr
 											LogMessageOutput* log_msg_output
 									) = 0;
 	virtual void					Release() = 0;
+	virtual void					GetExceptionMessage(uint16_t except, rvm::StringStream* str) const = 0;
 };
 
 struct RvmEngine: public ContractRepository // singleton

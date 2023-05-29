@@ -81,7 +81,7 @@ namespace transpiler{
 			{
 				FunctionSignature signature;
 				signature.returnType = QualifiedConcreteType(nullptr, true, false);
-				signature.parameters.push_back(Allocator::New<DefinedIdentifier>(GetBuiltInStringType(), false, true, "value", 0));
+				signature.parameters.push_back(Allocator::New<DefinedIdentifier>(GetBuiltInStringType(), true, true, "value", 0));
 				res = res && (m_builtInStringType->DefineMemberFunction("set", signature, false) != nullptr);
 				signature.returnType = QualifiedConcreteType(GetBuiltInStringType(), false, false);
 				res = res && (m_builtInStringType->DefineMemberFunction("append", signature, false) != nullptr);
@@ -90,7 +90,7 @@ namespace transpiler{
 			// Create conversion functions from all built-in integer types
 			{
 				FunctionSignature signature;
-				signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+				signature.flags = uint32_t(FunctionFlags::IsConst);
 				signature.parameters.resize(1);
 				signature.returnType = QualifiedConcreteType(m_builtInStringType, false, false);
 
@@ -146,7 +146,7 @@ namespace transpiler{
 			// Create conversion functions from string
 			{
 				FunctionSignature signature;
-				signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+				signature.flags = uint32_t(FunctionFlags::IsConst);
 				signature.parameters.resize(1);
 				signature.returnType = QualifiedConcreteType(m_builtInAddressType, true, false);
 
@@ -156,7 +156,7 @@ namespace transpiler{
 			// string constructor with address
 			{
 				FunctionSignature signature;
-				signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+				signature.flags = uint32_t(FunctionFlags::IsConst);
 				signature.parameters.resize(1);
 				signature.returnType = QualifiedConcreteType(m_builtInStringType, false, false);
 
@@ -166,7 +166,7 @@ namespace transpiler{
 			// add member functions
 			{
 				FunctionSignature signature;
-				signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+				signature.flags = uint32_t(FunctionFlags::IsConst);
 				signature.returnType = QualifiedConcreteType(GetBuiltInBoolType(), true, false);
 				bool res = true;
 				res = res && (m_builtInAddressType->DefineMemberFunction("is_user", signature, false) != nullptr);
@@ -175,6 +175,8 @@ namespace transpiler{
 				res = res && (m_builtInAddressType->DefineMemberFunction("is_asset", signature, false) != nullptr);
 				res = res && (m_builtInAddressType->DefineMemberFunction("is_name", signature, false) != nullptr);
 				res = res && (m_builtInAddressType->DefineMemberFunction("is_domain", signature, false) != nullptr);
+				res = res && (m_builtInAddressType->DefineMemberFunction("is_contract", signature, false) != nullptr);
+				res = res && (m_builtInAddressType->DefineMemberFunction("is_custom", signature, false) != nullptr);
 				assert(res);
 			}
 
@@ -196,7 +198,7 @@ namespace transpiler{
 			// Create conversion functions from string
 			{
 				FunctionSignature signature;
-				signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+				signature.flags = uint32_t(FunctionFlags::IsConst);
 				signature.parameters.resize(1);
 				signature.returnType = QualifiedConcreteType(m_builtInHashType, true, false);
 
@@ -205,12 +207,22 @@ namespace transpiler{
 			}
 			{
 				FunctionSignature signature;
-				signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+				signature.flags = uint32_t(FunctionFlags::IsConst);
 				signature.parameters.resize(1);
 				signature.returnType = QualifiedConcreteType(m_builtInStringType, false, false);
 
 				signature.parameters[0] = (Allocator::New<DefinedIdentifier>(m_builtInHashType, false, true, "src", 0));
 				res = res && (m_builtInStringType->DefineMemberFunction("@constructor", signature, false) != nullptr);
+			}
+			// Create conversion functions to address
+			{
+				FunctionSignature signature;
+				signature.flags = uint32_t(FunctionFlags::IsConst);
+				signature.parameters.resize(1);
+				signature.returnType = QualifiedConcreteType(m_builtInAddressType, true, false);
+
+				signature.parameters[0] = (Allocator::New<DefinedIdentifier>(m_builtInHashType, true, true, "src", 0));
+				res = res && (m_builtInAddressType->DefineMemberFunction("@constructor", signature, false) != nullptr);
 			}
 			assert(res);
 		}
@@ -237,7 +249,7 @@ namespace transpiler{
 		{
 			FunctionSignature signature;
 			signature.returnType = QualifiedConcreteType(GetBuiltInIntegerType(64, false), true, false);
-			signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+			signature.flags = uint32_t(FunctionFlags::IsConst);
 			bool res = (m_builtInTokenType->DefineMemberFunction("get_id", signature, false) != nullptr);
 			assert(res);
 		}
@@ -245,7 +257,7 @@ namespace transpiler{
 		{
 			FunctionSignature signature;
 			signature.returnType = QualifiedConcreteType(GetBuiltInBigIntType(), true, false);
-			signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+			signature.flags = uint32_t(FunctionFlags::IsConst);
 			bool res = (m_builtInTokenType->DefineMemberFunction("get_amount", signature, false) != nullptr);
 			assert(res);
 		}
@@ -309,7 +321,7 @@ namespace transpiler{
 			FunctionSignature signature;
 			signature.returnType = QualifiedConcreteType(GetBuiltInBigIntType(), false, false);
 			signature.parameters.push_back(Allocator::New<DefinedIdentifier>(GetBuiltInIntegerType(32, false), true, true, "divisor", 0));
-			signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+			signature.flags = uint32_t(FunctionFlags::IsConst);
 			bool res = (m_builtInBigIntType->DefineMemberFunction("div_uint32", signature, false) != nullptr);
 			assert(res);
 		}
@@ -324,7 +336,7 @@ namespace transpiler{
 
 		// Create conversion functions between all built-in integer types
 		FunctionSignature signature;
-		signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+		signature.flags = uint32_t(FunctionFlags::IsConst);
 		signature.parameters.resize(1);
 
 		for (size_t i = 0; i < allIntegerTypes.size(); i++)

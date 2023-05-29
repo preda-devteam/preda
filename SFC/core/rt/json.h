@@ -34,10 +34,6 @@
  *  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.   
  */
-/** \defgroup rt rt 
- * @ingroup SFC
- *  @{
- */
 
 #include "string_type_ops.h"
 
@@ -45,10 +41,6 @@
 // Composing Json Data
 namespace rt
 {
-	/** \defgroup json json
- * @ingroup rt
- *  @{
- */
 class Json;
 
 class _JVal
@@ -414,7 +406,7 @@ class JsonEscapeString: public rt::String
 {
 public:
 	JsonEscapeString(const rt::String_Ref& c_string, bool add_quote = false);
-	static void Concat(const rt::String_Ref& input, rt::String& out);
+	static void Concat(const rt::String_Ref& input, rt::String& in_out);
 };
 
 namespace _details
@@ -574,9 +566,7 @@ class Json
 {
 protected:
 	rt::String		_String;
-
-protected:
-	bool	IsEndsWith(int c){ return !_String.IsEmpty() && _String.Last() == c; }
+	bool			IsEndsWith(int c){ return !_String.IsEmpty() && _String.Last() == c; }
 
 public:
 	class _Appending
@@ -740,15 +730,26 @@ public:
 	[[nodiscard]]
 	auto	ScopeAppendingKey(const rt::String_Ref& key){ return _AppendingKeyedValue(*this, key); }
 	template<typename T>
-	auto&	AppendKey(const rt::String_Ref& key, const T& json_value)
+	auto&	AppendKey(const rt::String_Ref& key, const T& json_value) // value should be valid json string, or numeric types
 			{	ASSERT(IsEndsWith('}'));
 				_details::_AppendJsonValueToString(json_value, _AppendingKeyedValue(*this, key)._pJson->_String);
 				return *this;
 			}
-	auto&	AppendKeyAndEscapedValue(const rt::String_Ref& key, const rt::String_Ref& json_value)
-			{
-				ASSERT(IsEndsWith('}'));
-				_details::_AppendJsonValueToString(rt::JsonEscapeString(json_value), _AppendingKeyedValue(*this, key)._pJson->_String);
+	auto&	AppendKeyWithString(const rt::String_Ref& key, const rt::String_Ref& string) // value is a string, will be escaped
+			{	ASSERT(IsEndsWith('}'));
+				_details::_AppendJsonValueToString(rt::JsonEscapeString(string), _AppendingKeyedValue(*this, key)._pJson->_String);
+				return *this;
+			}
+	auto&	AppendKeyWithBinary(const rt::String_Ref& key, const rt::String_Ref& data) // value is a binary data, will be base64 encoded
+			{	ASSERT(IsEndsWith('}'));
+				auto val_sz = os::Base64EncodeLength(data.GetLength());
+				_String.Last() = ',';
+				_String += rt::SS() + '"' + key + rt::SS("\":");
+				auto org_len = _String.GetLength();
+				VERIFY(_String.SetLength(org_len + 2 + val_sz));
+				os::Base64Encode(&_String[org_len], data.Begin(), data.GetLength());
+				_String[val_sz] = '"';
+				_String[val_sz+1] = '}';
 				return *this;
 			}
 	/**
@@ -787,13 +788,15 @@ public:
 	auto	ScopeWritingStringEscaped(){ return _WritingStringEscaped(*this); }
 	[[nodiscard]]
 	auto	ScopeWritingStringEscapedAtKey(const rt::String_Ref& key){ return _WritingStringAtKey(*this, key); }
-	LPSTR	WriteStringEscaped(SIZE_T len)
-			{	_String += '"';
-				SIZE_T org = _String.GetLength();
-				_String.SetLength(org + len + 1);
-				_String.Last() = '"';
-				return &_String[org];
-			}
+	void	AppendStringEscaped(const rt::String_Ref& s){ _String += s; }
+	void	AppendString(const rt::String_Ref& s){ JsonEscapeString::Concat(s, _String); }
+	//LPSTR	WriteStringEscaped(SIZE_T len)
+	//		{	_String += '"';
+	//			SIZE_T org = _String.GetLength();
+	//			_String.SetLength(org + len + 1);
+	//			_String.Last() = '"';
+	//			return &_String[org];
+	//		}
 };
 
 class JsonBeautified: public rt::String

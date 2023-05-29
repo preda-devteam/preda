@@ -39,8 +39,11 @@ SimuShard::SimuShard(Simulator* simu, uint64_t time_base, uint32_t shard_order, 
 
 rvm::ScopeKey SimuShard::GetScopeTarget() const
 {
-	if(_IsAddressScope())return _SKPOD(_pTxn->Target);
-	return {nullptr, 0};
+	rvm::Scope scope = _GetScope();
+	if (scope == rvm::Scope::Global || scope == rvm::Scope::Shard)
+		return { nullptr, 0 };
+
+	return { (uint8_t*)&_pTxn->Target, _pTxn->Target.target_size };
 }
 
 rvm::ConstStateData SimuShard::GetState(rvm::ContractScopeId contract, const rvm::ScopeKey* key) const
@@ -64,10 +67,15 @@ rvm::ConstStateData	SimuShard::GetState(rvm::ContractScopeId cid) const
 	switch(scope)
 	{
 	case rvm::Scope::Address:
+	case rvm::Scope::UInt16:
+	case rvm::Scope::UInt32:
+	case rvm::Scope::UInt64:
+	case rvm::Scope::UInt256:
+	case rvm::Scope::UInt512:
 		if(IsGlobal())goto EMPTY_STATE;
-		if(_IsAddressScope())
+		if(_GetScope() == scope)
 		{
-			SimuAddressContract k = { _pTxn->Target, cid };
+			SimuAddressContract k{ _pTxn->Target, cid };
 			ret = _AddressStates.Get(k);
 		}
 		break;
@@ -128,9 +136,14 @@ void SimuShard::CommitNewState(rvm::BuildNum build_num, rvm::ContractScopeId cid
 	switch (scope)
 	{
 	case rvm::Scope::Address:
+	case rvm::Scope::UInt16:
+	case rvm::Scope::UInt32:
+	case rvm::Scope::UInt64:
+	case rvm::Scope::UInt256:
+	case rvm::Scope::UInt512:
 		{
 			ASSERT(!_IsGlobalScope());
-			ASSERT(_IsAddressScope());
+			ASSERT(_GetScope() == scope);
 
 			SimuAddressContract k = { _pTxn->Target, cid };
 			_AddressStates.Set(k, s);
@@ -178,11 +191,41 @@ SimuTxn* SimuShard::_CreateRelayTxn(rvm::ContractId cid, rvm::OpCode opcode, con
 	return txn;
 }
 
-bool SimuShard::EmitRelayToAddress(rvm::BuildNum build_num, rvm::ConstAddress* target, rvm::ContractScopeId cid, rvm::OpCode opcode, const rvm::ConstData* args_serialized, uint32_t gas_redistribution_weight)
+bool SimuShard::EmitRelayToScope(rvm::BuildNum build_num, const uint8_t* scope_key, uint32_t scope_key_size, rvm::ContractScopeId cid, rvm::OpCode opcode, const rvm::ConstData* args_serialized, uint32_t gas_redistribution_weight)
 {
 	auto* txn = _CreateRelayTxn(rvm::_details::CONTRACT_UNSET_SCOPE(cid), opcode, args_serialized, build_num);
-	txn->Target = *target;
-	txn->Initiator = _pTxn->IsRelay()?_pTxn->Initiator:_pTxn->Target;
+	ASSERT(txn->Contract == cid);
+	rvm::Scope scope = rvm::_details::CONTRACT_SCOPE(cid);
+	switch (scope)
+	{
+	case rvm::Scope::Address:
+		ASSERT(scope_key_size == sizeof(rvm::ConstAddress));
+		txn->Target = ScopeTarget(*(rvm::ConstAddress *)scope_key);
+		break;
+	case rvm::Scope::UInt16:
+		ASSERT(scope_key_size == sizeof(uint16_t));
+		txn->Target = ScopeTarget(*(uint16_t*)scope_key);
+		break;
+	case rvm::Scope::UInt32:
+		ASSERT(scope_key_size == sizeof(uint32_t));
+		txn->Target = ScopeTarget(*(uint32_t*)scope_key);
+		break;
+	case rvm::Scope::UInt64:
+		ASSERT(scope_key_size == sizeof(uint64_t));
+		txn->Target = ScopeTarget(*(uint64_t*)scope_key);
+		break;
+	case rvm::Scope::UInt256:
+		ASSERT(scope_key_size == 32);
+		txn->Target = ScopeTarget(*(std::array<uint8_t, 32>*)scope_key);
+		break;
+	case rvm::Scope::UInt512:
+		ASSERT(scope_key_size == 64);
+		txn->Target = ScopeTarget(*(std::array<uint8_t, 64>*)scope_key);
+		break;
+	default:
+		break;
+	}
+	txn->Initiator = _pTxn->IsRelay()?_pTxn->Initiator:_pTxn->Target.addr;
 
 	_RelayEmitted.push_back(txn);
 	return true;
@@ -193,7 +236,7 @@ bool SimuShard::EmitRelayToGlobal(rvm::BuildNum build_num, rvm::ContractScopeId 
 	auto* txn = _CreateRelayTxn(rvm::_details::CONTRACT_UNSET_SCOPE(cid), opcode, args_serialized, build_num);
 
 	rt::Zero(txn->Target);
-	txn->Initiator = _pTxn->IsRelay()?_pTxn->Initiator:_pTxn->Target;
+	txn->Initiator = _pTxn->IsRelay()?_pTxn->Initiator:_pTxn->Target.addr;
 
 	_RelayEmitted.push_back(txn);
 	return true;
@@ -205,7 +248,7 @@ bool SimuShard::EmitBroadcastToShards(rvm::BuildNum build_num, rvm::ContractScop
 
 	txn->Flag = (SimuTxnFlag)(txn->Flag|TXN_BROADCAST);
 	rt::Zero(txn->Target);
-	txn->Initiator = _pTxn->IsRelay()?_pTxn->Initiator:_pTxn->Target;
+	txn->Initiator = _pTxn->IsRelay()?_pTxn->Initiator:_pTxn->Target.addr;
 	if(rvm::_details::CONTRACT_SCOPE(_pTxn->Contract) == rvm::Scope::Global)
 	{
 		txn->Type = rvm::InvokeContextType::Scheduled; // Global to Shards 
@@ -301,7 +344,7 @@ void SimuShard::SetState(rvm::ContractId cid, rvm::Scope scope, const rvm::Addre
 	ASSERT(scope == rvm::Scope::Address);
 	ASSERT(_pSimulator->GetShardIndex(target) == _ShardIndex);
 
-	_AddressStates.Set({ target, rvm::_details::CONTRACT_SET_SCOPE(cid, scope) }, s);
+	_AddressStates.Set({ ScopeTarget(target), rvm::_details::CONTRACT_SET_SCOPE(cid, scope) }, s);
 }
 
 void SimuShard::PushTxn(SimuTxn* t)
@@ -349,7 +392,7 @@ RelayEmission::~RelayEmission()
 
 void RelayEmission::Collect(SimuTxn* origin, rt::BufferEx<SimuTxn*>& txns)
 {
-	for(auto t : txns)
+	for(SimuTxn* t : txns)
 	{
 		ASSERT(t->IsRelay());
 
@@ -377,13 +420,27 @@ void RelayEmission::Collect(SimuTxn* origin, rt::BufferEx<SimuTxn*>& txns)
 			break;
 		case rvm::Scope::Address:
 			{
-				uint32_t si = _pSimulator->GetShardIndex(t->Target);
+				uint32_t si = _pSimulator->GetShardIndex(t->Target.addr);
 				_ToShards[si].push_back(t);
 #ifdef _VIZ
 				_pShard->AppendToTxnTrace(origin, t);
 #endif
 			}
 			break;
+		case rvm::Scope::UInt16:
+		case rvm::Scope::UInt32:
+		case rvm::Scope::UInt64:
+		case rvm::Scope::UInt256:
+		case rvm::Scope::UInt512:
+		{
+			uint32_t si = _pSimulator->GetShardIndex(t->Target);
+			_ToShards[si].push_back(t);
+#ifdef _VIZ
+			_pShard->AppendToTxnTrace(origin, t);
+#endif
+		}
+		break;
+
 		default:
 			ASSERT(0);
 		}
@@ -472,10 +529,18 @@ void SimuShard::_BlockCreationRoutine()
 			auto* pexec = _ExecUnits.Get(_pTxn->GetEngineId());
 			if(pexec)
 			{
-				ret = pexec->Invoke(this, 0xffffffffU, _pTxn->BuildNum, _pTxn->Contract, _pTxn->Op, &args);
+				const rvm::ContractDID* contract_deployment_id = GetContractDeploymentIdentifier(rvm::_details::CONTRACT_UNSET_SCOPE(_pTxn->Contract), _pTxn->BuildNum);
+				ret = pexec->Invoke(this, 0xffffffffU, contract_deployment_id, _pTxn->Op, &args);
 				if((int)ret.Code > 0)
 				{
-					_LOG_WARNING("[PRD]: Engine invoke error. Error Message: " << rt::EnumStringify(ret.Code));
+					if ((int)ret.SubCodeLow > 0) {
+						rt::String tmp("");
+						StreamByString str(tmp);
+						pexec->GetExceptionMessage(ret.SubCodeLow, &str);
+						_LOG_WARNING("[PRD]: Engine invoke error. Error Message: " << rt::EnumStringify(ret.Code) << " (" << str.GetString().Str() << ")");
+					}
+					else
+						_LOG_WARNING("[PRD]: Engine invoke error. Error Message: " << rt::EnumStringify(ret.Code));
 				}
 			}
 			else

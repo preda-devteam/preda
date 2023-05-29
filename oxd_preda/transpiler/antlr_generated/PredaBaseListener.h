@@ -46,6 +46,9 @@ public:
   virtual void enterStateVariableDeclaration(PredaParser::StateVariableDeclarationContext * /*ctx*/) override { }
   virtual void exitStateVariableDeclaration(PredaParser::StateVariableDeclarationContext * /*ctx*/) override { }
 
+  virtual void enterConstVariableDeclaration(PredaParser::ConstVariableDeclarationContext * /*ctx*/) override { }
+  virtual void exitConstVariableDeclaration(PredaParser::ConstVariableDeclarationContext * /*ctx*/) override { }
+
   virtual void enterScope(PredaParser::ScopeContext * /*ctx*/) override { }
   virtual void exitScope(PredaParser::ScopeContext * /*ctx*/) override { }
 

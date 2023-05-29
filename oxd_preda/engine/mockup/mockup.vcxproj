@@ -78,6 +78,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\bin\compile_env\contract_template.h" />
     <ClInclude Include="..\..\bin\compile_env\include\address_blob_hash_types.h" />
     <ClInclude Include="..\..\bin\compile_env\include\arraytype.h" />
     <ClInclude Include="..\..\bin\compile_env\include\biginttype.h" />
@@ -99,10 +100,6 @@
     <ClInclude Include="TranspiledCode.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\bin\compile_env\contract_template.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </ClCompile>
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

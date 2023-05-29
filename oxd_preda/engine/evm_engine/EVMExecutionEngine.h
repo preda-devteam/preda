@@ -53,10 +53,11 @@ namespace preda_evm {
 		EVMExecutionEngine(ContractDatabase* pDB);
 		virtual ~EVMExecutionEngine() {}
 
-		virtual rvm::InvokeResult Invoke(rvm::ExecutionContext* executionContext, uint32_t gas_limit, rvm::BuildNum build_num, rvm::ContractScopeId contractId, rvm::OpCode opCode, const rvm::ConstData* args_serialized) override;
+		virtual rvm::InvokeResult Invoke(rvm::ExecutionContext* executionContext, uint32_t gas_limit, const rvm::ContractDID *contract_deployment_id, rvm::OpCode opCode, const rvm::ConstData* args_serialized) override;
 		virtual rvm::InvokeResult Deploy(rvm::ExecutionContext* exec, uint32_t gas_limit, rvm::CompiledContracts* linked, rvm::ContractDID* contract_deployment_ids, rvm::InterfaceDID** interface_deployment_ids, rvm::LogMessageOutput* log_msg_output) override;
 
 		virtual void Release() override;
+		virtual void GetExceptionMessage(uint16_t except, rvm::StringStream* str) const override;
 	};
 }
 

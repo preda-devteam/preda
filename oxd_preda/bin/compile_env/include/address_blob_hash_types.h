@@ -41,32 +41,32 @@ namespace prlrt {
 			memcpy(data, rhs.data, sizeof(data));
 		}
 
-		bool operator ==(const fixed_size_value_type<LEN, TYPE_IDENTIFIER_ENUM> &rhs) const
+		__prlt_bool operator ==(const fixed_size_value_type<LEN, TYPE_IDENTIFIER_ENUM> &rhs) const
 		{
 			return memcmp(data, rhs.data, sizeof(data)) == 0;
 		}
 
-		bool operator !=(const fixed_size_value_type<LEN, TYPE_IDENTIFIER_ENUM> &rhs) const
+		__prlt_bool operator !=(const fixed_size_value_type<LEN, TYPE_IDENTIFIER_ENUM> &rhs) const
 		{
 			return memcmp(data, rhs.data, sizeof(data)) != 0;
 		}
 
-		bool operator <(const fixed_size_value_type<LEN, TYPE_IDENTIFIER_ENUM> &rhs) const
+		__prlt_bool operator <(const fixed_size_value_type<LEN, TYPE_IDENTIFIER_ENUM> &rhs) const
 		{
 			return memcmp(data, rhs.data, sizeof(data)) < 0;
 		}
 
-		bool operator >(const fixed_size_value_type<LEN, TYPE_IDENTIFIER_ENUM> &rhs) const
+		__prlt_bool operator >(const fixed_size_value_type<LEN, TYPE_IDENTIFIER_ENUM> &rhs) const
 		{
 			return memcmp(data, rhs.data, sizeof(data)) > 0;
 		}
 
-		bool operator <=(const fixed_size_value_type<LEN, TYPE_IDENTIFIER_ENUM> &rhs) const
+		__prlt_bool operator <=(const fixed_size_value_type<LEN, TYPE_IDENTIFIER_ENUM> &rhs) const
 		{
 			return memcmp(data, rhs.data, sizeof(data)) <= 0;
 		}
 
-		bool operator >=(const fixed_size_value_type<LEN, TYPE_IDENTIFIER_ENUM> &rhs) const
+		__prlt_bool operator >=(const fixed_size_value_type<LEN, TYPE_IDENTIFIER_ENUM> &rhs) const
 		{
 			return memcmp(data, rhs.data, sizeof(data)) >= 0;
 		}
@@ -129,19 +129,31 @@ namespace prlrt {
 		{
 			return PREDA_CALL(IsDomainAddress, this);
 		}
+		__prlt_bool __prli_is_contract()
+		{
+			return PREDA_CALL(IsContractAddress, this);
+		}
+		__prlt_bool __prli_is_custom()
+		{
+			return PREDA_CALL(IsCustomAddress, this);
+		}
 		explicit operator __prlt_string() const
 		{
 			return __prlt_string(ToString().c_str());
 		}
 		std::string ToString() const
 		{
-			uint32_t len = PREDA_CALL(GetAddressToStringLength);
+			uint32_t len = PREDA_CALL(GetAddressToStringLength, data);
 			uint32_t dataLen = get_serialize_size();
 			std::vector<char> strBuf(len, '\0');
 			std::vector<uint8_t> dataBuf(dataLen);
 			serialize_out(&dataBuf[0], true);
 			PREDA_CALL(AddressToString, &dataBuf[0], dataLen, &strBuf[0]);
 			return std::string(&strBuf[0], len);
+		}
+		void SetAsContract(uint64_t contract_id)
+		{
+			PREDA_CALL(SetAsContractAddress, &data[0], contract_id);
 		}
 	};
 
@@ -174,6 +186,12 @@ namespace prlrt {
 			serialize_out(&dataBuf[0], true);
 			PREDA_CALL(HashToString, &dataBuf[0], dataLen, &strBuf[0]);
 			return std::string(&strBuf[0], len);
+		}
+		explicit operator __prlt_address()
+		{
+			__prlt_address result;
+			PREDA_CALL(SetAsCustomAddress, result.data, data);
+			return result;
 		}
 	};
 }

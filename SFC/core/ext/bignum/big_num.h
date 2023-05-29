@@ -457,7 +457,7 @@ public:
 	void Add(const BigNumRef& a, const BigNumRef& b){ _details::BN_Add(a, b, *this); } ///< this = a + b
 	void Sub(const BigNumRef& a, const BigNumRef& b){ _details::BN_Sub(a, b, *this); } ///< this = a - b
 	void Add(const BigNumRef& a, const _details::NativeInt& b){ Add(a, (const BigNumImmutable<_details::BN_Fix<>>&)b); } ///< this = a + b
-	void Sub(const BigNumRef& a, const _details::NativeInt& b){ Sub(a, (const BigNumImmutable<_details::BN_Fix<>>&)b); } ///< this = a + b
+	void Sub(const BigNumRef& a, const _details::NativeInt& b){ Sub(a, (const BigNumImmutable<_details::BN_Fix<>>&)b); } ///< this = a - b
 	/** @brief result cannot be any of the parameter */
 	void Mul(const BigNumRef& a, const BigNumRef& b){ _details::BN_Mul(a, b, *this); } 
 	void Mul(const BigNumRef& a, int b){ _details::BN_AbsMul(a, (UINT)abs(b), *this); SetSign(a.GetSign() != (b<0)); }

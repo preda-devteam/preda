@@ -2,6 +2,7 @@
 #include <fstream>
 #include <cassert>
 #include <string>
+#include <array>
 #if defined(_WIN32)
 	#include <windows.h>
 #else
@@ -226,41 +227,28 @@ int main(int argc, const char **argv)
  					std::string str;
  					uint32_t flags = pTranspiler->GetExportedFunctionFlag(i);
 
- 					switch (transpiler::PredaFunctionFlags(flags & uint32_t(transpiler::PredaFunctionFlags::ContextClassMask)))
- 					{
- 					case transpiler::PredaFunctionFlags::ContextClassNone:
- 						str += "ContextClassNone";
- 						break;
- 					case transpiler::PredaFunctionFlags::ContextClassGlobal:
- 						str += "ContextClassGlobal";
- 						break;
- 					case transpiler::PredaFunctionFlags::ContextClassShard:
- 						str += "ContextClassShard";
- 						break;
- 					case transpiler::PredaFunctionFlags::ContextClassAddress:
- 						str += "ContextClassAddress";
- 						break;
- 					default:
+					uint32_t scope = flags & uint32_t(transpiler::ScopeType::Mask);
+					if (scope >= 1 && scope <= 8)
+					{
+						static std::array<std::string, 8> scopeNames = { "global", "shard", "address", "uint16", "uint32", "uint64", "uint256", "uint512" };
+						str += "@" + scopeNames[scope - 1];
+					}
+					else
  						assert(0);
- 					}
- 					flags &= ~uint32_t(transpiler::PredaFunctionFlags::ContextClassMask);
+ 					flags &= ~uint32_t(transpiler::ScopeType::Mask);
 
  #define PARSE_FLAG(x)\
- 	if (flags & uint32_t(transpiler::PredaFunctionFlags::x))\
+ 	if (flags & uint32_t(transpiler::FunctionFlags::x))\
  	{\
  		str += " | "#x;\
- 		flags &= ~uint32_t(transpiler::PredaFunctionFlags::x);\
+ 		flags &= ~uint32_t(transpiler::FunctionFlags::x);\
  	}
  					PARSE_FLAG(CallableFromTransaction);
  					PARSE_FLAG(CallableFromRelay);
  					PARSE_FLAG(CallableFromOtherContract);
  					PARSE_FLAG(CallableFromSystem);
  					PARSE_FLAG(IsConst);
- 					PARSE_FLAG(BlockDependencyPosition);
- 					PARSE_FLAG(BlockDependencyPayload);
- 					PARSE_FLAG(BlockDependencyEntropy);
- 					PARSE_FLAG(TransactionDependency);
- 					PARSE_FLAG(HasRelayAddressStatement);
+ 					PARSE_FLAG(HasRelayScopeStatement);
 					PARSE_FLAG(HasRelayShardsStatement);
 					PARSE_FLAG(HasRelayGlobalStatement);
 					PARSE_FLAG(GlobalStateDependency);
@@ -283,12 +271,21 @@ int main(int argc, const char **argv)
 			std::cout << "shard_scale_out_function: " << pTranspiler->GetShardScaleoutFunctionExportIndex() << std::endl;
 
  			std::cout << std::endl;
- 			std::cout << "global var : " << pTranspiler->GetGlobalStateVariableSignature() << std::endl;
-			std::cout << "global var has asset and blob : " << pTranspiler->PerShardStateVariableHasAsset() << " " << pTranspiler->PerShardStateVariableHasBlob() << std::endl;
-			std::cout << "shard var  : " << pTranspiler->GetPerShardStateVariableSignature() << std::endl;
- 			std::cout << "shard var has asset and blob : " << pTranspiler->PerShardStateVariableHasAsset() << " " << pTranspiler->PerShardStateVariableHasBlob() << std::endl;
- 			std::cout << "address var: " << pTranspiler->GetPerAddressStateVariableSignature() << std::endl;
- 			std::cout << "address var has asset and blob : " << pTranspiler->PerAddressStateVariableHasAsset() << " " << pTranspiler->PerAddressStateVariableHasBlob() << std::endl;
+			std::array<transpiler::ScopeType, 8> scopes = { transpiler::ScopeType::Global,transpiler::ScopeType::Shard,transpiler::ScopeType::Address, transpiler::ScopeType::Uint16,
+				transpiler::ScopeType::Uint32, transpiler::ScopeType::Uint64, transpiler::ScopeType::Uint256, transpiler::ScopeType::Uint512 };
+			std::array<std::string, 8> scopeNames = { "global", "shard", "address", "uint16", "uint32", "uint64", "uint256", "uint512" };
+			static_assert(scopeNames.size() == scopes.size());
+			for (int i = 0; i < (int)scopes.size(); i++)
+			{
+				if (pTranspiler->GetNumScopeStateVariable(scopes[i]) > 0)
+				{
+					std::cout << scopeNames[i] << " var : " << pTranspiler->GetScopeStateVariableSignature(scopes[i]) << std::endl;
+					bool hasAsset = pTranspiler->ScopeStateVariableHasAsset(scopes[i]);
+					bool hasBlob = pTranspiler->ScopeStateVariableHasBlob(scopes[i]);
+					if (hasAsset || hasBlob)
+						std::cout << scopeNames[i] << " var has asset and blob : " << hasAsset << " " << hasBlob << std::endl;
+				}
+			}
 
  			std::cout << std::endl;
  			for (uint32_t i = 0; i < pTranspiler->GetNumEnumTypes(); i++)

@@ -163,6 +163,7 @@ public:
 		if(pHostname)SetAddress(pHostname, ushPort);
 	}
 	bool	IsLoopback() const { return _details::InetAddrT_Op<t_ADDR>::IsAddressLoopback(*this); }
+	bool	IsAny() const { return _details::InetAddrT_Op<t_ADDR>::IsAddressAny(*this); }
 	bool	SetAsLocal(bool no_loopback = false){ OP::Init(*this); return GetLocalAddresses(this,1,no_loopback); }
 	auto&	SetAsLoopback(){ OP::Init(*this); _details::InetAddrT_Op<t_ADDR>::AssignLoopbackAddress(*this); return *this; }
 	auto&	SetAsAny(){ OP::Init(*this); _details::InetAddrT_Op<t_ADDR>::SetAny(*this); return *this; }
@@ -190,7 +191,7 @@ public:
 
 		if(!ap[0].IsEmpty())
 		{
-			if(port)SetPort(port);
+			if(ap[1].IsEmpty() && port)SetPort(port);
 			// http://uw714doc.sco.com/en/SDK_netapi/sockC.PortIPv4appIPv6.html
 #if !defined(PLATFORM_MAX_COMPATIBILITY)
 			if(inet_pton(OP::SIN_FAMILY, pHostname, OP::GetAddressPtr(*this)))return true;
@@ -329,7 +330,7 @@ public:
 
     void			EnableNonblockingIO(bool enable = true);
 	void			EnableDatagramBroadcast(bool enable = true);
-	bool	IsLastOperationTimeout() const { return false; }
+	bool			IsLastOperationTimeout() const { return false; }
 };
 
 class SocketTimed:public Socket

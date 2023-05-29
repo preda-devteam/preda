@@ -286,6 +286,7 @@ target("chain_simulator")
         add_rules("win.sdk")
         add_defines("_CONSOLE")
         add_cxflags("/bigobj")
+        add_files("SFC/core/ext/bignum/ttmath/ttmathuint_x86_64_msvc.asm")
     elseif (is_plat("linux")) then
         add_cxflags("-fPIC", "-pthread")
         add_rules("linux.link_ipp")

@@ -231,38 +231,36 @@ bool CRuntimeInterface::StringToAddress(void *pAddress, const char *data, uint32
 	return true;
 }
 
-uint32_t CRuntimeInterface::GetAddressToStringLength()
+uint32_t CRuntimeInterface::GetAddressToStringLength(const void* pAddress)
 {
-	return (uint32_t)(rvm::_details::ADDRESS_BASE32_LEN + 10); //extra space for "\"" + "\"" + ":ed25519"
+	return (uint32_t)(rvm::_details::ADDRESS_BASE32_LEN + 1 + oxd::SecuritySuite::IdToString(((rvm::Address*)pAddress)->_SSID).GetLength());
 }
 
-bool CRuntimeInterface::AddressToString(const void* pData, uint32_t dataLen, char* out)
+bool CRuntimeInterface::AddressToString(const void* pAddress, uint32_t dataLen, char* out)
 {
-	rt::String result = "\"";
+	rt::String result;
 	rvm::Address addr;
-	memcpy(&addr, pData, dataLen);
+	memcpy(&addr, pAddress, dataLen);
 	char addr_buf[rvm::_details::ADDRESS_BASE32_LEN];
 	rvm::_details::ADDRESS_TO_STRING(addr, addr_buf);
-	result += rt::String(addr_buf, rvm::_details::ADDRESS_BASE32_LEN)  + rt::SS(":") + oxd::SecuritySuite::IdToString(addr._SSID) + '"';
+	result = rt::String(addr_buf, rvm::_details::ADDRESS_BASE32_LEN)  + rt::SS(":") + oxd::SecuritySuite::IdToString(addr._SSID);
 	memcpy(out, result.Begin(), result.GetLength());
 	return true;
 }
 
 uint32_t CRuntimeInterface::GetHashToStringLength()
 {
-	return (uint32_t)os::Base32EncodeLength(RVM_HASH_SIZE) + 2;
+	return (uint32_t)os::Base32EncodeLength(RVM_HASH_SIZE);
 }
 
 bool CRuntimeInterface::HashToString(const void* pData, uint32_t dataLen, char* out)
 {
-	rt::String result = "\"";
 	if(dataLen != sizeof(rvm::HashValue))
 	{
 		return false;
 	}
 	rt::tos::Base32CrockfordLowercaseOnStack<> str(pData, dataLen);
-	result += str + '"';
-	memcpy(out, result.Begin(), result.GetLength());
+	memcpy(out, str.Begin(), str.GetLength());
 	return true;
 }
 
@@ -274,14 +272,19 @@ void CRuntimeInterface::PushContractStack(PredaContractDID deployId, rvm::Contra
 	entry.funtionFlags = functionFlags;
 	m_contractStack.push_back(entry);
 
-	bool bIsConstCall = (functionFlags & uint32_t(transpiler::PredaFunctionFlags::IsConst)) != 0;
+	bool bIsConstCall = (functionFlags & uint32_t(transpiler::FunctionFlags::IsConst)) != 0;
 
 	if (!bIsConstCall)
 	{
-		auto itor = m_contractStateModifiedFlags.try_emplace(deployId, std::array<bool, uint8_t(prlrt::ContractContextType::Num)>{false, false, false, false});
-		uint32_t contextClassLevel = uint32_t(functionFlags & uint32_t(transpiler::PredaFunctionFlags::ContextClassMask));
-		for (uint32_t i = 0; i <= contextClassLevel; i++)
-			itor.first->second[i] = true;
+		std::array<bool, uint8_t(prlrt::ContractContextType::Num)> initialFlags;
+		initialFlags.fill(false);
+		auto itor = m_contractStateModifiedFlags.try_emplace(deployId, initialFlags);
+		transpiler::ScopeType scope = transpiler::ScopeType(functionFlags & uint32_t(transpiler::FunctionFlags::ScopeTypeMask));
+		itor.first->second[uint32_t(scope)] = true;
+		if (uint32_t(scope) > uint32_t(transpiler::ScopeType::Global))
+			itor.first->second[uint32_t(transpiler::ScopeType::Global)] = true;
+		if (uint32_t(scope) > uint32_t(transpiler::ScopeType::Shard))
+			itor.first->second[uint32_t(transpiler::ScopeType::Shard)] = true;
 	}
 }
 
@@ -289,13 +292,14 @@ void CRuntimeInterface::ClearBigInt() {
 	m_bigint.clear();
 }
 
-bool CRuntimeInterface::EmitRelayToAddress(const uint8_t *address, uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)
+bool CRuntimeInterface::EmitRelayToScope(const uint8_t* scope_key, uint32_t scope_key_size, uint32_t scope_type, uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)
 {
 	rvm::ConstData args;
 	args.DataPtr = args_serialized;
 	args.DataSize = args_size;
 	// TODO: implement gas_redistribution_weight on preda code level
-	return m_pExecutionContext->EmitRelayToAddress(rvm::BuildNumLatest, (rvm::ConstAddress *)address, rvm::_details::CONTRACT_SET_SCOPE(m_contractStack.back().contractId, rvm::Scope::Address), rvm::OpCode(opCode), &args, 1);
+	rvm::Scope rvmScope = _details::PredaScopeToRvmScope(transpiler::ScopeType(scope_type));
+	return m_pExecutionContext->EmitRelayToScope(rvm::BuildNumLatest, scope_key, scope_key_size, rvm::_details::CONTRACT_SET_SCOPE(m_contractStack.back().contractId, rvmScope), rvm::OpCode(opCode), &args, 1);
 }
 
 bool CRuntimeInterface::EmitRelayToGlobal(uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)
@@ -373,17 +377,24 @@ void CRuntimeInterface::DebugPrintBufferAppendSerializedData(const char *type_ex
 	m_logOutputBuffer += outputStr;
 }
 
-void CRuntimeInterface::DebugPrintOutputBuffer()
+void CRuntimeInterface::DebugPrintOutputBuffer(uint32_t line)
 {
 	rvm::ConstString s{ m_logOutputBuffer.c_str(), uint32_t(m_logOutputBuffer.size()) };
 
-	m_pDB->m_pRuntimeAPI->DebugPrint(rvm::DebugMessageType::Informational, &s, m_pExecutionContext, m_pDB->GetContract(m_contractStack.back().deployId));
+	m_pDB->m_pRuntimeAPI->DebugPrint(rvm::DebugMessageType::Informational, &s, m_pExecutionContext, m_pDB->GetContract(m_contractStack.back().deployId), line);
 	m_logOutputBuffer.clear();
 }
 
 void CRuntimeInterface::DebugAssertionFailure(uint32_t line)
 {
 	std::string tmp = "Assertion failure on line " + std::to_string(line);
+	rvm::ConstString s{ tmp.c_str(), uint32_t(tmp.size()) };
+	m_pDB->m_pRuntimeAPI->DebugPrint(rvm::DebugMessageType::Warning, &s, m_pExecutionContext, m_pDB->GetContract(m_contractStack.back().deployId));
+}
+
+void CRuntimeInterface::DebugAssertionFailureMessage(uint32_t line, const char* message, uint32_t length)
+{
+	std::string tmp = "Assertion failure on line " + std::to_string(line) + ": " + std::string(message, length);
 	rvm::ConstString s{ tmp.c_str(), uint32_t(tmp.size()) };
 	m_pDB->m_pRuntimeAPI->DebugPrint(rvm::DebugMessageType::Warning, &s, m_pExecutionContext, m_pDB->GetContract(m_contractStack.back().deployId));
 }
@@ -428,6 +439,26 @@ bool CRuntimeInterface::IsNameAddress(const void *pAddress)
 bool CRuntimeInterface::IsDomainAddress(const void *pAddress)
 {
 	return ((oxd::SecureAddress*)pAddress)->GetSecuritySuiteId() == oxd::SEC_SUITE_REGISTERED_DOMAIN;
+}
+
+bool CRuntimeInterface::IsContractAddress(const void* pAddress)
+{
+	return ((oxd::SecureAddress*)pAddress)->GetSecuritySuiteId() == oxd::SEC_SUITE_CONTRACT;
+}
+
+bool CRuntimeInterface::IsCustomAddress(const void* pAddress)
+{
+	return ((oxd::SecureAddress*)pAddress)->GetSecuritySuiteId() == oxd::SEC_SUITE_CUSTOM;
+}
+
+void CRuntimeInterface::SetAsCustomAddress(void* pAddress, const uint8_t* data)
+{
+	((oxd::SecureAddress*)pAddress)->SetAsCustom(data);
+}
+
+void CRuntimeInterface::SetAsContractAddress(void* pAddress, uint64_t contract_id)
+{
+	((oxd::SecureAddress*)pAddress)->SetAsContract(contract_id);
 }
 
 bool CRuntimeInterface::BurnGasLoop()
@@ -696,6 +727,22 @@ void CRuntimeInterface::Transaction_GetSelfAddress(uint8_t* out)
 
 }
 
+void CRuntimeInterface::Transaction_GetSender(uint8_t* out)
+{
+	// only if scope is address
+	if (m_contractStack.size() > 1)
+		((oxd::SecureAddress*)out)->SetAsContract(uint64_t(m_contractStack[m_contractStack.size() - 2].contractId));
+	else
+	{
+		if (Transaction_GetSingerCount() > 0)
+		{
+			*(rvm::Address*)out = *m_pExecutionContext->GetSigner(0);
+		}
+		else
+			((oxd::SecureAddress*)out)->Zero();
+	}
+}
+
 uint64_t CRuntimeInterface::Transaction_GetTimeStamp()
 {
 	return m_pExecutionContext->GetTimestamp();
@@ -703,7 +750,11 @@ uint64_t CRuntimeInterface::Transaction_GetTimeStamp()
 
 void CRuntimeInterface::Transaction_GetSigner(uint32_t signerIdx, uint8_t* out)
 {
-	*(rvm::Address*)out = *m_pExecutionContext->GetSigner(signerIdx);
+	rvm::ConstAddress* signer = m_pExecutionContext->GetSigner(signerIdx);
+	if (signer)
+		*(rvm::Address*)out = *signer;
+	else
+		((oxd::SecureAddress*)out)->Zero();
 }
 
 const uint32_t CRuntimeInterface::Transaction_GetSingerCount()

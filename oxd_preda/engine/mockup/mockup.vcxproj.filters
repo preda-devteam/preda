@@ -78,13 +78,13 @@
     <ClInclude Include="..\..\bin\compile_env\include\interface.h">
       <Filter>Source Files\compile_env</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\bin\compile_env\contract_template.h">
+      <Filter>Source Files\compile_env</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\bin\compile_env\contract_template.cpp">
-      <Filter>Source Files\compile_env</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

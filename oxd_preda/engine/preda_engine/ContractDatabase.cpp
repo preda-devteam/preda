@@ -86,77 +86,42 @@ bool ReadEntryFromJson(const rt::JsonObject &json, ContractDatabaseEntry &outEnt
 		::rvm::_details::_JsonParse(outEntry.compileData.intermediateHash, jsonStr);
 	}
 
-	// shard state variables
-	outEntry.compileData.perShardStateVariableSignature = rt::String(json.GetValue("sv_shard_sig", bExist)).GetString();
-	if (!bExist) return false;
-
+	// state variables
 	{
-		data = json.GetValue("sv_shard_comment", bExist);
+		data = json.GetValue("sv", bExist);
 		if (!bExist) return false;
-		rt::JsonArray stateVarArray(data);
-		rt::String_Ref stateVarStr;
-		for (int i = 0; i < (int)stateVarArray.GetSize(); i++)
+		rt::JsonArray svArray(data);
+		rt::JsonObject svJson;
+		outEntry.compileData.scopeStateVarMeta.resize(int(transpiler::ScopeType::Num));
+		for (int i = 0; i < (int)svArray.GetSize(); i++)
 		{
-			stateVarArray.GetNextObjectRaw(stateVarStr);
-			outEntry.compileData.perShardStateVariableComment.push_back(rt::String(stateVarStr).GetString());
+			svArray.GetNextObjectRaw(svJson);
+
+			rt::String sig;
+			if (!svJson.LoadValue("sig", sig))
+				return false;
+			outEntry.compileData.scopeStateVarMeta[i].signature = sig;
+
+			rt::String_Ref comment;
+			if (!svJson.LoadValue("comment", comment))
+				return false;
+			rt::JsonArray stateVarArray(comment);
+			rt::String_Ref stateVarStr;
+			for (int i = 0; i < (int)stateVarArray.GetSize(); i++)
+			{
+				stateVarArray.GetNextObjectRaw(stateVarStr);
+				outEntry.compileData.scopeStateVarMeta[i].comment.push_back(rt::String(stateVarStr).GetString());
+			}
+
+			data = svJson.GetValue("has_asset", bExist);
+			if (!bExist) return false;
+			data.ToNumber(outEntry.compileData.scopeStateVarMeta[i].hasAsset);
+
+			data = svJson.GetValue("has_blob", bExist);
+			if (!bExist) return false;
+			data.ToNumber(outEntry.compileData.scopeStateVarMeta[i].hasBlob);
 		}
 	}
-
-	data = json.GetValue("sv_shard_has_asset", bExist);
-	if (!bExist) return false;
-	data.ToNumber(outEntry.compileData.perShardStateVariableHasAsset);
-
-	data = json.GetValue("sv_shard_has_blob", bExist);
-	if (!bExist) return false;
-	data.ToNumber(outEntry.compileData.perShardStateVariableHasBlob);
-
-	// address state variables
-	outEntry.compileData.perAddressStateVariableSignature = rt::String(json.GetValue("sv_address_sig", bExist)).GetString();
-	if (!bExist) return false;
-
-	{
-		data = json.GetValue("sv_address_comment", bExist);
-		if (!bExist) return false;
-		rt::JsonArray stateVarArray(data);
-		rt::String_Ref stateVarStr;
-		for (int i = 0; i < (int)stateVarArray.GetSize(); i++)
-		{
-			stateVarArray.GetNextObjectRaw(stateVarStr);
-			outEntry.compileData.perAddressStateVariableComment.push_back(rt::String(stateVarStr).GetString());
-		}
-	}
-
-	data = json.GetValue("sv_address_has_asset", bExist);
-	if (!bExist) return false;
-	data.ToNumber(outEntry.compileData.perAddressStateVariableHasAsset);
-
-	data = json.GetValue("sv_address_has_blob", bExist);
-	if (!bExist) return false;
-	data.ToNumber(outEntry.compileData.perAddressStateVariableHasBlob);
-
-	// global state variables
-	outEntry.compileData.globalStateVariableSignature = rt::String(json.GetValue("sv_global_sig", bExist)).GetString();
-	if (!bExist) return false;
-
-	{
-		data = json.GetValue("sv_global_comment", bExist);
-		if (!bExist) return false;
-		rt::JsonArray stateVarArray(data);
-		rt::String_Ref stateVarStr;
-		for (int i = 0; i < (int)stateVarArray.GetSize(); i++)
-		{
-			stateVarArray.GetNextObjectRaw(stateVarStr);
-			outEntry.compileData.globalStateVariableComment.push_back(rt::String(stateVarStr).GetString());
-		}
-	}
-
-	data = json.GetValue("sv_global_has_asset", bExist);
-	if (!bExist) return false;
-	data.ToNumber(outEntry.compileData.globalStateVariableHasAsset);
-
-	data = json.GetValue("sv_global_has_blob", bExist);
-	if (!bExist) return false;
-	data.ToNumber(outEntry.compileData.globalStateVariableHasBlob);
 
 	{
 		data = json.GetValue("imports", bExist);
@@ -1030,32 +995,19 @@ bool CContractDatabase::CompileContract(const rvm::ConstString* dapp_name, CCont
 		}
 		out_compile_data.exportUniqueString = pTranspiler->GetContractExportUniqueIdentifierString();
 
-		out_compile_data.perAddressStateVariableSignature = pTranspiler->GetPerAddressStateVariableSignature();
-		uint32_t NumPerAddressStateVariable = pTranspiler->GetNumPerAddressStateVariable();
-		out_compile_data.perAddressStateVariableComment = std::vector<std::string>();
-		for(uint32_t i = 0; i < NumPerAddressStateVariable; i++){
-			out_compile_data.perAddressStateVariableComment.push_back(pTranspiler->GetPerAddressStateVariableComment(i));
+		out_compile_data.scopeStateVarMeta.resize(int(transpiler::ScopeType::Num));
+		for (int i = 0; i < int(transpiler::ScopeType::Num); i++)
+		{
+			transpiler::ScopeType scope = transpiler::ScopeType(i);
+			out_compile_data.scopeStateVarMeta[i].signature = pTranspiler->GetScopeStateVariableSignature(scope);
+			uint32_t NumPerAddressStateVariable = pTranspiler->GetNumScopeStateVariable(scope);
+			out_compile_data.scopeStateVarMeta[i].comment = std::vector<std::string>();
+			for (uint32_t j = 0; j < NumPerAddressStateVariable; j++) {
+				out_compile_data.scopeStateVarMeta[i].comment.push_back(pTranspiler->GetScopeStateVariableComment(scope, j));
+			}
+			out_compile_data.scopeStateVarMeta[i].hasAsset = pTranspiler->ScopeStateVariableHasAsset(scope);
+			out_compile_data.scopeStateVarMeta[i].hasBlob = pTranspiler->ScopeStateVariableHasBlob(scope);
 		}
-		out_compile_data.perAddressStateVariableHasAsset = pTranspiler->PerAddressStateVariableHasAsset();
-		out_compile_data.perAddressStateVariableHasBlob = pTranspiler->PerAddressStateVariableHasBlob();
-
-		out_compile_data.perShardStateVariableSignature = pTranspiler->GetPerShardStateVariableSignature();
-		uint32_t NumPerShardStateVariable = pTranspiler->GetNumPerShardStateVariable();
-		out_compile_data.perShardStateVariableComment = std::vector<std::string>();
-		for(uint32_t i = 0; i < NumPerShardStateVariable; i++){
-			out_compile_data.perShardStateVariableComment.push_back(pTranspiler->GetPerShardStateVariableComment(i));
-		}
-		out_compile_data.perShardStateVariableHasAsset = pTranspiler->PerShardStateVariableHasAsset();
-		out_compile_data.perShardStateVariableHasBlob = pTranspiler->PerShardStateVariableHasBlob();
-
-		out_compile_data.globalStateVariableSignature = pTranspiler->GetGlobalStateVariableSignature();
-		uint32_t NumGlobalStateVariable = pTranspiler->GetNumGlobalStateVariable();
-		out_compile_data.globalStateVariableComment = std::vector<std::string>();
-		for(uint32_t i = 0; i < NumGlobalStateVariable; i++){
-			out_compile_data.globalStateVariableComment.push_back(pTranspiler->GetGlobalStateVariableComment(i));
-		}
-		out_compile_data.globalStateVariableHasAsset = pTranspiler->GlobalStateVariableHasAsset();
-		out_compile_data.globalStateVariableHasBlob = pTranspiler->GlobalStateVariableHasBlob();
 
 		for (uint32_t i = 0; i < pTranspiler->GetNumImportedContracts(); i++)
 			out_compile_data.importedContracts.push_back(pTranspiler->GetImportedContractFullName(i));
@@ -1234,7 +1186,7 @@ bool CContractDatabase::LinkContract(const std::string &source_code, const std::
 #if	defined(__linux__) || defined(__linux) || defined(__APPLE__)
 		if (m_runtime_mode == RuntimeMode::NATIVE)
 		{
-			std::string cmdLine = "g++ -I" + m_modulePath + "../compile_env/ -shared -fPIC -std=c++17 -o\"" + m_dbPath + contractBinPathFileName + "\" \"" + m_dbPath + "/transpiledCode.cpp\" 2>&1";
+			std::string cmdLine = "g++ -O3 -I" + m_modulePath + "../compile_env/ -shared -fPIC -std=c++17 -o\"" + m_dbPath + contractBinPathFileName + "\" \"" + m_dbPath + "/transpiledCode.cpp\" 2>&1";
 			FILE *pipe = popen(cmdLine.c_str(), "r");
 			if (pipe == nullptr)
 			{
@@ -1328,7 +1280,7 @@ bool CContractDatabase::LinkContract(const std::string &source_code, const std::
 		{
 			if (m_runtime_mode == RuntimeMode::NATIVE)
 			{
-				std::string cmdLine = m_modulePath + "../mingw64/bin/g++ -I" + m_modulePath + "../compile_env/ -shared -std=c++17 -o \"" + m_dbPath + contractBinPathFileName + "\" \"" + m_dbPath + "/transpiledCode.cpp\"";
+				std::string cmdLine = m_modulePath + "../mingw64/bin/g++ -O3 -I" + m_modulePath + "../compile_env/ -shared -std=c++17 -o \"" + m_dbPath + contractBinPathFileName + "\" \"" + m_dbPath + "/transpiledCode.cpp\"";
 				if (!processLauncher.Launch(cmdLine.c_str(), os::LaunchProcess::FLAG_SAVE_OUTPUT))
 				{
 					out_log.AddMessage(0, 0, 0, ("Failed to execute " + cmdLine).c_str());
@@ -1654,39 +1606,24 @@ std::string CContractDatabase::ConvertEntryToJson(const ContractDatabaseEntry *p
 		json += "\t\"inter_hash\": " + std::string(res.GetString()) + ",\n";
 	}
 
-	// shard
-	json += "\t\"sv_shard_sig\": \"" + pEntry->compileData.perShardStateVariableSignature + "\",\n";
-	json += "\t\"sv_shard_comment\": [\n";
-	for(int i = 0; i < pEntry->compileData.perShardStateVariableComment.size(); i++){
-		if(i > 0)
-			json += ", ";
-		json += "\"" + pEntry->compileData.perShardStateVariableComment[i] + "\"";
+	// state vars
+	json += "\t\"sv\": [\n";
+	for (int i = 0; i < int(transpiler::ScopeType::Num); i++)
+	{
+		json += "\t\t[\n";
+		json += "\t\t\t\"sig\": \"" + pEntry->compileData.scopeStateVarMeta[i].signature + "\",\n";
+		json += "\t\t\t\"comment\": [\n";
+		for (int j = 0; j < pEntry->compileData.scopeStateVarMeta[i].comment.size(); j++) {
+			if (j > 0)
+				json += ", ";
+			json += "\"" + pEntry->compileData.scopeStateVarMeta[i].comment[j] + "\"";
+		}
+		json += "\n\t\t\t],\n";
+		json += "\t\t\t\"has_asset\": \"" + std::string(pEntry->compileData.scopeStateVarMeta[i].hasAsset ? "true" : "false") + "\",\n";
+		json += "\t\t\t\"has_blob\": \"" + std::string(pEntry->compileData.scopeStateVarMeta[i].hasBlob ? "true" : "false") + "\"\n";
+		json += "\t\t]" + std::string(i < int(transpiler::ScopeType::Num) - 1 ? ",":"") + "\n";
 	}
-	json += "\n\t],\n";
-	json += "\t\"sv_shard_has_asset\": \"" + std::string(pEntry->compileData.perShardStateVariableHasAsset ? "true" : "false") + "\",\n";
-	json += "\t\"sv_shard_has_blob\": \"" + std::string(pEntry->compileData.perShardStateVariableHasBlob ? "true" : "false") + "\",\n";
-	// addr
-	json += "\t\"sv_address_sig\": \"" + pEntry->compileData.perAddressStateVariableSignature + "\",\n";
-	json += "\t\"sv_address_comment\": [\n";
-	for(int i = 0; i < pEntry->compileData.perAddressStateVariableComment.size(); i++){
-		if(i > 0)
-			json += ", ";
-		json += "\"" + pEntry->compileData.perShardStateVariableComment[i] + "\"";
-	}
-	json += "\n\t],\n";
-	json += "\t\"sv_address_has_asset\": \"" + std::string(pEntry->compileData.perAddressStateVariableHasAsset ? "true" : "false") + "\",\n";
-	json += "\t\"sv_address_has_blob\": \"" + std::string(pEntry->compileData.perAddressStateVariableHasBlob ? "true" : "false") + "\",\n";
-	// global
-	json += "\t\"sv_global_sig\": \"" + pEntry->compileData.globalStateVariableSignature + "\",\n";
-	json += "\t\"sv_global_comment\": [\n";
-	for(int i = 0; i < pEntry->compileData.globalStateVariableComment.size(); i++){
-		if(i > 0)
-			json += ", ";
-		json += "\"" + pEntry->compileData.globalStateVariableComment[i] + "\"";
-	}
-	json += "\n\t],\n";
-	json += "\t\"sv_global_has_asset\": \"" + std::string(pEntry->compileData.globalStateVariableHasAsset ? "true" : "false") + "\",\n";
-	json += "\t\"sv_global_has_blob\": \"" + std::string(pEntry->compileData.globalStateVariableHasBlob ? "true" : "false") + "\",\n";
+	json += "\t],\n";
 
 	json += "\t\"imports\": [\n";
 	for (size_t i = 0; i < pEntry->compileData.importedContracts.size(); i++)
@@ -2040,14 +1977,11 @@ bool CContractDatabase::StateJsonify(rvm::BuildNum build_num, rvm::ContractScope
 		return false;
 	const std::string *pSig = nullptr;
 	rvm::Scope scope = rvm::_details::CONTRACT_SCOPE(contract);
-	if (scope == rvm::Scope::Address)
-		pSig = &pContractEntry->compileData.perAddressStateVariableSignature;
-	else if (scope == rvm::Scope::Shard)
-		pSig = &pContractEntry->compileData.perShardStateVariableSignature;
-	else if (scope == rvm::Scope::Global)
-		pSig = &pContractEntry->compileData.globalStateVariableSignature;
-	else
+	transpiler::ScopeType predaScope = _details::RvmScopeToPredaScope(scope);
+	if (predaScope == transpiler::ScopeType::None)
 		return false;
+
+	pSig = &pContractEntry->compileData.scopeStateVarMeta[int(predaScope)].signature;
 
 	CSymbolDatabaseForJsonifier symbolDb(this, ps);
 	std::string expandedSig;
@@ -2082,13 +2016,8 @@ bool CContractDatabase::StateJsonParse(rvm::BuildNum build_num, rvm::ContractSco
 	}
 	const std::string *pSig = nullptr;
 	rvm::Scope scope = rvm::_details::CONTRACT_SCOPE(contract);
-	if (scope == rvm::Scope::Address)
-		pSig = &pContractEntry->compileData.perAddressStateVariableSignature;
-	else if (scope == rvm::Scope::Shard)
-		pSig = &pContractEntry->compileData.perShardStateVariableSignature;
-	else if (scope == rvm::Scope::Global)
-		pSig = &pContractEntry->compileData.globalStateVariableSignature;
-	else
+	transpiler::ScopeType predaScope = _details::RvmScopeToPredaScope(scope);
+	if (predaScope == transpiler::ScopeType::None)
 	{
 		if (log)
 		{
@@ -2097,6 +2026,8 @@ bool CContractDatabase::StateJsonParse(rvm::BuildNum build_num, rvm::ContractSco
 		}
 		return false;
 	}
+
+	pSig = &pContractEntry->compileData.scopeStateVarMeta[int(predaScope)].signature;
 
 	std::vector<uint8_t> ret;
 
@@ -2356,14 +2287,11 @@ bool CContractDatabase::GetContractStateSignature(rvm::BuildNum build_num, rvm::
 		return false;
 	const std::string *pSig = nullptr;
 	rvm::Scope scope = rvm::_details::CONTRACT_SCOPE(contract);
-	if (scope == rvm::Scope::Address)
-		pSig = &pContractEntry->compileData.perAddressStateVariableSignature;
-	else if (scope == rvm::Scope::Shard)
-		pSig = &pContractEntry->compileData.perShardStateVariableSignature;
-	else if (scope == rvm::Scope::Global)
-		pSig = &pContractEntry->compileData.globalStateVariableSignature;
-	else
+	transpiler::ScopeType predaScope = _details::RvmScopeToPredaScope(scope);
+	if (predaScope == transpiler::ScopeType::None)
 		return false;
+
+	pSig = &pContractEntry->compileData.scopeStateVarMeta[int(predaScope)].signature;
 
 	CSymbolDatabaseForJsonifier symbolDb(this, ps);
 	std::string expandedSig;

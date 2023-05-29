@@ -141,6 +141,18 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 		})) {
 		return {};
 	}
+	if (!linker.func_wrap("env", "predaBigintShiftRightInplace",
+		[&engine](uint64_t self, int a) -> void {
+			return engine.runtimeInterface().BigintShiftRightInplace((prlrt::BigintPtr)self, a);
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaBigintShiftLeftInplace",
+		[&engine](uint64_t self, int a) -> void {
+			return engine.runtimeInterface().BigintShiftLeftInplace((prlrt::BigintPtr)self, a);
+		})) {
+		return {};
+	}
 	if (!linker.func_wrap("env", "predaBigintMulInplace_Int32",
 		[&engine](uint64_t self, int32_t a) -> void {
 			return engine.runtimeInterface().BigintMulInplace_Int32((prlrt::BigintPtr)self, a);
@@ -181,6 +193,12 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 	if (!linker.func_wrap("env", "predaBigintNegateInplace",
 		[&engine](uint64_t self) -> void {
 			return engine.runtimeInterface().BigintNegateInplace((prlrt::BigintPtr)self);
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaBigintIsNegative",
+		[&engine](uint64_t self) -> uint32_t {
+			return engine.runtimeInterface().BigintIsNegative((prlrt::BigintPtr)self);
 		})) {
 		return {};
 	}
@@ -251,6 +269,33 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 		})) {
 		return {};
 	}
+	if (!linker.func_wrap("env", "predaGetAddressToStringLength",
+		[&engine](wasmtime::Caller caller, WasmPtrT address_offset) -> uint32_t {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			return engine.runtimeInterface().GetAddressToStringLength(WasmPtrToPtr<const void*>(mem, address_offset));
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaAddressToString",
+		[&engine](wasmtime::Caller caller, WasmPtrT address_offset, uint32_t data_len, WasmPtrT out_offset) -> uint32_t {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			return engine.runtimeInterface().AddressToString(WasmPtrToPtr<const void*>(mem, address_offset), data_len, WasmPtrToPtr<char*>(mem, out_offset));
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaGetHashToStringLength",
+		[&engine](wasmtime::Caller caller) -> uint32_t {
+			return engine.runtimeInterface().GetHashToStringLength();
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaHashToString",
+		[&engine](wasmtime::Caller caller, WasmPtrT data_offset, uint32_t data_len, WasmPtrT out_offset) -> uint32_t {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			return engine.runtimeInterface().HashToString(WasmPtrToPtr<const void*>(mem, data_offset), data_len, WasmPtrToPtr<char*>(mem, out_offset));
+		})) {
+		return {};
+	}
 	if (!linker.func_wrap("env", "predaCalculateHash",
 		[&engine](wasmtime::Caller caller, WasmPtrT hash_offset, WasmPtrT data_offset, uint32_t data_len) -> void {
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
@@ -258,10 +303,10 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 		})) {
 		return {};
 	}
-	if (!linker.func_wrap("env", "predaEmitRelayToAddress",
-		[&engine](wasmtime::Caller caller, WasmPtrT address_offset, uint32_t op_code, WasmPtrT args_serialized_offset, uint32_t args_size) -> uint32_t {
+	if (!linker.func_wrap("env", "predaEmitRelayToScope",
+		[&engine](wasmtime::Caller caller, WasmPtrT scope_key_offset, uint32_t scope_key_size, uint32_t scope_type, uint32_t op_code, WasmPtrT args_serialized_offset, uint32_t args_size) -> uint32_t {
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
-			return engine.runtimeInterface().EmitRelayToAddress(WasmPtrToPtr<const uint8_t*>(mem, address_offset), op_code, WasmPtrToPtr<const uint8_t*>(mem, args_serialized_offset), args_size);
+			return engine.runtimeInterface().EmitRelayToScope(WasmPtrToPtr<const uint8_t*>(mem, scope_key_offset), scope_key_size, scope_type, op_code, WasmPtrToPtr<const uint8_t*>(mem, args_serialized_offset), args_size);
 		})) {
 		return {};
 	}
@@ -321,14 +366,22 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 		return {};
 	}
 	if (!linker.func_wrap("env", "predaDebugPrintOutputBuffer",
-		[&engine](wasmtime::Caller caller) {
-			engine.runtimeInterface().DebugPrintOutputBuffer();
+		[&engine](wasmtime::Caller caller, uint32_t line) {
+			engine.runtimeInterface().DebugPrintOutputBuffer(line);
 		})) {
 		return {};
 	}
 	if (!linker.func_wrap("env", "predaDebugAssertionFailure",
 		[&engine](wasmtime::Caller caller, uint32_t line) {
 			engine.runtimeInterface().DebugAssertionFailure(line);
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaDebugAssertionFailureMessage",
+		[&engine](wasmtime::Caller caller, uint32_t line, WasmPtrT message_offset, uint32_t length) {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			const char* message = WasmPtrToPtr<const char*>(mem, message_offset);
+			engine.runtimeInterface().DebugAssertionFailureMessage(line, message, length);
 		})) {
 		return {};
 	}
@@ -371,6 +424,34 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 		[&engine](wasmtime::Caller caller, WasmPtrT address_offset) -> uint32_t {
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
 			return engine.runtimeInterface().IsDomainAddress(WasmPtrToPtr<const void*>(mem, address_offset));
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaIsContractAddress",
+		[&engine](wasmtime::Caller caller, WasmPtrT address_offset) -> uint32_t {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			return engine.runtimeInterface().IsContractAddress(WasmPtrToPtr<const void*>(mem, address_offset));
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaIsCustomAddress",
+		[&engine](wasmtime::Caller caller, WasmPtrT address_offset) -> uint32_t {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			return engine.runtimeInterface().IsCustomAddress(WasmPtrToPtr<const void*>(mem, address_offset));
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaSetAsContractAddress",
+		[&engine](wasmtime::Caller caller, WasmPtrT address_offset, uint64_t contract_id) -> void {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			return engine.runtimeInterface().SetAsContractAddress(WasmPtrToPtr<void*>(mem, address_offset), contract_id);
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaSetAsCustomAddress",
+		[&engine](wasmtime::Caller caller, WasmPtrT address_offset, WasmPtrT data_offset) -> void {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			return engine.runtimeInterface().SetAsCustomAddress(WasmPtrToPtr<void*>(mem, address_offset), WasmPtrToPtr<const uint8_t*>(mem, data_offset));
 		})) {
 		return {};
 	}
@@ -693,6 +774,13 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 		})) {
 		return {};
 	}
+	if (!linker.func_wrap("env", "predaTransaction_GetSender",
+		[&engine](wasmtime::Caller caller, WasmPtrT out_offset) -> void {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			return engine.runtimeInterface().Transaction_GetSender(WasmPtrToPtr<uint8_t*>(mem, out_offset));
+		})) {
+		return {};
+	}
 	if (!linker.func_wrap("env", "predaTransaction_GetTimeStamp",
 		[&engine](wasmtime::Caller caller) -> uint64_t {
 			return engine.runtimeInterface().Transaction_GetTimeStamp();
@@ -858,6 +946,7 @@ std::optional<wasmtime::Instance> WASMRuntime::Instantiate(wasmtime::Module& mod
 
 	if (!maybe_instance) {
 		std::string msg = maybe_instance.err().message();
+		std::cout << "WASM Instantiate error: " << msg << std::endl;
 		return {};
 	}
 

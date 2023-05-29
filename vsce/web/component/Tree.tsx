@@ -115,10 +115,11 @@ const Tree = ({ data, name }: TreeData) => {
             const t = setInterval(() => {
               const fnElement = document.querySelector(`.${name} .tree-node.tree-${id} .fn`);
               if (node.data.tx_info.Arguments && fnElement) {
+                const args = Object.assign({}, node.data.tx_info.Arguments || {});
                 reactDom.render(
                   <Tooltip placement={'top'} trigger="hover" overlay={
                     <ReactJson
-                      src={node.data.tx_info.Arguments}
+                      src={args}
                       style={{ background: "none" }}
                       displayObjectSize={false}
                       enableClipboard={false}

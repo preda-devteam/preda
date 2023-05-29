@@ -146,6 +146,18 @@ void SecureAddress::SetAsNonFungible(const rt::String_Ref& namespec)
 	SetAsDelegated(namespec, SEC_SUITE_REGISTERED_NONFUNGIBLE);
 }
 
+void SecureAddress::SetAsContract(uint64_t contractId)
+{
+	*(uint64_t*)GetBytes() = contractId;
+	SetupChecksum(SEC_SUITE_CONTRACT);
+}
+
+void SecureAddress::SetAsCustom(const uint8_t* data)
+{
+	memcpy(GetBytes(), data, SecSuite<SEC_SUITE_CUSTOM>::_GetEntry()->AddressSize);
+	SetupChecksum(SEC_SUITE_CUSTOM);
+}
+
 // [dapp_name].dapp registered by native contract
 // [asset_name].asset registered by native contract
 // [subname].[dapp_name].dapp registered by rvm contract
@@ -356,7 +368,9 @@ SecuritySuite::SecuritySuite()
 							ITERATE(SEC_SUITE_REGISTERED_TOKEN)	\
 							ITERATE(SEC_SUITE_REGISTERED_NAME)	\
 							ITERATE(SEC_SUITE_REGISTERED_NONFUNGIBLE)	\
-							
+							ITERATE(SEC_SUITE_CONTRACT)	\
+							ITERATE(SEC_SUITE_CUSTOM)	\
+
 bool SecuritySuite::SetId(SecSuiteId ss)
 {
 #define ITERATE(id)	case id: _pEntry = SecSuite<id>::_GetEntry(); break;

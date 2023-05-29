@@ -125,7 +125,7 @@ SIZE_T UTF8EncodeLength(LPCU16CHAR pIn, SIZE_T len)	// number of char
 			outlen++;
 		else if(c <= 0x7ff)
 			outlen+=2;
-		else if(c <= 0xD7ff)
+		else if(c <= 0xD7ff || c >= 0xE000)
 			outlen+=3;
 		else
 		{	// unicode BMP
@@ -152,7 +152,7 @@ SIZE_T UTF8Encode(LPCU16CHAR pIn, SIZE_T len, LPSTR pOut)
 		{	*((WORD*)p) = 0x80c0u | ((c>>6)&0x1fu) | ((c&0x3fu)<<8);
 			p+=2;
 		}
-		else if(c <= 0xD7ffu) // 1110xxxx 	10xxxxxx 	10xxxxxx
+		else if(c <= 0xD7ffu || c >= 0xE000) // 1110xxxx 	10xxxxxx 	10xxxxxx
 		{	*((WORD*)p) = 0x80e0u | ((c>>12)&0xfu) | ((c<<2)&0x3f00u);
 			p[2] = 0x80 | (c&0x3fu);
 			p+=3;

@@ -215,9 +215,16 @@ bool SimuGlobalShard::AllocateContractIds(const rvm::CompiledContracts* linked)
 			cid = rvm::_details::CONTRACT_ID_MAKE(_DeployingDatabase._NextContractSN++, _pSimulator->DAPP_ID, e);
 			_DeployingDatabase._Contracts[name.Str()] = cid;
 			_DeployingDatabase._ContractBuildNumLatest[cid] = BUILD_NUM_INIT;
+			_DeployingDatabase._ContractEngine[name.Str()] = e;
+			_Contracts[name.Str()] = cid;
 		}
 		else
 		{
+			if (_DeployingDatabase._ContractEngine[name.Str()] != e)
+			{
+				_LOG("[PRD] Contract " << name.Str() << " already deployed with another engine")
+				return false;
+			}
 			_DeployingDatabase._ContractBuildNumLatest[cid] = _ContractBuildNumLatest.get(cid) + 1;
 		}
 	}
@@ -242,9 +249,11 @@ void SimuGlobalShard::_FinalizeFunctionInfo(const ContractVersionedId& cvid, con
 		auto opcode = c->GetFunctionOpCode(i);
 		info->ScopeOfOpcode[(int)opcode] = c->GetFunctionScope(i);
 		funcname = func_prefix + '.' + c->GetFunctionName(i).Str();
-		auto& fi = _DeployingDatabase._ContractFunctions[funcname];
+		auto& fi = _DeployingDatabase._ContractFunctions[funcname].push_back();
 		fi.Contract = cvid.Contract;
 		fi.Op = opcode;
+		StreamByString ss(fi.FunctionSignature);
+		c->GetFunctionSignature(i, &ss);
 	}
 
 	_SafeDel_ConstPtr(_DeployingDatabase._ContractInfo.replace(cvid, info));

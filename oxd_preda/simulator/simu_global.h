@@ -78,6 +78,7 @@ struct ContractFunction
 {
 	rvm::ContractId	Contract;
 	rvm::OpCode		Op;
+	rt::String		FunctionSignature;
 	ContractFunction(){ rt::Zero(*this); }
 };
 #pragma pack(pop)
@@ -97,7 +98,8 @@ struct ContractsDatabase
 	ext::fast_map_ptr<ContractVersionedId, ContractInfo, rt::_details::hash_compare_fix<ContractVersionedId>>	_ContractInfo; // includes interfaces as well
 	ext::fast_map<rt::String, rvm::ContractId>			_Contracts;
 	ext::fast_map<rvm::ContractId, rvm::BuildNum>		_ContractBuildNumLatest;
-	ext::fast_map<rt::String, ContractFunction>			_ContractFunctions;
+	ext::fast_map<rt::String, rt::BufferEx<ContractFunction>>			_ContractFunctions;
+	ext::fast_map<rt::String, rvm::EngineId>			_ContractEngine;
 	uint32_t											_NextContractSN = 1;
 
 	void	Reset(const ContractsDatabase& x);

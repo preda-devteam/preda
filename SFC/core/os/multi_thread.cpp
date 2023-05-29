@@ -325,8 +325,6 @@ void os::Thread::TerminateForcely()
 {
 	if(_hThread)
 	{
-		_LOGC_WARNING("Thread #"<<GetId()<<" will be terminated forcely, which is unsafe in most cases.");
-
 		::TerminateThread(_hThread, -1);
 		__release_handle(_hThread);
 		_hThread = NULL;
@@ -543,7 +541,7 @@ void os::ConsolePrompt::_ConsoleInput()
 
 		os::AtomicIncrement(&__fgets_called);
 		bool isFirst = true;
-		while (fgets(cmdbuf.Begin() + (isFirst ? 0 : cmdbuf.GetSize() - _InputBufSize - 1), _InputBufSize + (isFirst ? 0 : 1), stdin))
+		while(fgets(cmdbuf.Begin() + (isFirst ? 0 : cmdbuf.GetSize() - _InputBufSize - 1), _InputBufSize + (isFirst ? 0 : 1), stdin))
 		{
 			isFirst = false;
 			if(strlen(cmdbuf.Begin()) == cmdbuf.GetSize() - 1 && *(cmdbuf.End() - 2) != '\n')

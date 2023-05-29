@@ -104,10 +104,10 @@ public:
 	};
 	std::vector<ImplementedInterface> m_implementedInterfaces;
 
-	std::string m_stateVariableSignature[4];
-	bool m_stateVariableHasBlob[4];
-	bool m_stateVariableHasAsset[4];
-	std::vector<std::string> m_stateVariableDoxygenComment[4];
+	std::string m_stateVariableSignature[uint32_t(transpiler::ScopeType::Num)];
+	bool m_stateVariableHasBlob[uint32_t(transpiler::ScopeType::Num)];
+	bool m_stateVariableHasAsset[uint32_t(transpiler::ScopeType::Num)];
+	std::vector<std::string> m_stateVariableDoxygenComment[uint32_t(transpiler::ScopeType::Num)];
 
 	struct ContractEnum
 	{
@@ -165,27 +165,30 @@ public:
 
 private:
 	enum class RelayType {
-		Address,
+		CustomScope,
 		Shards,
 		Global,
 	};
 
 	struct PendingRelayLambda
 	{
-		PendingRelayLambda(PredaParser::RelayLambdaDefinitionContext *ctx, const std::vector<transpiler::QualifiedConcreteType> &types, RelayType type, size_t slot, ForwardDeclaredContractFunction* base)
-			: pDefinitionCtx(ctx), paramTypes(types), relayType(type), exportFuncSlot(slot), baseFunc(base)
+		PendingRelayLambda(PredaParser::RelayLambdaDefinitionContext *ctx, const std::vector<transpiler::QualifiedConcreteType> &types, RelayType type, transpiler::ScopeType scope, size_t slot, ForwardDeclaredContractFunction* base)
+			: pDefinitionCtx(ctx), paramTypes(types), relayType(type), funcScope(scope), exportFuncSlot(slot), baseFunc(base)
 		{
 		}
 		PredaParser::RelayLambdaDefinitionContext *pDefinitionCtx;
 		std::vector<transpiler::QualifiedConcreteType> paramTypes;
 		RelayType relayType;
+		transpiler::ScopeType funcScope;
 		size_t exportFuncSlot;
 		ForwardDeclaredContractFunction* baseFunc; //function name where the relay lambda is defined
 	};
 
 	std::vector<PendingRelayLambda> m_pendingRelayLambdas;
-	size_t DeclareRelayLambdaFunction(PredaParser::RelayLambdaDefinitionContext *ctx, const std::vector<transpiler::QualifiedConcreteType> &paramTypes, RelayType type, ForwardDeclaredContractFunction* base);
+	size_t DeclareRelayLambdaFunction(PredaParser::RelayLambdaDefinitionContext *ctx, const std::vector<transpiler::QualifiedConcreteType> &paramTypes, RelayType type, transpiler::ScopeType scope, ForwardDeclaredContractFunction* base);
 	void DefinePendingRelayLambdas();
+	ConcreteTypePtr ScopeTypeToConcreteType(transpiler::ScopeType scope);
+	transpiler::ScopeType ConcreteTypeToScopeType(ConcreteTypePtr type);
 
 private:
 	transpiler::DefinedIdentifierPtr DefineFunctionLocalVariable(ConcreteTypePtr pType, PredaParser::IdentifierContext *identifierCtx, bool bIsConst, uint32_t flags);
@@ -193,6 +196,7 @@ private:
 	bool GenFunctionSignatureFromFunctionDeclareCtx(transpiler::FunctionSignature& outSig, PredaParser::FunctionDeclarationContext* declCtx);
 	void ForwardDeclareFunction(PredaParser::FunctionDefinitionContext *ctx);
 	void DefineStateVariable(PredaParser::StateVariableDeclarationContext *ctx);
+	void DefineConstVariable(PredaParser::ConstVariableDeclarationContext *ctx);
 	void DefineStruct(PredaParser::StructDefinitionContext *ctx);
 	void DefineEnum(PredaParser::EnumDefinitionContext *ctx);
 	void DefineInterface(PredaParser::InterfaceDefinitionContext *ctx);
@@ -236,10 +240,10 @@ public:
 	virtual void exitUserBlockStatement(PredaParser::UserBlockStatementContext *ctx) override;
 	virtual void enterRelayStatement(PredaParser::RelayStatementContext *ctx) override;
 	virtual void enterContinueStatement(PredaParser::ContinueStatementContext *ctx) override;
-	virtual void exitContinueStatement(PredaParser::ContinueStatementContext *ctx) override;
+	//virtual void exitContinueStatement(PredaParser::ContinueStatementContext *ctx) override;
 	virtual void enterBreakStatement(PredaParser::BreakStatementContext *ctx) override;
-	virtual void exitBreakStatement(PredaParser::BreakStatementContext *ctx) override;
-	virtual void enterStatement(PredaParser::StatementContext *ctx) override;
+	//virtual void exitBreakStatement(PredaParser::BreakStatementContext *ctx) override;
+	//virtual void enterStatement(PredaParser::StatementContext *ctx) override;
 	virtual void exitStatement(PredaParser::StatementContext *ctx) override;
 	virtual void enterContractDefinition(PredaParser::ContractDefinitionContext *ctx) override;
 	virtual void exitContractDefinition(PredaParser::ContractDefinitionContext *ctx) override;
@@ -247,8 +251,8 @@ public:
 	virtual void exitFunctionDefinition(PredaParser::FunctionDefinitionContext *ctx) override;
 	//virtual void enterRelayLambdaStatement(PredaParser::RelayLambdaStatementContext *ctx) override;
 	//virtual void exitRelayLambdaStatement(PredaParser::RelayLambdaStatementContext *ctx) override;
-	virtual void enterRelayLambdaDefinition(PredaParser::RelayLambdaDefinitionContext *ctx) override;
+	//virtual void enterRelayLambdaDefinition(PredaParser::RelayLambdaDefinitionContext *ctx) override;
 	//virtual void exitRelayLambdaDefinition(PredaParser::RelayLambdaDefinitionContext *ctx) override;
 	virtual void enterPredaSource(PredaParser::PredaSourceContext * /*ctx*/) override;
-  	virtual void enterDoxygen(PredaParser::DoxygenContext * /*ctx*/) override;
+  	//virtual void enterDoxygen(PredaParser::DoxygenContext * /*ctx*/) override;
 };

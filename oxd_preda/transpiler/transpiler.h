@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <vector>
+#include "transpiler/PredaCommon.h"
 
 namespace transpiler {
 
@@ -41,8 +42,8 @@ namespace transpiler {
 		MinedDependencyWithRelay = 32,
 		NoMatchingOverloadedFunction = 33,
 		ArgumentListLengthMismatch = 34,
-		ConstantTooLarge = 35,
-		AccessVariableOfHigherContextClass = 36,
+		ConstantOutOfRange = 35,
+		IdentifierScopeUnaccessible = 36,
 		AccessFunctionOfHigherContextClass = 37,
 		SpaceInNegativeNumberLiteral = 38,
 		NoMatchingConstructor = 39,
@@ -80,13 +81,17 @@ namespace transpiler {
 		RelayShardsOutsideGlobal = 71,
 		RelayGlobalFromGlobal = 72,
 		RelayGlobalToNonGlobalFunction = 73,
-		RelayAddressToNonAddressFunction = 74,
+		RelayTargetAndFunctionScopeMismatch = 74,
 		BlobInGlobalStateVariable = 75,
 		InaccessibleGlobalFunctionFromNonGlobalFunction = 76,
 		ReservedFunctionMustBeGlobal = 77,
 		FunctionConstnessOrContextClassNotMatchInterface = 78,
 		InterfaceFunctionImplementedButNotPublic = 79,
 		InterfaceFunctionNotImplemented = 80,
+		InvalidScope = 81,
+		OnDeployCannotBeAddressFunction = 82,
+		AssigningMemberVarToConstVar = 83,
+		InvalidConstMemberVarType = 84,
 
 		SyntaxError = 0x7fff,
 		InternalError = 0xffff,
@@ -132,21 +137,11 @@ namespace transpiler {
 		virtual uint32_t GetNumImplementedInterfaceFunctions(uint32_t interfaceIdx) const = 0;
 		virtual int32_t GetImplementedInterfaceFunctionExportIndex(uint32_t interfaceIdx, uint32_t functionIdx) const = 0;
 
-		virtual const char* GetPerAddressStateVariableSignature() const = 0;
-		virtual uint32_t GetNumPerAddressStateVariable() const = 0;
-		virtual const char* GetPerAddressStateVariableComment(uint32_t varIdx) const = 0;
-		virtual bool PerAddressStateVariableHasAsset() const = 0;
-		virtual bool PerAddressStateVariableHasBlob() const = 0;
-		virtual const char* GetPerShardStateVariableSignature() const = 0;
-		virtual uint32_t GetNumPerShardStateVariable() const = 0;
-		virtual const char* GetPerShardStateVariableComment(uint32_t varIdx) const = 0;
-		virtual bool PerShardStateVariableHasAsset() const = 0;
-		virtual bool PerShardStateVariableHasBlob() const = 0;
-		virtual const char* GetGlobalStateVariableSignature() const = 0;
-		virtual uint32_t GetNumGlobalStateVariable() const = 0;
-		virtual const char* GetGlobalStateVariableComment(uint32_t varIdx) const = 0;
-		virtual bool GlobalStateVariableHasAsset() const = 0;
-		virtual bool GlobalStateVariableHasBlob() const = 0;
+		virtual const char* GetScopeStateVariableSignature(transpiler::ScopeType scope) const = 0;
+		virtual uint32_t GetNumScopeStateVariable(transpiler::ScopeType scope) const = 0;
+		virtual const char* GetScopeStateVariableComment(transpiler::ScopeType scope, uint32_t varIdx) const = 0;
+		virtual bool ScopeStateVariableHasAsset(transpiler::ScopeType scope) const = 0;
+		virtual bool ScopeStateVariableHasBlob(transpiler::ScopeType scope) const = 0;
 
 		virtual uint32_t GetNumEnumTypes() const = 0;
 		virtual const char* GetEnumDoxygenComment(uint32_t enumTypeIdx) const = 0;

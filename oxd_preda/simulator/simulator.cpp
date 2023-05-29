@@ -39,6 +39,11 @@ int SimulatorMain(const os::CommandLine& cmd)
 	const char* homeDir = getenv("HOME");
 #endif
 	rt::String predaHomePath = rt::SS(homeDir, strlen(homeDir)) + rt::String(PREDA_DATA_FOLDER);
+	if (!os::File::CreateDirectories(predaHomePath))
+	{
+		_LOG("Unable to create Preda Home Directory: " << lockPath);
+		return 1;
+	}
 	lockPath = predaHomePath + ".preda_lock";
 	os::File lockfile(lockPath, "a+b", true);
 	if(!lockfile.IsOpen())
@@ -409,7 +414,7 @@ bool Simulator::Build(ExecuteUnit& exec_units, const rt::String_Ref& file_list, 
 			txn->OriginateHeight = 0;
 			txn->OriginateShardIndex = 0;
 			txn->OriginateShardOrder = 0;
-			txn->Target = ADDRESS;
+			txn->Target = ScopeTarget(ADDRESS);
 		}
 		else if(eid == rvm::EngineId::PREDA_NATIVE)
 		{
@@ -901,12 +906,12 @@ bool Simulator::_ExecTraceLog(const CmdParse& cmd, rt::Json& json)
 			auto s = json.ScopeAppendingKey("tx_info");
 			json.Object();
 
-			if(current_pair.first->Type == rvm::InvokeContextType::RelayInbound)
+			if(current_pair.first->Type == rvm::InvokeContextType::RelayInbound && current_pair.first->GetScope() == rvm::Scope::Address)
 			{
 				User a;
-				a.Addr = current_pair.first->Target;
+				a.Addr = current_pair.first->Target.addr;
 				a.ShardDword = rvm::_details::ADDRESS_SHARD_DWORD(a.Addr);
-				current_pair.first->Target_index = (uint64_t)_Users.Find(a);
+				current_pair.first->Target_index = (int64_t)_Users.Find(a);
 			}
 
 			current_pair.first->Jsonify(GetEngine(current_pair.first->GetEngineId()), *_pGlobalShard, json, nullptr);
@@ -1292,7 +1297,7 @@ rt::String_Ref Simulator::_LookupFunctionName(const rvm::Contract* c, rvm::OpCod
 	return nullptr;
 }
 
-void Simulator::DebugPrint(rvm::DebugMessageType type, const rvm::ConstString* text, const rvm::ExecutionState* ctx, const rvm::Contract* contract)
+void Simulator::DebugPrint(rvm::DebugMessageType type, const rvm::ConstString* text, const rvm::ExecutionState* ctx, const rvm::Contract* contract, int32_t line)
 {
 	ASSERT(text);
 
@@ -1326,7 +1331,13 @@ void Simulator::DebugPrint(rvm::DebugMessageType type, const rvm::ConstString* t
 			log += rt::SS(ss) + "]-h" + ctx->GetBlockHeight();
 		}
 
-		log += rt::SS(": ") + contract->GetName().Str() + '.' + _LookupFunctionName(contract, ctx->GetOpCode());
+		log += rt::SS(": ") + contract->GetName().Str();
+		if (line >= 0)
+		{
+			log += rt::SS(", line: ") + line;
+		}
+
+		//log += rt::SS(": ") + contract->GetName().Str() + '.' + _LookupFunctionName(contract, ctx->GetOpCode());
 	}
 
 	static const rt::SS sep(": ");
@@ -1551,18 +1562,25 @@ void Simulator::_ConvertQueueToTxnPool()
 rvm::ConstData Simulator::_ComposeState(oxd::SimuShard* s, rvm::BuildNum build, rvm::ContractScopeId csid, InputParametrized& input, const rt::String& in_state, rvm::Address* addr)
 {
 	rvm::ConstStateData stateData{nullptr, 0 , 0};
-	if (rvm::_details::CONTRACT_SCOPE(csid) == rvm::Scope::Address)
+	rvm::Scope scope = rvm::_details::CONTRACT_SCOPE(csid);
+	switch (scope)
 	{
-		SimuAddressContract k{ *addr, csid };
+	case rvm::Scope::Address:
+	{
+		SimuAddressContract k{ ScopeTarget(*addr), csid };
 		const SimuState* state = s->GetAddressState(k);
 		if (state)
 		{
 			stateData = { state->Data, state->DataSize, build };
 		}
+		break;
 	}
-	else
-	{
+	case rvm::Scope::Shard:
+	case rvm::Scope::Global:
 		stateData = s->GetState(csid);
+		break;
+	default:
+		break;
 	}
 	const rvm::ConstData data{ stateData.DataPtr, stateData.DataSize };
 	rt::String out;
@@ -1767,7 +1785,75 @@ uint32_t Simulator::GetScriptRandomAddressIndex() const
 		}
 	}
 }
-
+bool Simulator::_GetContractFunction(const CmdParse& cmd, ContractFunction& fi) const
+{
+	rt::BufferEx<ContractFunction> buf = rt::_CastToConst(_pGlobalShard->_ContractFunctions).get(rt::String_Ref(cmd.L1.Begin(), cmd.L2.End()), rt::BufferEx<ContractFunction>());
+	if (buf.GetSize() == 0)
+	{
+		_LOG_WARNING("[BC] Line " << GetLineNum() << ": contract function '" << rt::String_Ref(cmd.L1.Begin(), cmd.L2.End()) << "' is not found");
+		return false;
+	}
+	else if (rvm::_details::CONTRACT_ENGINE(buf[0].Contract) == rvm::EngineId::SOLIDITY_EVM)
+	{
+		fi = buf[0];
+		return true;
+	}
+	UINT maxVarMatched = 0;
+	bool matched = false;
+	UINT minSignatureLength = 1024;
+	for (int i = 0; i < buf.GetSize(); i++)
+	{
+		UINT numVarMatched = 0;
+		rt::JsonObject args_json(cmd.Args);
+		rt::String funcSignature = buf[i].FunctionSignature;
+		if (funcSignature.GetLength() == 0 && args_json.IsEmptyObject()) //empty json won't enter the while loop below
+		{
+			fi = buf[i];
+			return true;
+		}
+		rt::BufferEx<rt::String_Ref> args_sets;
+		args_sets.ExpandSize(1024);
+		uint32_t signatureLen = funcSignature.Split(&args_sets[0], 1024, " ");
+		rt::JsonKeyValuePair p;
+		while (args_json.GetNextKeyValuePair(p))
+		{
+			rt::String_Ref varName = p.GetKey();
+			if (varName.FindCharacter("$)") != -1)
+			{
+				int64_t nextKeyPos = cmd.Args.FindCharacter(',', varName.Begin() - cmd.Args.Begin());
+				int64_t nextColonPos = cmd.Args.FindCharacter(':', nextKeyPos);
+				if (nextKeyPos == -1)
+				{
+					continue;
+				}
+				nextKeyPos++;
+				varName = cmd.Args.SubStr(nextKeyPos, nextColonPos - nextKeyPos).TrimSpace();
+			}
+			if (args_sets.Find(varName) != -1)
+			{
+				numVarMatched++;
+			}
+			else
+			{
+				matched = false;
+				break;
+			}
+			matched = true;
+		}
+		if (matched && numVarMatched >= maxVarMatched && signatureLen < minSignatureLength )
+		{
+			fi = buf[i];
+			maxVarMatched = numVarMatched;
+			minSignatureLength = signatureLen;
+		}
+	}
+	if (maxVarMatched == 0)
+	{
+		_LOG_WARNING("[BC] Line " << GetLineNum() << ": Invalid function argument/s");
+		return false;
+	}
+	return true;
+}
 bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 {
 	ContractFunction fi;
@@ -1775,10 +1861,8 @@ bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 	rvm::Scope scope;
 
 	{	EnterCSBlock(_CS);
-		fi = rt::_CastToConst(_pGlobalShard->_ContractFunctions).get(rt::String_Ref(cmd.L1.Begin(), cmd.L2.End()), ContractFunction());
-		if(fi.Contract == (rvm::ContractId)0)
+		if (!_GetContractFunction(cmd, fi))
 		{
-			_LOG_WARNING("[BC] Line " << GetLineNum() << ": contract function '"<<rt::String_Ref(cmd.L1.Begin(), cmd.L2.End())<<"' is not found");
 			return false;
 		}
 
@@ -1928,7 +2012,7 @@ bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 				{
 					return false;
 				}
-				t->Target = a.Addr;
+				t->Target = ScopeTarget(a.Addr);
 				t->Target_index = last;
 				_Shards[a.ShardDword&_ShardBitmask]->PushTxn(t);
 #ifdef _VIZ
@@ -1958,7 +2042,7 @@ bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 						return false;
 					}
 					auto& a = _Users[i];
-					t->Target = a.Addr;
+					t->Target = ScopeTarget(a.Addr);
 					t->Target_index = i;
 					_Shards[a.ShardDword & _ShardBitmask]->PushTxn(t);
 #ifdef _VIZ
@@ -1977,7 +2061,7 @@ bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 			if(s>=0 && s<_Users.GetSize())
 			{
 				auto& a = _Users[s];
-				txn->Target = a.Addr;
+				txn->Target = ScopeTarget(a.Addr);
 				txn->Target_index = s;
 
 				auto* param = &input; // input in this thread should be used in all loop threads
@@ -1989,7 +2073,7 @@ bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 					{
 						return false;
 					}
-					t->Target = a.Addr;
+					t->Target = ScopeTarget(a.Addr);
 					t->Target_index = s;
 					_Shards[a.ShardDword&_ShardBitmask]->PushTxn(t);
 #ifdef _VIZ
@@ -2028,13 +2112,13 @@ bool Simulator::ExportVizHtml(const rt::String_Ref& templ, const rt::String_Ref&
 	rt::String out;
 
 	out = html.SubStr(0, pos);
-	out += "\n<script type=\"text/javascript\">\nvar PREDA_VIZ_LOG = \n";
+	out += "\n<script type=\"text/javascript\">\nvar PREDA_VIZ_LOG = `\n";
 #if defined(PLATFORM_DEBUG_BUILD)
 	out += rt::JsonBeautified(_ScriptVizJson);
 #else
 	out += _ScriptVizJson;
 #endif
-	out += ";\n</script>\n\n";
+	out += "`;\n</script>\n\n";
 
 	out += html.SubStr(pos);
 

@@ -755,6 +755,10 @@ bool CDataJsonParser::IsLongIntegerLiteralInRange(const rt::String_Ref& literalB
 	size_t maxValueLen = maxValue.length();
 	if (literalIsNonPositive)
 	{
+		if (!bIsSigned)
+		{
+			return false;
+		}
 		maxValue[maxValue.length() - 1] = '8';
 	}
 	if (str.GetLength() > maxValueLen)

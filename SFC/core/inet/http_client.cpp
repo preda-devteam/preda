@@ -149,12 +149,12 @@ namespace _details
 
 bool _HttpSession_TLS_SocketRecv_CB(LPVOID buf, UINT buf_size, UINT&read, LPVOID cookie)
 {
-	return ((SocketTimed*)cookie)->Recv(buf, buf_size, read) && read;
+	return ((HttpSession::SOCKET_TYPE*)cookie)->Recv(buf, buf_size, read) && read;
 }
 
 bool _HttpSession_TLS_SocketSend_CB(LPCVOID buf, UINT buf_size, LPVOID cookie)
 {
-	return ((SocketTimed*)cookie)->Send(buf, buf_size);
+	return ((HttpSession::SOCKET_TYPE*)cookie)->Send(buf, buf_size);
 }
 
 } // namespace _details

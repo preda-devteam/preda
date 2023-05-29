@@ -391,9 +391,9 @@ inline t_Val* BufStgReserve(t_Index& buf_resv_size, const t_Val* old, t_Index ol
 template<uint32_t FixedSize, typename t_Val, typename t_Index = SIZE_T>
 class BufStgFixed: public BufferOpBase_Ref<_details::BufStgRefFixed<FixedSize, t_Val, t_Index>>
 {
+protected:
 	typedef BufferOpBase_Ref<_details::BufStgRefFixed<FixedSize, t_Val, t_Index>> _SC;
 	using typename _SC::_xt;
-protected:
 	BufStgFixed() = default;
 	~BufStgFixed(){ _xt::dtor(_SC::_ptr(), _SC::_ptr() + _SC::_len); }
 	bool	_expand_entries(t_Index co = 1) // the newly added entry's ctor will not be called !!
@@ -1332,7 +1332,7 @@ protected:
 	SIZE_T		_BufferSize;
 	SIZE_T		Back;
 	SIZE_T		NewBlock;
-	_Block*		pLastBlock;	
+	_Block*		pLastBlock;
 public:
 	CircularBuffer(){ _Buffer = nullptr; SetSize(0); }
 	~CircularBuffer(){ _SafeFree32AL(_Buffer); }
@@ -1406,6 +1406,7 @@ public:
 				else
 					return nullptr;
 			}
+	void	Empty(){ while(Peek())Pop(); }
 };
 
 

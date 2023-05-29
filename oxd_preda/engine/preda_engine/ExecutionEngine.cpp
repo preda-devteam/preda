@@ -106,27 +106,28 @@ ContractRuntimeInstance* CExecutionEngine::CreateContractInstance(PredaContractD
 bool CExecutionEngine::MapNeededContractContext(rvm::ExecutionContext *executionContext, ContractRuntimeInstance *pInstance, uint32_t calledFunctionFlag)
 {
 	prlrt::ContractContextType neededContextLevel = prlrt::ContractContextType::None;
-	uint32_t functionContextClass = calledFunctionFlag & uint32_t(transpiler::PredaFunctionFlags::ContextClassMask);
-	if (functionContextClass == uint32_t(transpiler::PredaFunctionFlags::ContextClassNone))
-		neededContextLevel = prlrt::ContractContextType::None;
-	else if (functionContextClass == uint32_t(transpiler::PredaFunctionFlags::ContextClassGlobal))
-		neededContextLevel = prlrt::ContractContextType::Global;
-	else if (functionContextClass == uint32_t(transpiler::PredaFunctionFlags::ContextClassShard))
-		neededContextLevel = prlrt::ContractContextType::PerShard;
-	else if (functionContextClass == uint32_t(transpiler::PredaFunctionFlags::ContextClassAddress))
-		neededContextLevel = prlrt::ContractContextType::PerAddress;
-	for (uint8_t i = uint8_t(pInstance->currentMappedContractContextLevel) + 1; i <= uint8_t(neededContextLevel); i++)
+	uint32_t functionScopeType = calledFunctionFlag & uint32_t(transpiler::FunctionFlags::ScopeTypeMask);
+	neededContextLevel = _details::PredaScopeToRuntimeContextType(transpiler::ScopeType(functionScopeType));
+
+	// everything needed already mapped
+	if (pInstance->currentMappedContractContextLevel == neededContextLevel)
+		return true;
+	
+	// if there are already some context mapped, it has to be none / global / shard, i.e. it should be impossible for it to be another custom scope
+	assert(uint8_t(pInstance->currentMappedContractContextLevel) <= uint8_t(prlrt::ContractContextType::Shard));
+
+	// collect the needed contexts
+	std::vector<uint8_t> neededContexts(1, uint8_t(neededContextLevel));	// first the context of the function
+	// then global / shard if not already mapped
+	for (uint8_t i = uint8_t(pInstance->currentMappedContractContextLevel) + 1; i < std::min(uint8_t(uint8_t(prlrt::ContractContextType::Shard) + 1), uint8_t(neededContextLevel)); i++)
+		neededContexts.push_back(i);
+
+	for (int i = 0; i < (int)neededContexts.size(); i++)
 	{
 		const uint8_t *buffer = nullptr;
 		uint32_t buffer_size = 0;
-		rvm::Scope scope;
-		if (i == uint8_t(prlrt::ContractContextType::PerAddress))
-			scope = rvm::Scope::Address;
-		else if (i == uint8_t(prlrt::ContractContextType::PerShard))
-			scope = rvm::Scope::Shard;
-		else if (i == uint8_t(prlrt::ContractContextType::Global))
-			scope = rvm::Scope::Global;
-		else
+		rvm::Scope scope = _details::PredaScopeToRvmScope(_details::RuntimeContextTypeToPredaScope(prlrt::ContractContextType(neededContexts[i])));
+		if (scope == rvm::Scope::Neutral)
 			return false;
 
 		{
@@ -144,7 +145,7 @@ bool CExecutionEngine::MapNeededContractContext(rvm::ExecutionContext *execution
 		if (buffer == nullptr)
 			continue;
 
-		if (!pInstance->MapContractContextToInstance(prlrt::ContractContextType(i), buffer, buffer_size))
+		if (!pInstance->MapContractContextToInstance(prlrt::ContractContextType(neededContexts[i]), buffer, buffer_size))
 		{
 			return false;
 		}
@@ -160,7 +161,7 @@ uint32_t CExecutionEngine::InvokeContractCall(rvm::ExecutionContext *executionCo
 	const ContractDatabaseEntry *pContractEntry = m_pDB->FindContractEntry(deployId);;
 	if (!pContractEntry
 		|| opCode >= uint32_t(pContractEntry->compileData.functions.size())
-		|| (pContractEntry->compileData.functions[opCode].flags & uint32_t(transpiler::PredaFunctionFlags::CallableFromOtherContract)) == 0)
+		|| (pContractEntry->compileData.functions[opCode].flags & uint32_t(transpiler::FunctionFlags::CallableFromOtherContract)) == 0)
 		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallFunctionNotFound) << 8);
 
 	m_runtimeInterface.PushContractStack(deployId, pContractEntry->deployData.contractId, pContractEntry->compileData.functions[opCode].flags);
@@ -180,7 +181,7 @@ uint32_t CExecutionEngine::InvokeContractCall(rvm::ExecutionContext *executionCo
 	return ret;
 }
 
-rvm::InvokeResult CExecutionEngine::Invoke(rvm::ExecutionContext *executionContext, uint32_t gas_limit, rvm::BuildNum build_num, rvm::ContractScopeId contractId, rvm::OpCode opCode, const rvm::ConstData* args_serialized)
+rvm::InvokeResult CExecutionEngine::Invoke(rvm::ExecutionContext *executionContext, uint32_t gas_limit, const rvm::ContractDID *contract_deployment_id, rvm::OpCode opCode, const rvm::ConstData* args_serialized)
 {
 	rvm::InvokeResult ret;
 	ret.SubCodeHigh = 0;
@@ -193,7 +194,7 @@ rvm::InvokeResult CExecutionEngine::Invoke(rvm::ExecutionContext *executionConte
 
 	rvm::_details::ExecutionStateScope::Set(executionContext);
 
-	PredaContractDID deployId = _details::RvmCDIDToPredaCDID(executionContext->GetContractDeploymentIdentifier(rvm::_details::CONTRACT_UNSET_SCOPE(contractId), build_num));
+	PredaContractDID deployId = _details::RvmCDIDToPredaCDID(contract_deployment_id);
 	
 	uint32_t internalRet = Invoke_Internal(executionContext, deployId, opCode, args_serialized, gas_limit);
 	rvm::_details::ExecutionStateScope::Unset();
@@ -216,7 +217,6 @@ rvm::InvokeResult CExecutionEngine::Invoke(rvm::ExecutionContext *executionConte
 		return ret;
 	case ExecutionResult::ExecutionError:
 	{
-		ret.SubCodeLow = ((internalRet >> 8) & 0xff) << 8;
 		switch (prlrt::ExecutionError((internalRet >> 8) & 0xff))
 		{
 		case prlrt::ExecutionError::NoError:
@@ -231,7 +231,7 @@ rvm::InvokeResult CExecutionEngine::Invoke(rvm::ExecutionContext *executionConte
 		case prlrt::ExecutionError::RuntimeException:
 		{
 			ret.Code = rvm::InvokeErrorCode::ExceptionThrown;
-			ret.SubCodeLow |= (internalRet >> 16) & 0xff;
+			ret.SubCodeLow |= (internalRet >> 16);
 			return ret;
 		}
 		case prlrt::ExecutionError::UserDefinedError:
@@ -273,9 +273,9 @@ uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionConte
 		return uint32_t(ExecutionResult::InvalidFunctionId);
 	{
 		rvm::InvokeContextType txnType = executionContext->GetInvokeType();
-		if ((txnType == rvm::InvokeContextType::Normal && (pContractEntry->compileData.functions[opCodeReal].flags & uint32_t(transpiler::PredaFunctionFlags::CallableFromTransaction)) == 0)
-			|| ((txnType == rvm::InvokeContextType::RelayInbound || txnType == rvm::InvokeContextType::RelayIntra) && (pContractEntry->compileData.functions[opCodeReal].flags & uint32_t(transpiler::PredaFunctionFlags::CallableFromRelay)) == 0)
-			|| (txnType == rvm::InvokeContextType::System && (pContractEntry->compileData.functions[opCodeReal].flags & uint32_t(transpiler::PredaFunctionFlags::CallableFromSystem)) == 0))
+		if ((txnType == rvm::InvokeContextType::Normal && (pContractEntry->compileData.functions[opCodeReal].flags & uint32_t(transpiler::FunctionFlags::CallableFromTransaction)) == 0)
+			|| ((txnType == rvm::InvokeContextType::RelayInbound || txnType == rvm::InvokeContextType::RelayIntra) && (pContractEntry->compileData.functions[opCodeReal].flags & uint32_t(transpiler::FunctionFlags::CallableFromRelay)) == 0)
+			|| (txnType == rvm::InvokeContextType::System && (pContractEntry->compileData.functions[opCodeReal].flags & uint32_t(transpiler::FunctionFlags::CallableFromSystem)) == 0))
 			return uint32_t(ExecutionResult::FunctionSignatureMismatch);
 	}
 
@@ -291,8 +291,8 @@ uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionConte
 
 	bool bGlobalContext;
 	{
-		uint32_t functionContextClass = pContractEntry->compileData.functions[opCodeReal].flags & uint32_t(transpiler::PredaFunctionFlags::ContextClassMask);
-		bGlobalContext = functionContextClass == uint32_t(transpiler::PredaFunctionFlags::ContextClassGlobal);
+		uint32_t functionContextClass = pContractEntry->compileData.functions[opCodeReal].flags & uint32_t(transpiler::FunctionFlags::ScopeTypeMask);
+		bGlobalContext = functionContextClass == uint32_t(transpiler::ScopeType::Global);
 	}
 
 	// TODO: pass gas_limit into contract
@@ -318,18 +318,8 @@ uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionConte
 			{
 				for (uint8_t i = 0; i < uint8_t(prlrt::ContractContextType::Num); i++)
 				{
-					rvm::Scope scope;
-					if (i == uint8_t(prlrt::ContractContextType::PerAddress))
-						scope = rvm::Scope::Address;
-					else if (i == uint8_t(prlrt::ContractContextType::PerShard))
-						scope = rvm::Scope::Shard;
-					else if (i == uint8_t(prlrt::ContractContextType::Global))
-					{
-						scope = rvm::Scope::Global;
-						if (!bGlobalContext)			// global state is read-only in non-global scope, therefore no need to commit it
-							continue;
-					}
-					else
+					// global state is read-only in non-global scope, therefore no need to commit it
+					if (i == uint8_t(prlrt::ContractContextType::Global) && !bGlobalContext)
 						continue;
 
 					if (pModifiedFlags[i])
@@ -348,7 +338,7 @@ uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionConte
 							return (serializeRes << 8) | uint32_t(ExecutionResult::ExecutionError);
 						}
 
-						pendingStates.emplace_back(itor.second->contractId, scope, pStateData);
+						pendingStates.emplace_back(itor.second->contractId, _details::PredaScopeToRvmScope(_details::RuntimeContextTypeToPredaScope(prlrt::ContractContextType(i))), pStateData);
 					}
 				}
 			}
@@ -382,4 +372,10 @@ rvm::InvokeResult CExecutionEngine::Deploy(rvm::ExecutionContext* exec, uint32_t
 	// TODO: trigger on_deploy on all the deployed contracts
 
 	return { 0, 0, rvm::InvokeErrorCode::Success, 0 };
+}
+
+void CExecutionEngine::GetExceptionMessage(uint16_t except, rvm::StringStream* str) const
+{
+	rt::EnumStringify ExceptionEnumString((prlrt::ExceptionType)except);
+	str->Append(ExceptionEnumString._p, (uint32_t)ExceptionEnumString._len);
 }

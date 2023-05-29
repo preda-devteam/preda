@@ -17,6 +17,7 @@ static const uint32_t		CONTRACT_SN_BITMASK = (1u<<CONTRACT_SN_BITS)-1;
 static const uint32_t		CONTRACT_ENTITY_DEFINITION_BITS = 15u;
 static const uint32_t		CONTRACT_ENTITY_DEFINITION_BITMASK = ((1ull<<(CONTRACT_ENTITY_DEFINITION_BITS + CONTRACT_SN_BITS)) - 1);
 static const uint32_t		CONTRACT_ENTITY_TYPE_BITS = 3u;
+static const uint32_t		CONTRACT_SCOPE_SLOT_AND_KEYTYPE_BITS = SCOPE_SLOT_BITS + SCOPE_KEYTYPE_BITS;
 static const uint32_t		CONTRACT_SCOPE_BITS = SCOPE_SLOT_BITS + SCOPE_KEYTYPE_BITS + SCOPE_TYPE_BITS;
 static const uint32_t		CONTRACT_ENGINE_BITS = 3u;
 } // namespace _details
@@ -59,7 +60,7 @@ enum class ContractEntityType // Entities defined/used in a contract, like contr
 	_Bitmask = (1u<<_details::CONTRACT_ENTITY_TYPE_BITS)-1
 };
 
-enum class ScopeType
+enum class ScopeType : uint8_t
 {
 	Contract = 0,			// a contract scope defined, predefined or user-defined
 	ScatteredMapOnGlobal,	// a scatter map variable defined on global scope
@@ -69,19 +70,24 @@ enum class ScopeType
 	_Bitmask = (1u<<_details::SCOPE_TYPE_BITS)-1
 };
 
-enum class Scope: uint16_t  // 12bits: Low [SlotIndex:4bits][ScopeKeyType:6bits][ScopeType:2bits] High
+enum class Scope: uint16_t  // 12bits: Low [SlotIndex:4bits][ScopeKeySize:6bits][ScopeType:2bits] High
 {
 	Global = 0,
 	Shard,
 	Address,
+	UInt16 = (uint16_t(ScopeType::Contract) << _details::CONTRACT_SCOPE_SLOT_AND_KEYTYPE_BITS) | (uint16_t(ScopeKeySize::UInt16) << _details::SCOPE_SLOT_BITS),
+	UInt32 = (uint16_t(ScopeType::Contract) << _details::CONTRACT_SCOPE_SLOT_AND_KEYTYPE_BITS) | (uint16_t(ScopeKeySize::UInt32) << _details::SCOPE_SLOT_BITS),
+	UInt64 = (uint16_t(ScopeType::Contract) << _details::CONTRACT_SCOPE_SLOT_AND_KEYTYPE_BITS) | (uint16_t(ScopeKeySize::UInt64) << _details::SCOPE_SLOT_BITS),
+	UInt256 = (uint16_t(ScopeType::Contract) << _details::CONTRACT_SCOPE_SLOT_AND_KEYTYPE_BITS) | (uint16_t(ScopeKeySize::UInt256) << _details::SCOPE_SLOT_BITS),
+	UInt512 = (uint16_t(ScopeType::Contract) << _details::CONTRACT_SCOPE_SLOT_AND_KEYTYPE_BITS) | (uint16_t(ScopeKeySize::UInt512) << _details::SCOPE_SLOT_BITS),
 	Customized,	// user-defined scope
 	// ... more user-defined scopes
-	ScatteredMapOnGlobal			= (int)ScopeType::ScatteredMapOnGlobal<<10,
+	ScatteredMapOnGlobal			= (uint16_t)ScopeType::ScatteredMapOnGlobal << _details::CONTRACT_SCOPE_SLOT_AND_KEYTYPE_BITS,
 	// ... more scattered maps in global scope
-	ScatteredMapOnShard				= (int)ScopeType::ScatteredMapOnShard<<10,
-	ScatteredMapOnShard_CloneScale	= (int)ScopeType::ScatteredMapOnShard_CloneScale<<10,
+	ScatteredMapOnShard				= (uint16_t)ScopeType::ScatteredMapOnShard << _details::CONTRACT_SCOPE_SLOT_AND_KEYTYPE_BITS,
+	ScatteredMapOnShard_CloneScale	= (uint16_t)ScopeType::ScatteredMapOnShard_CloneScale << _details::CONTRACT_SCOPE_SLOT_AND_KEYTYPE_BITS,
 	// ... more scattered maps in shard scope that dose clone scale
-	ScatteredMapOnShard_SplitScale	= (int)ScopeType::ScatteredMapOnShard_SplitScale<<10,
+	ScatteredMapOnShard_SplitScale	= (uint16_t)ScopeType::ScatteredMapOnShard_SplitScale << _details::CONTRACT_SCOPE_SLOT_AND_KEYTYPE_BITS,
 	// ... more scattered maps in shard scope that dose scatter scale
 	Neutral = (1u<<_details::CONTRACT_SCOPE_BITS)-1,
 
@@ -146,14 +152,14 @@ inline constexpr ContractId			INTERFACE_CONTRACT(InterfaceId iid){ return (Contr
 inline constexpr bool				SCOPE_IS_SCATTERED_MAP(Scope x)
 									{	return (int)x<(int)Scope::Neutral && (int)x>=(int)Scope::ScatteredMapOnGlobal;
 									}
-inline constexpr bool				SCOPE_IS_ENUMERABLE(Scope x){ return (int)x & ((int)ScopeKeySize::IsEnumerable)<<4; }
+inline constexpr bool				SCOPE_IS_ENUMERABLE(Scope x){ return (int)x & ((int)ScopeKeySize::IsEnumerable)<< SCOPE_SLOT_BITS; }
 inline constexpr ScopeType			SCOPE_TYPE(Scope x)
 									{	if(x == Scope::Neutral)return ScopeType::Contract;
-										return (ScopeType)((int)x>>8);
+										return (ScopeType)((int)x>> CONTRACT_SCOPE_SLOT_AND_KEYTYPE_BITS);
 									}
 inline constexpr bool				SCOPE_IS_CLONESCALE(Scope x){ return SCOPE_TYPE(x) == ScopeType::ScatteredMapOnShard_CloneScale; }
-inline constexpr Scope				SCOPE_MAKE(ScopeType t, ScopeKeySize kst = ScopeKeySize::Default, int slot_idx = 0){ return (Scope)(((int)t<<8)|((int)kst<<4)|slot_idx); }
-inline constexpr ScopeKeySize		SCOPE_KEYSIZETYPE(Scope x){ return (ScopeKeySize)(((int)x>>4) & (int)ScopeKeySize::Bitmask); }
+inline constexpr Scope				SCOPE_MAKE(ScopeType t, ScopeKeySize kst = ScopeKeySize::Default, int slot_idx = 0){ return (Scope)(((int)t<< CONTRACT_SCOPE_SLOT_AND_KEYTYPE_BITS)|((int)kst<< SCOPE_SLOT_BITS)|slot_idx); }
+inline constexpr ScopeKeySize		SCOPE_KEYSIZETYPE(Scope x){ return (ScopeKeySize)(((int)x>> SCOPE_SLOT_BITS) & (int)ScopeKeySize::Bitmask); }
 inline constexpr int				SCOPE_KEYSIZE(Scope x) // -1: n/a, 0:varying, or the #bytes of the fixed size
 									{	auto t = SCOPE_KEYSIZETYPE(x);
 										if(t == ScopeKeySize::Default && !SCOPE_IS_SCATTERED_MAP(x) && (int)x<(int)Scope::Address)return -1;

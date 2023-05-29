@@ -998,7 +998,7 @@ namespace preda_evm {
         }
     }
 
-	rvm::InvokeResult EVMExecutionEngine::Invoke(rvm::ExecutionContext* executionContext, uint32_t gas_limit, rvm::BuildNum build_num, rvm::ContractScopeId contractId, rvm::OpCode opCode, const rvm::ConstData* args_serialized)
+	rvm::InvokeResult EVMExecutionEngine::Invoke(rvm::ExecutionContext* executionContext, uint32_t gas_limit, const rvm::ContractDID *contract_deployment_id, rvm::OpCode opCode, const rvm::ConstData* args_serialized)
 	{
         const rt::String_Ref args_json_str((const char*)args_serialized->DataPtr, args_serialized->DataSize);
         const rt::JsonObject args_json = args_json_str;
@@ -1008,7 +1008,7 @@ namespace preda_evm {
         ret.SubCodeLow = 0;
         ret.GasBurnt = 1;
 
-        ContractDID deployId = _details::RvmCDIDToEVMCDID(executionContext->GetContractDeploymentIdentifier(rvm::_details::CONTRACT_UNSET_SCOPE(contractId), build_num));
+        ContractDID deployId = _details::RvmCDIDToEVMCDID(contract_deployment_id);
         const ContractDatabaseEntry* entry = m_pDB->FindContractEntry(deployId);
 
         if (!entry)
@@ -1026,9 +1026,9 @@ namespace preda_evm {
             // mint ETH
             evmc::uint256be current_balance = host.get_stack_back().balances[origin];
             evmc::uint256be current_contract_balance = host.get_stack_back().balances[entry->address];
-			unsigned int value = args_json.GetValueAs<unsigned int>("value", 0);
-            host.get_stack_back().balances[origin] = TTMathUintToEVMCUint(EVMCUintToTTMathUint(current_balance) + value);
-            host.get_stack_back().balances[entry->address] = TTMathUintToEVMCUint(EVMCUintToTTMathUint(current_contract_balance) + value);
+			uint64_t value = args_json.GetValueAs<uint64_t>("value", 0);
+            host.get_stack_back().balances[origin] = TTMathUintToEVMCUint(EVMCUintToTTMathUint(current_balance) + ttmath::uint(value));
+            host.get_stack_back().balances[entry->address] = TTMathUintToEVMCUint(EVMCUintToTTMathUint(current_contract_balance) + ttmath::uint(value));
             ret.Code = rvm::InvokeErrorCode::Success;
             return ret;
         }
@@ -1174,5 +1174,9 @@ namespace preda_evm {
 	void EVMExecutionEngine::Release()
 	{
 		delete this;
+	}
+
+	void EVMExecutionEngine::GetExceptionMessage(uint16_t except, rvm::StringStream* str) const
+	{
 	}
 }

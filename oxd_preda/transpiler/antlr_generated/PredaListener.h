@@ -44,6 +44,9 @@ public:
   virtual void enterStateVariableDeclaration(PredaParser::StateVariableDeclarationContext *ctx) = 0;
   virtual void exitStateVariableDeclaration(PredaParser::StateVariableDeclarationContext *ctx) = 0;
 
+  virtual void enterConstVariableDeclaration(PredaParser::ConstVariableDeclarationContext *ctx) = 0;
+  virtual void exitConstVariableDeclaration(PredaParser::ConstVariableDeclarationContext *ctx) = 0;
+
   virtual void enterScope(PredaParser::ScopeContext *ctx) = 0;
   virtual void exitScope(PredaParser::ScopeContext *ctx) = 0;
 

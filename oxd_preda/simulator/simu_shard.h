@@ -85,6 +85,7 @@ protected:
 	rt::BufferEx<uint8_t>		_ReturnVal;
 	rt::BufferEx<SimuTxn*>		_RelayEmitted;  // all be dispatched and cleared once txn execution is done
 	bool						_IsAddressScope() const { return _pTxn&&_pTxn->GetScope() == rvm::Scope::Address; }
+	rvm::Scope					_GetScope() const { if (_pTxn) return _pTxn->GetScope(); return rvm::Scope::Neutral; }
 	bool						_IsGlobalScope() const { return (SimuShard*)_pGlobalShard == this; }
 	uint64_t					_GetBlockTime() const { return _BlockTimeBase + _BlockHeight*SIMU_BLOCK_INTERVAL; }
 	SimuTxn*					_CreateRelayTxn(rvm::ContractId cid, rvm::OpCode opcode, const rvm::ConstData* args_serialized, rvm::BuildNum build_num = (rvm::BuildNum)0) const;
@@ -130,10 +131,10 @@ protected:
 	// normal txn
 	virtual rvm::ConstAddress*		GetSigner(uint32_t i) const override { 
 		ASSERT(_pTxn && i==0); 
-		return _pTxn->IsRelay()?nullptr:&_pTxn->Target;
+		return _pTxn->IsRelay()?nullptr:&_pTxn->Target.addr;
 	}
 	virtual uint32_t				GetSignerCount() const override { ASSERT(_pTxn); return _pTxn->IsRelay()?0:1; }
-	virtual bool					IsSignedBy(rvm::ConstAddress* addr) const override { ASSERT(_pTxn); return !_pTxn->IsRelay() && rt::IsEqual(*addr, _pTxn->Target); }
+	virtual bool					IsSignedBy(rvm::ConstAddress* addr) const override { ASSERT(_pTxn); return !_pTxn->IsRelay() && rt::IsEqual(*addr, _pTxn->Target.addr); }
 	// relay txn
 	virtual uint32_t				GetOriginatedShardIndex() const override { ASSERT(_pTxn && _pTxn->IsRelay()); return _pTxn->OriginateShardIndex; }
 	virtual uint32_t				GetOriginatedShardOrder() const override { ASSERT(_pTxn && _pTxn->IsRelay()); return _pTxn->OriginateShardOrder; }
@@ -148,7 +149,7 @@ protected:
 	virtual void					CommitNewState(rvm::BuildNum build_num, rvm::ContractScopeId cid, uint8_t* state) override;  // `state` must be allocated from AllocateStateMemory
 	virtual void					CommitNewState(rvm::BuildNum build_num, rvm::ContractScopeId cid, const rvm::ScopeKey* key, uint8_t* state) override;  // `state` must be allocated from AllocateStateMemory
 
-	virtual bool					EmitRelayToAddress(rvm::BuildNum build_num, rvm::ConstAddress* target, rvm::ContractScopeId cid, rvm::OpCode opcode, const rvm::ConstData* args_serialized, uint32_t gas_redistribution_weight) override;
+	virtual bool					EmitRelayToScope(rvm::BuildNum build_num, const uint8_t* scope_key, uint32_t scope_key_size, rvm::ContractScopeId cid, rvm::OpCode opcode, const rvm::ConstData* args_serialized, uint32_t gas_redistribution_weight) override;
 	virtual bool					EmitRelayToGlobal(rvm::BuildNum build_num, rvm::ContractScopeId cid, rvm::OpCode opcode, const rvm::ConstData* args_serialized, uint32_t gas_redistribution_weight) override;
 	virtual bool					EmitBroadcastToShards(rvm::BuildNum build_num, rvm::ContractScopeId cid, rvm::OpCode opcode, const rvm::ConstData* args_serialized, uint32_t gas_redistribution_weight) override;
 

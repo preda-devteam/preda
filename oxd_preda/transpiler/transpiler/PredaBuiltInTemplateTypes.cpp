@@ -44,7 +44,7 @@ namespace transpiler{
 			{
 				FunctionSignature signature;
 				signature.returnType = QualifiedConcreteType(pTranspilerContext->GetBuiltInIntegerType(32, false), true, false);
-				signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+				signature.flags = uint32_t(FunctionFlags::IsConst);
 				bool res = (pConcreteType->DefineMemberFunction("length", signature, false) != nullptr);
 				assert(res);
 			}
@@ -128,7 +128,7 @@ namespace transpiler{
 				FunctionSignature signature;
 				signature.returnType = QualifiedConcreteType(pTranspilerContext->GetBuiltInBoolType(), true, false);
 				signature.parameters.push_back(Allocator::New<DefinedIdentifier>(keyType, true, true, "key", 0));
-				signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+				signature.flags = uint32_t(FunctionFlags::IsConst);
 				bool res = (pConcreteType->DefineMemberFunction("has", signature, false) != nullptr);
 				assert(res);
 			}

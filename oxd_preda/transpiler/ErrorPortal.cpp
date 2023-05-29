@@ -198,20 +198,20 @@ void ErrorPortal::AddArgumentListLengthMismatchError(size_t numExpected, size_t 
 	AddError(ErrorCode::ArgumentListLengthMismatch, "function expects " + std::to_string(numExpected) + " parameter(s), " + std::to_string(numGiven) + " provided.");
 }
 
-void ErrorPortal::AddConstantTooLargeError()
+void ErrorPortal::AddConstantOutOfRangeError()
 {
-	AddError(ErrorCode::ConstantTooLarge, "constant too large.");
+	AddError(ErrorCode::ConstantOutOfRange, "constant is out of range.");
 }
 
-void ErrorPortal::AddAccessVariableOfHigherContextClassError(const std::string &identifierName)
+void ErrorPortal::AddIdentifierScopeUnaccessibleError(const std::string &identifierName, const std::string &identifierScope, const std::string& currentScope)
 {
-	AddError(ErrorCode::AccessVariableOfHigherContextClass, "variable \"" + identifierName + "\" has a higher context class than the current function and is not accessible.");
+	AddError(ErrorCode::IdentifierScopeUnaccessible, "\"" + identifierName + "\" in scope \"" + identifierScope + "\" is not accessible from scope \"" + currentScope +"\".");
 }
 
-void ErrorPortal::AddAccessFunctionOfHigherContextClassError(const std::string &identifierName)
-{
-	AddError(ErrorCode::AccessFunctionOfHigherContextClass, "function \"" + identifierName + "\" has a higher context class than the current function and is not accessible.");
-}
+//void ErrorPortal::AddAccessFunctionOfHigherContextClassError(const std::string &identifierName)
+//{
+//	AddError(ErrorCode::AccessFunctionOfHigherContextClass, "function \"" + identifierName + "\" has a higher context class than the current function and is not accessible.");
+//}
 
 void ErrorPortal::AddSpaceInNegativeNumberLiteralError()
 {
@@ -376,18 +376,18 @@ void ErrorPortal::AddRelayGlobalFromGlobalError()
 
 void ErrorPortal::AddRelayGlobalToNonGlobalFunctionError(const std::string& identifierName)
 {
-	AddError(ErrorCode::RelayGlobalToNonGlobalFunction, "relay@global target \"" + identifierName + "\" must be a global function.");
+	AddError(ErrorCode::RelayGlobalToNonGlobalFunction, "relay@global to non-global function \"" + identifierName + "\".");
 }
 
-void ErrorPortal::AddRelayAddressToNonAddressFunctionError(const std::string& identifierName)
+void ErrorPortal::AddRelayTargetAndFunctionScopeMismatchError(const std::string& targetType, const std::string& functionName, const std::string& functionScope)
 {
-	AddError(ErrorCode::RelayAddressToNonAddressFunction, "relay@shards target \"" + identifierName + "\" must be a per-shard function.");
+	AddError(ErrorCode::RelayTargetAndFunctionScopeMismatch, "relay target type \"" + targetType + "\" does not match scope of function \"" + functionName + "\" (\"" + functionScope + "\").");
 }
 
-void ErrorPortal::AddOnDeployCannotBeAddressFunctionError()
-{
-	AddError(ErrorCode::RelayAddressToNonAddressFunction, "on_deploy() must be either a global or a per-shard function.");
-}
+//void ErrorPortal::AddOnDeployCannotBeAddressFunctionError()
+//{
+//	AddError(ErrorCode::OnDeployCannotBeAddressFunction, "on_deploy() must be either a global or a per-shard function.");
+//}
 
 void ErrorPortal::AddBlobInGlobalStateVariableError()
 {
@@ -404,24 +404,40 @@ void ErrorPortal::AddReservedFunctionMustBeGlobalError(const std::string& functi
 	AddError(ErrorCode::ReservedFunctionMustBeGlobal, "reserved function " + functionName + " must have global context class.");
 }
 
-void ErrorPortal::AddFunctionConstnessOrContextClassNotMatchInterface(const std::string &interfaceName)
+void ErrorPortal::AddFunctionConstnessOrContextClassNotMatchInterfaceError(const std::string &interfaceName)
 {
 	AddError(ErrorCode::FunctionConstnessOrContextClassNotMatchInterface, "function const-ness or context class not matching interface " + interfaceName + ".");
 }
 
-void ErrorPortal::AddInterfaceFunctionImplementedButNotPublic(const std::string& interfaceName)
+void ErrorPortal::AddInterfaceFunctionImplementedButNotPublicError(const std::string& interfaceName)
 {
 	AddError(ErrorCode::InterfaceFunctionImplementedButNotPublic, "function implementing interface (\"" + interfaceName + "\") must be made public.");
 }
 
-void ErrorPortal::AddInterfaceFunctionNotImplemented(const std::string& interfaceName, const std::string missingFunction)
+void ErrorPortal::AddInterfaceFunctionNotImplementedError(const std::string& interfaceName, const std::string missingFunction)
 {
 	AddError(ErrorCode::InterfaceFunctionNotImplemented, "interface \"" + interfaceName + "\" not implemented, missing implementation for \"" + missingFunction + "\".");
 }
 
+void ErrorPortal::AddInvalidScopeError(const std::string& scopeName)
+{
+	AddError(ErrorCode::InvalidScope, "invalid scope name \"" + scopeName + "\".");
+}
 
+void ErrorPortal::AssigningMemberVarToConstVarError(const std::string& identifierName)
+{
+	AddError(ErrorCode::AssigningMemberVarToConstVar, "variable \"" + identifierName + "\" cannot be assigned to const member variable");
+}
 
+void ErrorPortal::AddInvalidRelayTargetTypeError(const std::string& targetType)
+{
+	AddError(ErrorCode::InvalidScope, "invalid relay target type \"" + targetType + "\".");
+}
 
+void ErrorPortal::InvalidConstMemberVarType()
+{
+	AddError(ErrorCode::InvalidConstMemberVarType, "Invalid constant member variable type. Only string, enum, and value types are supported.");
+}
 
 void ErrorPortal::AddSyntaxError(uint32_t line, uint32_t pos, const std::string &msg)
 {

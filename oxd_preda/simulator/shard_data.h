@@ -111,11 +111,36 @@ enum SimuTxnFlag: uint16_t
 };
 
 #pragma pack(push, 1)
+struct ScopeTarget
+{
+	union {
+		rvm::Address			addr;
+		uint16_t				u16;
+		uint32_t				u32;
+		uint64_t				u64;
+		std::array<uint8_t, 32>	u256;
+		std::array<uint8_t, 64>	u512;
+	};
+	uint8_t target_size;
+	ScopeTarget()
+	{
+		rt::Zero(*this); target_size = 36;
+	}
+	explicit ScopeTarget(const rvm::Address& v) : ScopeTarget() { addr = v; target_size = 36; }
+	explicit ScopeTarget(const uint16_t& v) : ScopeTarget() { u16 = v; target_size = 2; }
+	explicit ScopeTarget(const uint32_t& v) : ScopeTarget() { u32 = v; target_size = 4; }
+	explicit ScopeTarget(const uint64_t& v) : ScopeTarget() { u64 = v; target_size = 8; }
+	explicit ScopeTarget(const std::array<uint8_t, 32>& v) : ScopeTarget() { u256 = v; target_size = 32; }
+	explicit ScopeTarget(const std::array<uint8_t, 64>& v) : ScopeTarget() { u512 = v; target_size = 64; }
+
+	TYPETRAITS_DECLARE_POD;
+};
+
 struct SimuTxn
 {
 	rvm::InvokeContextType	Type;
-	rvm::Address			Target;		// available if GetScope() == SCOPE_ADDRESS
-	uint64_t				Target_index; //Users[Target_index]
+	ScopeTarget				Target;		// available if GetScope() is not global or shard
+	int64_t				    Target_index;   //Users[Target_index] or -1 if target is not an existing user
 
 	uint64_t				Height; // height of the block including this txn
 	uint16_t				ShardIndex; // shard index
@@ -400,13 +425,16 @@ private:
 	{
 		for (auto it : _State)
 		{
+			if (rvm::_details::CONTRACT_SCOPE(it.first.Id) != rvm::Scope::Address)
+				continue;
 			rt::BufferEx<std::pair<rvm::ContractScopeId, SimuState*>> current;
-			if(m.find(it.first.Address) != m.end())
+			auto itor = m.find(it.first.Address.addr);
+			if (itor != m.end())
 			{
-				current = m.find(it.first.Address)->second;
+				current = itor->second;
 			}
 			current.push_back({ it.first.Id, it.second});
-			m[it.first.Address] = current;
+			m[it.first.Address.addr] = current;
 		}
 	}
 #endif
@@ -415,9 +443,19 @@ private:
 #pragma pack(push, 1)
 struct SimuAddressContract
 {
-	rvm::Address			Address;
+	ScopeTarget				Address;
 	rvm::ContractScopeId	Id;			// contractid with scope
 	bool operator == (const SimuAddressContract& x) const { return rt::IsEqual(*this, x); }
+	//SimuAddressContract() {}
+	//SimuAddressContract(ScopeTarget target, rvm::ContractScopeId id) { Address = target; Id = id; }
+	//SimuAddressContract(ext::HASHKEY_CTOR_TYPE type)
+	//{
+	//	if (type == ext::CTOR_VOID)
+	//		Id = rvm::ContractScopeId(0xffffffffffffffff);
+	//	if (type == ext::CTOR_ZERO)
+	//		Id = rvm::ContractScopeId(0);
+	//}
+	TYPETRAITS_DECLARE_POD;
 };
 #pragma pack(pop)
 

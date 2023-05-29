@@ -1,3 +1,7 @@
+#pragma warning(push)
+#pragma warning(disable:4244)
+#include "../../SFC/core/ext/bignum/ttmath/ttmath.h"
+#pragma warning(pop)
 #include "shard_data.h"
 #include "simulator.h"
 #include "simu_global.h"
@@ -99,17 +103,41 @@ SimuTxn* PendingTxns::Pop()
 #ifdef _VIZ
 void SimuTxn::Jsonify(rvm::RvmEngine* engine, const rvm::ChainState* ps, rt::Json& append, rvm::InvokeResult* result) const
 {
-	append.AppendKeyAndEscapedValue("InvokeContextType", rt::EnumStringify(Type));
+	append.AppendKeyWithString("InvokeContextType", rt::EnumStringify(Type));
 	char addr_buf[rvm::_details::ADDRESS_BASE32_LEN];
 
-	if(GetScope() == rvm::Scope::Address)
+	rvm::Scope scope = GetScope();
+	switch (scope)
 	{
-		rvm::_details::ADDRESS_TO_STRING(Target, addr_buf);
-		append.AppendKeyAndEscapedValue("Target", rt::String(addr_buf, rvm::_details::ADDRESS_BASE32_LEN) + rt::SS(":") + 
-															oxd::SecuritySuite::IdToString(Target._SSID));
-		append.AppendKeyAndEscapedValue("AddressIndex", rt::String('@') + Target_index);
+	case rvm::Scope::Address:
+		rvm::_details::ADDRESS_TO_STRING(Target.addr, addr_buf);
+		append.AppendKeyWithString("Target", rt::String(addr_buf, rvm::_details::ADDRESS_BASE32_LEN) + rt::SS(":") +
+															oxd::SecuritySuite::IdToString(Target.addr._SSID));
+		if(Target_index >= 0){
+			append.AppendKeyWithString("AddressIndex", rt::String('@') + Target_index);
+		}
+		break;
+	case rvm::Scope::UInt16:
+		append.AppendKeyWithString("Target", std::to_string(Target.u16) + "u16");
+		break;
+	case rvm::Scope::UInt32:
+		append.AppendKeyWithString("Target", std::to_string(Target.u32) + "u32");
+		break;
+	case rvm::Scope::UInt64:
+		append.AppendKeyWithString("Target", std::to_string(Target.u64) + "u64");
+		break;
+	case rvm::Scope::UInt256:
+		append.AppendKeyWithString("Target", (*(ttmath::UInt<8>*) & Target.u256).ToString() + "u256");
+		break;
+	break;
+	case rvm::Scope::UInt512:
+		append.AppendKeyWithString("Target", (*(ttmath::UInt<16>*) & Target.u512).ToString() + "u512");
+		break;
+	default:
+		break;
 	}
-	else if(IsRelay())
+
+	if(IsRelay())
 	{
 		rvm::_details::ADDRESS_TO_STRING(Initiator, addr_buf);
 		append << ((
@@ -416,7 +444,7 @@ SimuTxn* InputParametrized::ComposeTxn(rvm::BuildNum build_num, rvm::ContractSco
 	}
 	else
 	{
-		_LOG("[PRD] Line " << _Simulator.GetLineNum() << ": Invalid function argument/s")
+		_LOG("[BC] Line " << _Simulator.GetLineNum() << ": Invalid function argument/s")
 		return nullptr;
 	}
 }

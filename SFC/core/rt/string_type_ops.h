@@ -34,13 +34,18 @@
  *  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.   
  */
-/** \defgroup rt rt 
- * @ingroup SFC
- *  @{
- */
 
 #include "string_type.h"
 
+namespace os
+{
+extern SIZE_T	Base64EncodeLength(SIZE_T len);
+extern SIZE_T	Base64DecodeLength(LPCSTR pBase64, SIZE_T len);
+extern void		Base64Encode(LPSTR pBase64Out,LPCVOID pData, SIZE_T data_len); ///< assuming the data is well formated
+extern bool		Base64Decode(LPVOID pDataOut,SIZE_T* pDataOutLen,LPCSTR pBase64, SIZE_T str_len); ///< false if partial data decoded due to illegal data (*pDataOutLen) might be smaller than Base64DecodeLength returned
+extern bool		Base64Encode(const rt::String_Ref&in, rt::String& out);
+extern bool		Base64Decode(const rt::String_Ref&in, rt::String& out);
+} // namespace os
 
 namespace rt
 {

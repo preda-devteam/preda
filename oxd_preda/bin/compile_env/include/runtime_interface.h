@@ -6,8 +6,13 @@ namespace prlrt {
 	enum class ContractContextType : uint8_t {
 		None = 0,
 		Global = 1,
-		PerShard = 2,
-		PerAddress = 3,
+		Shard = 2,
+		Address = 3,
+		Uint16 = 4,
+		Uint32 = 5,
+		Uint64 = 6,
+		Uint256 = 7,
+		Uint512 = 8,
 		Num
 	};
 
@@ -188,10 +193,10 @@ namespace prlrt {
 	V(bool, InitHashFromLiteral, void* pHash, const char* str)\
 	V(bool, StringToAddress, void* pAddress, const char* data, uint32_t data_len)\
 	V(uint32_t, GetHashToStringLength, )\
-	V(uint32_t, GetAddressToStringLength, )\
+	V(uint32_t, GetAddressToStringLength, const void* pAddress)\
 	V(bool, AddressToString, const void* pData, uint32_t dataLen, char* out)\
 	V(void, CalculateHash, void* pHash, const uint8_t* data, uint32_t data_len)\
-	V(bool, EmitRelayToAddress, const uint8_t* address, uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)\
+	V(bool, EmitRelayToScope, const uint8_t* scope_key, uint32_t scope_key_size, uint32_t scope_type, uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)\
 	V(bool, EmitRelayToGlobal, uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)\
 	V(bool, EmitRelayToShards, uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)\
 	V(bool, HashToString, const void* pData, uint32_t dataLen, char* out) \
@@ -200,8 +205,9 @@ namespace prlrt {
 	V(void, ReportOrphanToken, uint64_t id, ::prlrt::BigintPtr amount)\
 	V(void, ReportReturnValue, const char* type_export_name, const uint8_t* serialized_data, uint32_t serialized_data_size)\
 	V(void, DebugPrintBufferAppendSerializedData, const char* type_export_name, const uint8_t* serialized_data, uint32_t serialized_data_size)\
-	V(void, DebugPrintOutputBuffer, )\
+	V(void, DebugPrintOutputBuffer, uint32_t line)\
 	V(void, DebugAssertionFailure, uint32_t line)\
+	V(void, DebugAssertionFailureMessage, uint32_t line, const char* message, uint32_t length)\
 	V(uint32_t, GetTokenIdByName, const char* name)\
 \
 	V(bool, IsUserAddress, const void* pAddress)\
@@ -210,6 +216,10 @@ namespace prlrt {
 	V(bool, IsAssetAddress, const void* pAddress)\
 	V(bool, IsNameAddress, const void* pAddress)\
 	V(bool, IsDomainAddress, const void* pAddress)\
+	V(bool, IsContractAddress, const void* pAddress)\
+	V(bool, IsCustomAddress, const void* pAddress)\
+	V(void, SetAsContractAddress, void* pAddress, uint64_t contract_id)\
+	V(void, SetAsCustomAddress, void* pAddress, const uint8_t* data)\
 \
 	V(bool, BurnGasLoop, )\
 	V(bool, BurnGasFunctionCall, )\
@@ -238,6 +248,7 @@ namespace prlrt {
 	/*  transaction context */\
 	V(::prlrt::transaction_type, Transaction_GetType, )\
 	V(void, Transaction_GetSelfAddress, uint8_t* out)\
+	V(void, Transaction_GetSender, uint8_t* out)\
 	V(uint64_t, Transaction_GetTimeStamp, )\
 	V(void, Transaction_GetSigner, uint32_t signerIdx, uint8_t* out)\
 	V(const uint32_t, Transaction_GetSingerCount, )\

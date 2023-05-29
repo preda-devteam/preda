@@ -84,8 +84,12 @@ enum
 
 class HttpSession
 {
+public:
+	typedef Socket		SOCKET_TYPE;
+	//typedef SocketTimed	SOCKET_TYPE;
+protected:
     sec::TLS			_SecureConn;
-    SocketTimed			_TcpConn;
+    SOCKET_TYPE			_TcpConn;
     bool				_Send(LPCVOID pData, UINT len);
     bool				_Recv(LPVOID pData, UINT len, UINT& len_out);
 

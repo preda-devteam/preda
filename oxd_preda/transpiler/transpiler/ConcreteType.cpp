@@ -56,8 +56,8 @@ namespace transpiler {
 			ConcreteTypePtr functionType = pMember->qualifiedType.baseConcreteType;
 			if (functionType->typeCategory != FunctionType)		// If the identifier is already defined as a variable 
 				return nullptr;
-			if (bExistingIsStatic || bIsStatic)									// static member functions cannot be overloaded
-				return nullptr;
+			//if (bExistingIsStatic || bIsStatic)									// static member functions cannot be overloaded
+			//	return nullptr;
 
 			// If there's already a function with the same name and signature 
 			for (size_t i = 0; i < functionType->vOverloadedFunctions.size(); i++)

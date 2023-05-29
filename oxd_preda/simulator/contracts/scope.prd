@@ -1,0 +1,31 @@
+contract Scope {
+    @address uint32 storedData;
+	@shard uint32 perShardData;
+	@uint256 string str;
+	@uint256 int32 c;
+
+    @address function set() export {
+        storedData = 3u;
+		relay@258561872668562656125162556165418126u256 f();
+		//relay@__transaction.get_sender() get();
+    }
+
+    @address function uint32 get() public const {
+        return storedData;
+    }
+    
+    @address function int32 increment(const uint32 n) export {
+        storedData = storedData + n;
+        return 0;
+    }
+    
+    @address function int32 decrement(const uint32 n) export {
+        storedData = storedData - n;
+        return 0;
+    }
+	
+	@uint256 function f() {
+		__debug.print(c, str);
+		str = "Hello world!";
+	}
+}

@@ -661,7 +661,7 @@ public:
 
 	void			LoadEnvironmentVariablesAsOptions();
 	void			SetOptionDefault(const rt::String_Ref& opt_name, const rt::String_Ref& value);
-	void			SetOption(const rt::String_Ref& opt_name, const rt::String_Ref& value);
+	void			SetOption(const rt::String_Ref& opt_name, const rt::String_Ref& value = nullptr);
 };
 
 /**

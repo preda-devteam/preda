@@ -14,7 +14,7 @@ const ContractState = (s: any) => {
       <div className='box-key'>State:</div>
       <div className='box-val'>
         <ReactJson
-          src={(s.State as object)}
+          src={(JSON.parse(JSON.stringify(s.State)) as object)}
           style={{ background: "none" }}
           displayObjectSize={false}
           enableClipboard={false}

@@ -9,6 +9,7 @@ import editArgs from "./Commands/edit";
 import compile from "./Commands/compile";
 import compileMultiple from "./Commands/compileMultiple";
 import view from "./Commands/view";
+import { PredaDefinitionProvider } from "./languageServer/definitionProvider";
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -158,6 +159,12 @@ export function activate(context: vscode.ExtensionContext) {
   function triggerUpdateDecorations() {
     timeout && clearTimeout(timeout);
     timeout = setTimeout(updateDecorations, 0);
+  }
+  // defind language
+  if(vscode.workspace.workspaceFolders) {
+    // Push the disposable to the context's subscriptions so that the
+    // client can be deactivated on extension deactivation
+    context.subscriptions.push(vscode.languages.registerDefinitionProvider({ language: 'preda', scheme: 'file' }, new PredaDefinitionProvider()));
   }
 }
 

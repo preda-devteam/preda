@@ -168,66 +168,27 @@ class CContractSymbolDatabaseForTranspiler : public transpiler::IContractSymbolD
 			return int32_t(m_pEntry->implementedInterfaces[interfaceIdx].functionIds[functionIdx]);
 		}
 
-		virtual const char* GetPerAddressStateVariableSignature() const override
+		virtual const char* GetScopeStateVariableSignature(transpiler::ScopeType scope) const override
 		{
-			return m_pEntry->perAddressStateVariableSignature.c_str();
+			return m_pEntry->scopeStateVarMeta[int(scope)].signature.c_str();
 		}
-		virtual uint32_t GetNumPerAddressStateVariable() const override
+		virtual uint32_t GetNumScopeStateVariable(transpiler::ScopeType scope) const override
 		{
-			return (uint32_t)m_pEntry->perAddressStateVariableComment.size();
+			return (uint32_t)m_pEntry->scopeStateVarMeta[int(scope)].comment.size();
 		}
-		virtual const char* GetPerAddressStateVariableComment(uint32_t varIdx) const override
+		virtual const char* GetScopeStateVariableComment(transpiler::ScopeType scope, uint32_t varIdx) const override
 		{
-			return m_pEntry->perAddressStateVariableComment[varIdx].c_str();
+			return m_pEntry->scopeStateVarMeta[int(scope)].comment[varIdx].c_str();
 		}
-		virtual bool PerAddressStateVariableHasAsset() const override
+		virtual bool ScopeStateVariableHasAsset(transpiler::ScopeType scope) const override
 		{
-			return m_pEntry->perAddressStateVariableHasAsset;
+			return m_pEntry->scopeStateVarMeta[int(scope)].hasAsset;
 		}
-		virtual bool PerAddressStateVariableHasBlob() const override
+		virtual bool ScopeStateVariableHasBlob(transpiler::ScopeType scope) const override
 		{
-			return m_pEntry->perAddressStateVariableHasBlob;
+			return m_pEntry->scopeStateVarMeta[int(scope)].hasBlob;
 		}
-		virtual const char* GetPerShardStateVariableSignature() const override
-		{
-			return m_pEntry->perShardStateVariableSignature.c_str();
-		}
-		virtual uint32_t GetNumPerShardStateVariable() const override
-		{
-			return (uint32_t)m_pEntry->perShardStateVariableComment.size();
-		}
-		virtual const char* GetPerShardStateVariableComment(uint32_t varIdx) const override
-		{
-			return m_pEntry->perShardStateVariableComment[varIdx].c_str();
-		}
-		virtual bool PerShardStateVariableHasAsset() const override
-		{
-			return m_pEntry->perShardStateVariableHasAsset;
-		}
-		virtual bool PerShardStateVariableHasBlob() const override
-		{
-			return m_pEntry->perShardStateVariableHasBlob;
-		}
-		virtual const char* GetGlobalStateVariableSignature() const override
-		{
-			return m_pEntry->globalStateVariableSignature.c_str();
-		}
-		virtual uint32_t GetNumGlobalStateVariable() const
-		{
-			return (uint32_t)m_pEntry->globalStateVariableComment.size();
-		}
-		virtual const char* GetGlobalStateVariableComment(uint32_t varIdx) const override
-		{
-			return m_pEntry->globalStateVariableComment[varIdx].c_str();
-		}
-		virtual bool GlobalStateVariableHasAsset() const override
-		{
-			return m_pEntry->globalStateVariableHasAsset;
-		}
-		virtual bool GlobalStateVariableHasBlob() const override
-		{
-			return m_pEntry->globalStateVariableHasBlob;
-		}
+
 		virtual uint32_t GetNumEnumTypes() const override
 		{
 			return (uint32_t)m_pEntry->enums.size();

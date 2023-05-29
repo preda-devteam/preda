@@ -220,7 +220,7 @@ bool NonFungibleArtworkData::Compose(rt::String& namespec, const rt::String_Ref&
 	}
 	
 
-	s = json.GetValueUnescaped("name");
+	s = json.GetValue("name");
 	if(!s.IsEmpty())
 	{
 		if(s.GetLength() <= NFMODE_NAME_MAXLEN)
@@ -256,7 +256,7 @@ bool NonFungibleArtworkData::Compose(rt::String& namespec, const rt::String_Ref&
 				else
 					return false;
 
-			s = json.GetValueUnescaped("name");
+			s = json.GetValue("name");
 			if(!s.IsEmpty())
 				if(s.GetLength() <= NFMODE_NAME_MAXLEN)
 				{
@@ -359,7 +359,7 @@ void NonFungibleArtworkData::Jsonify(rt::Json& append) const
 	{
 		Address u;
 		GetArtistAddress(u);
-		append.AppendKeyAndEscapedValue("signer", oxd::b32address(u));
+		append.AppendKeyWithString("signer", oxd::b32address(u));
 	}
 
 	if(GetPieceCount())

@@ -71,9 +71,9 @@ public:
 	void AddMinedDependencyWithRelayError();
 	void AddNoMatchingOverloadedFunctionError();
 	void AddArgumentListLengthMismatchError(size_t numExpected, size_t numGiven);
-	void AddConstantTooLargeError();
-	void AddAccessVariableOfHigherContextClassError(const std::string &identifierName);
-	void AddAccessFunctionOfHigherContextClassError(const std::string &identifierName);
+	void AddConstantOutOfRangeError();
+	void AddIdentifierScopeUnaccessibleError(const std::string &identifierName, const std::string &identifierScope, const std::string& currentScope);
+	//void AddAccessFunctionOfHigherContextClassError(const std::string &identifierName);
 	void AddSpaceInNegativeNumberLiteralError();
 	void AddNoMatchingConstructorError(const std::string &typeName);
 	void AddNotAMemberOfError(const std::string &identifierName, const std::string &typeName);
@@ -107,15 +107,18 @@ public:
 	void AddRelayShardsOutsideGlobalError();
 	void AddRelayGlobalFromGlobalError();
 	void AddRelayGlobalToNonGlobalFunctionError(const std::string& identifierName);
-	void AddRelayAddressToNonAddressFunctionError(const std::string& identifierName);
-	void AddOnDeployCannotBeAddressFunctionError();
+	void AddRelayTargetAndFunctionScopeMismatchError(const std::string& targetType, const std::string& functionName, const std::string& functionScope);
+	//void AddOnDeployCannotBeAddressFunctionError();
 	void AddBlobInGlobalStateVariableError();
 	void AddInaccessibleGlobalFunctionFromNonGlobalFunctionError(const std::string& identifierName);
 	void AddReservedFunctionMustBeGlobalError(const std::string& functionName);
-	void AddFunctionConstnessOrContextClassNotMatchInterface(const std::string &interfaceName);
-	void AddInterfaceFunctionImplementedButNotPublic(const std::string& interfaceName);
-	void AddInterfaceFunctionNotImplemented(const std::string& interfaceName, const std::string missingFunction);
-
+	void AddFunctionConstnessOrContextClassNotMatchInterfaceError(const std::string &interfaceName);
+	void AddInterfaceFunctionImplementedButNotPublicError(const std::string& interfaceName);
+	void AddInterfaceFunctionNotImplementedError(const std::string& interfaceName, const std::string missingFunction);
+	void AddInvalidScopeError(const std::string& scopeName);
+	void AssigningMemberVarToConstVarError(const std::string& identifierName);
+	void AddInvalidRelayTargetTypeError(const std::string& targetType);
+	void InvalidConstMemberVarType();
 
 	void AddSyntaxError(uint32_t line, uint32_t pos, const std::string &msg);
 	void AddInternalError(uint32_t line, uint32_t pos, const std::string &msg);

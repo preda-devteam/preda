@@ -382,7 +382,7 @@ public:
 				{
 					typedef _details::RRCD_Holder<ThreadSafeMutable>* LPHOLDER;
 					auto& h = (LPHOLDER&)_details::RRCD_Holder_GetLastEntry();
-					ASSERT(h); // add THREADSAFEMUTABLE_SCOPE(obj) before calling Get()
+					ASSERT(h); // add THREADSAFEMUTABLE_SCOPE(obj) before every calling of GetImmutable()
 					ASSERT(h->mtm_obj == this);
 					LPRRCD ret;
 					{	EnterCSBlock(_cs_swap);

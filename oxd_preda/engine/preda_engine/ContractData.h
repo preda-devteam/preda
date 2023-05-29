@@ -5,6 +5,7 @@
 #include "../../native/abi/vm_types.h"
 #include "../../native/abi/vm_interfaces.h"
 #include "../../transpiler/transpiler/PredaCommon.h"
+#include "../../bin/compile_env/include/runtime_interface.h"
 //#include "RuntimeInterfaceImpl.h"
 
 
@@ -59,18 +60,15 @@ struct ContractCompileData
 	std::vector<ContractInterface> interfaces;
 	std::vector<ContractImplementedInterface> implementedInterfaces;
 
-	std::string perAddressStateVariableSignature;
-	std::vector<std::string> perAddressStateVariableComment;
-	bool perAddressStateVariableHasAsset;
-	bool perAddressStateVariableHasBlob;
-	std::string perShardStateVariableSignature;
-	std::vector<std::string> perShardStateVariableComment;
-	bool perShardStateVariableHasAsset;
-	bool perShardStateVariableHasBlob;
-	std::string globalStateVariableSignature;
-	std::vector<std::string> globalStateVariableComment;
-	bool globalStateVariableHasAsset;
-	bool globalStateVariableHasBlob;
+	struct ScopeStateVariableMetadata
+	{
+		std::string signature;
+		std::vector<std::string> comment;
+		bool hasAsset;
+		bool hasBlob;
+	};
+
+	std::vector<ScopeStateVariableMetadata> scopeStateVarMeta;
 
 	std::vector<ContractEnum> enums;
 	std::vector<ContractStruct> structs;
@@ -125,9 +123,113 @@ namespace _details {
 		return rvm::ContractIdInvalid;
 	}
 
-	static const PredaContractDID GetOnChainPredaContractDIdFromFullName(const rvm::ChainState* pChainState, const std::string& fullName, rvm::BuildNum buildNum = rvm::BuildNumLatest)
+	static PredaContractDID GetOnChainPredaContractDIdFromFullName(const rvm::ChainState* pChainState, const std::string& fullName, rvm::BuildNum buildNum = rvm::BuildNumLatest)
 	{
 		rvm::ContractId contractId = GetOnChainContractIdFromContractFullName(pChainState, fullName);
 		return RvmCDIDToPredaCDID(pChainState->GetContractDeploymentIdentifier(contractId, buildNum));
+	}
+
+	static transpiler::ScopeType RvmScopeToPredaScope(rvm::Scope scope)
+	{
+		switch (scope)
+		{
+		case rvm::Scope::Global:
+			return transpiler::ScopeType::Global;
+		case rvm::Scope::Shard:
+			return transpiler::ScopeType::Shard;
+		case rvm::Scope::Address:
+			return transpiler::ScopeType::Address;
+		case rvm::_details::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt16, 0):
+			return transpiler::ScopeType::Uint16;
+		case rvm::_details::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt32, 0):
+			return transpiler::ScopeType::Uint32;
+		case rvm::_details::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt64, 0):
+			return transpiler::ScopeType::Uint64;
+		case rvm::_details::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt256, 0):
+			return transpiler::ScopeType::Uint256;
+		case rvm::_details::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt512, 0):
+			return transpiler::ScopeType::Uint512;
+		default:
+			return transpiler::ScopeType::None;
+		}
+	}
+
+	static rvm::Scope PredaScopeToRvmScope(transpiler::ScopeType scope)
+	{
+		switch (scope)
+		{
+		case transpiler::ScopeType::Global:
+			return rvm::Scope::Global;
+		case transpiler::ScopeType::Shard:
+			return rvm::Scope::Shard;
+		case transpiler::ScopeType::Address:
+			return rvm::Scope::Address;
+		case transpiler::ScopeType::Uint16:
+			return rvm::Scope::UInt16;
+		case transpiler::ScopeType::Uint32:
+			return rvm::Scope::UInt32;
+		case transpiler::ScopeType::Uint64:
+			return rvm::Scope::UInt64;
+		case transpiler::ScopeType::Uint256:
+			return rvm::Scope::UInt256;
+		case transpiler::ScopeType::Uint512:
+			return rvm::Scope::UInt512;
+		default:
+			return rvm::Scope::Neutral;
+		}
+	}
+
+	static prlrt::ContractContextType PredaScopeToRuntimeContextType(transpiler::ScopeType scope)
+	{
+		switch (scope)
+		{
+		case transpiler::ScopeType::None:
+			return prlrt::ContractContextType::None;
+		case transpiler::ScopeType::Global:
+			return prlrt::ContractContextType::Global;
+		case transpiler::ScopeType::Shard:
+			return prlrt::ContractContextType::Shard;
+		case transpiler::ScopeType::Address:
+			return prlrt::ContractContextType::Address;
+		case transpiler::ScopeType::Uint16:
+			return prlrt::ContractContextType::Uint16;
+		case transpiler::ScopeType::Uint32:
+			return prlrt::ContractContextType::Uint32;
+		case transpiler::ScopeType::Uint64:
+			return prlrt::ContractContextType::Uint64;
+		case transpiler::ScopeType::Uint256:
+			return prlrt::ContractContextType::Uint256;
+		case transpiler::ScopeType::Uint512:
+			return prlrt::ContractContextType::Uint512;
+		default:
+			return prlrt::ContractContextType::None;
+		}
+	}
+
+	static transpiler::ScopeType RuntimeContextTypeToPredaScope(prlrt::ContractContextType scope)
+	{
+		switch (scope)
+		{
+		case prlrt::ContractContextType::None:
+			return transpiler::ScopeType::None;
+		case prlrt::ContractContextType::Global:
+			return transpiler::ScopeType::Global;
+		case prlrt::ContractContextType::Shard:
+			return transpiler::ScopeType::Shard;
+		case prlrt::ContractContextType::Address:
+			return transpiler::ScopeType::Address;
+		case prlrt::ContractContextType::Uint16:
+			return transpiler::ScopeType::Uint16;
+		case prlrt::ContractContextType::Uint32:
+			return transpiler::ScopeType::Uint32;
+		case prlrt::ContractContextType::Uint64:
+			return transpiler::ScopeType::Uint64;
+		case prlrt::ContractContextType::Uint256:
+			return transpiler::ScopeType::Uint256;
+		case prlrt::ContractContextType::Uint512:
+			return transpiler::ScopeType::Uint512;
+		default:
+			return transpiler::ScopeType::None;
+		}
 	}
 }

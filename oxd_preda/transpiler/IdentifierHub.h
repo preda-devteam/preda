@@ -12,7 +12,8 @@ class IdentifierHub
 
 	transpiler::PredaTranspilerContext *m_pTranspilerCtx = nullptr;
 	ErrorPortal *m_pErrorPortal = nullptr;
-
+private:
+	std::map<transpiler::DefinedIdentifierPtr, std::string> constantVarMap;
 public:
 	void SetTranspilerContext(transpiler::PredaTranspilerContext *pCtx)
 	{
@@ -22,7 +23,21 @@ public:
 	{
 		m_pErrorPortal = pPortal;
 	}
-
+	void AddConstMemberVar(transpiler::DefinedIdentifierPtr idPtr, std::string definition)
+	{
+		constantVarMap[idPtr] = definition;
+	}
+	bool GetConstMemberDefinition(transpiler::DefinedIdentifierPtr idPtr, std::string& definition)
+	{
+		auto iter = constantVarMap.find(idPtr);
+		if (iter == constantVarMap.end())
+		{
+			definition.clear();
+			return false;
+		}
+		definition = iter->second;
+		return true;
+	}
 	bool FindExistingIdentifier(const std::string &typeName, ConcreteTypePtr *outType, transpiler::DefinedIdentifierPtr *outDefinedIdentifier, ConcreteTypePtr *outOuterType = nullptr);
 	bool ValidateNewIdentifier(const std::string &typeName);
 	bool ValidateNewIdentifier(PredaParser::IdentifierContext *ctx);

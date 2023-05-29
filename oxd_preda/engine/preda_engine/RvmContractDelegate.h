@@ -22,9 +22,9 @@ private:
 
 	std::vector<Function> m_functions;
 
-	rvm::OpCode m_shardScaleOutOpCode = rvm::OpCode(0);
+	rvm::OpCode m_onScaleOutOpCode = rvm::OpCode(0);
 	rvm::OpCode m_shardDeployOpCode = rvm::OpCode(0);
-	rvm::OpCode m_globalDeployOpCode = rvm::OpCode(0);
+	rvm::OpCode m_onDeployOpCode = rvm::OpCode(0);
 	rvm::OpCode m_periodicOpCode = rvm::OpCode(0);
 	rvm::OpCode m_addressPeriodicOpCode = rvm::OpCode(0);
 
@@ -34,7 +34,7 @@ private:
 	struct ScopeDesc
 	{
 		rvm::Scope scope;
-		std::underlying_type<rvm::ScopeDefinitionFlag>::type flags;
+		std::underlying_type_t<rvm::ScopeDefinitionFlag> flags;
 		std::string name;
 		rvm::ContractScopeId originalScopeId;
 	};
@@ -90,14 +90,11 @@ public:
 	}
 	virtual bool					GetStateSignature(rvm::Scope scope, rvm::StringStream* signature_out) const override
 	{
-		if (scope == rvm::Scope::Global)
-			signature_out->Append(m_pContractCompiledData->globalStateVariableSignature.c_str(), uint32_t(m_pContractCompiledData->globalStateVariableSignature.length()));
-		else if (scope == rvm::Scope::Shard)
-			signature_out->Append(m_pContractCompiledData->perShardStateVariableSignature.c_str(), uint32_t(m_pContractCompiledData->perShardStateVariableSignature.length()));
-		else if (scope == rvm::Scope::Address)
-			signature_out->Append(m_pContractCompiledData->perAddressStateVariableSignature.c_str(), uint32_t(m_pContractCompiledData->perAddressStateVariableSignature.length()));
-		else
+		int idx = int(_details::RvmScopeToPredaScope(scope));
+		if (idx == 0)		// 0 corresponds to None
 			return false;
+
+		signature_out->Append(m_pContractCompiledData->scopeStateVarMeta[idx].signature.c_str(), uint32_t(m_pContractCompiledData->scopeStateVarMeta[idx].signature.length()));
 
 		return true;
 	}

@@ -58,7 +58,7 @@ protected:
 	virtual rvm::ConstString			GetCoreDAppName() const override { return {"core", 4}; }
 	virtual rvm::AggregatedRepository*	GetContractRepository() override { return nullptr; }
 
-	virtual void						DebugPrint(rvm::DebugMessageType type, const rvm::ConstString* string, const rvm::ExecutionState* ctx_opt, const rvm::Contract* contract_opt) override;
+	virtual void						DebugPrint(rvm::DebugMessageType type, const rvm::ConstString* string, const rvm::ExecutionState* ctx_opt, const rvm::Contract* contract_opt, int32_t line) override;
 
 protected:
 	// Scripting
@@ -113,6 +113,7 @@ protected:
 	bool 							_ExecTxnLog(const CmdParse& cmd, rt::Json& json);
 	bool							_ExecTraceLog(const CmdParse& cmd, rt::Json& json);
 	void							_ExecProfileLog(rt::Json& json);
+	bool							_GetContractFunction(const CmdParse& cmd, ContractFunction& fi) const;
 	bool							_ProcessTargetRequest(rt::String& out, uint32_t LineNum, bool shardReq);
 	bool							_ProcessIdentifierRequest(const CmdParse& cmd, rt::String& id_name, int& index, bool isTrace);
 	void							_ConvertQueueToTxnPool();
@@ -129,6 +130,7 @@ public:
 
 	rvm::Scope		PrepareTxn(rvm::ContractId cid, rvm::OpCode opcode, rvm::BuildNum& buildnum_inout) const;
 	uint32_t		GetShardIndex(const rvm::Address& a) const { return rvm::_details::ADDRESS_SHARD_DWORD(a)&_ShardBitmask; }
+	uint32_t		GetShardIndex(const ScopeTarget& a) const { return rvm::_details::SCOPEKEY_SHARD_DWORD(rvm::ScopeKey{ (uint8_t*)&a, a.target_size }) &_ShardBitmask; }
 	uint32_t		GetShardCount() const { return 1<<_ShardOrder; }
 	auto*			GetShard(uint32_t i){ return _Shards[i]; }
 	auto*			GetShard(uint32_t i) const { return _Shards[i]; }

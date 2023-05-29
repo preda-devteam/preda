@@ -1,6 +1,8 @@
-#include "ExpressionParser.h"
-
 #include <string>
+
+#include "ExpressionParser.h"
+#include "util.h"
+
 using ConcreteTypePtr = transpiler::ConcreteTypePtr;
 
 void GetIntergerWidthAndSignFromLiteralSuffix(const std::string &integerLiteral, std::string &outIntegerBody, size_t &outBitWidth, bool &outIsSigned)
@@ -132,6 +134,10 @@ bool IsLongIntegerLiteralInRange(std::string& literalBody, size_t bitWidth, bool
 	size_t maxValueLen = maxValue.length();
 	if(literalIsNonPositive)
 	{
+		if (!bIsSigned)
+		{
+			return false;
+		}
 		maxValue[maxValue.length() - 1] = '8';
 	}
 	if (str.length()  > maxValueLen)
@@ -189,7 +195,7 @@ bool IsIntegerLiteralInRange(std::string &literalBody, size_t bitWidth, bool bIs
 			return false;
 		curValue *= base;
 
-		uint64_t curDigit;
+		uint8_t curDigit;
 		if (literalBody[i] >= '0' && literalBody[i] <= '9')
 			curDigit = literalBody[i] - '0';
 		else if (literalBody[i] >= 'a' && literalBody[i] <= 'f')
@@ -209,7 +215,7 @@ bool IsIntegerLiteralInRange(std::string &literalBody, size_t bitWidth, bool bIs
 	return true;
 }
 
-bool ExpressionParser::ParseIdentifier_Internal(PredaParser::IdentifierContext *ctx, ExpressionResult &outResult)
+bool ExpressionParser::ParseIdentifier_Internal(PredaParser::IdentifierContext *ctx, ExpressionResult &outResult, bool requireConst)
 {
 	std::string identifierName = ctx->getText();
 
@@ -234,42 +240,69 @@ bool ExpressionParser::ParseIdentifier_Internal(PredaParser::IdentifierContext *
 	}
 
 	// otherwise it's an identifier
-	uint32_t curFunctionContextClass = m_pTranspilerCtx->functionCtx.GetFunctionSignature()->flags & uint32_t(transpiler::PredaFunctionFlags::ContextClassMask);
-	uint32_t identifierContextClass = pDefinedIdentifier->flags & uint32_t(transpiler::PredaDefinedVariableFlags::ContextClassMask);
-	if (m_pTranspilerCtx->functionCtx.GetFunctionSignature())
-	{
-		if (curFunctionContextClass < identifierContextClass)
+	bool isConstMem = m_pIdentifierHub->GetConstMemberDefinition(pDefinedIdentifier, outResult.text); //is iddentifier is a const member var, outResult.text will be set to its definition
+	//if requireConst is true, ParseIdentifier_Internal is called from defineConstVariable
+	if (requireConst) {
+		bool tmp;
+		if (!isConstMem) //processing non-const variable in a const variable declaration
 		{
 			m_pErrorPortal->SetAnchor(ctx->start);
-			m_pErrorPortal->AddAccessVariableOfHigherContextClassError(identifierName);
+			m_pErrorPortal->AssigningMemberVarToConstVarError(identifierName);
 			return false;
 		}
-	}
-
-	outResult.type = pDefinedIdentifier->qualifiedType;
-	outResult.text = pDefinedIdentifier->outputName;
-	outResult.bIsTypeName = false;
-
-	// if we are inside a const function, all variables in the scope right outside it are limited to const access
-	if (m_pTranspilerCtx->thisPtrStack.stack.size() > 0
-		&& outerType == m_pTranspilerCtx->thisPtrStack.stack.back().thisType
-		&& m_pTranspilerCtx->thisPtrStack.stack.back().bIsConstPtr)
+		if (outerType == m_pTranspilerCtx->globalType && m_pTranspilerCtx->globalType->GetMember(identifierName, &tmp) != nullptr) //using global context's member in a const variable declaration
+		{
+			m_pErrorPortal->SetAnchor(ctx->start);
+			m_pErrorPortal->AddAssignToConstError();
+			return false;
+		}
+		outResult.type = pDefinedIdentifier->qualifiedType;
 		outResult.type.bIsConst = true;
-
-	if (identifierContextClass == uint32_t(transpiler::PredaFunctionFlags::ContextClassGlobal))
-	{
-		// set global state dependency flag
-		m_pTranspilerCtx->functionCtx.GetFunctionSignature()->flags |= uint32_t(transpiler::PredaFunctionFlags::GlobalStateDependency);
-
-		// global state variables are read-only in non-global functions
-		if (curFunctionContextClass != uint32_t(transpiler::PredaFunctionFlags::ContextClassGlobal))
-			outResult.type.bIsConst = true;
 	}
+	else
+	{
+		if (isConstMem) //searching for constant member variable in a function call
+		{
+			outResult.type = pDefinedIdentifier->qualifiedType;
+			outResult.type.bIsConst = true;
+			return true;
+		}
+		uint32_t curFunctionScope = m_pTranspilerCtx->functionCtx.GetFunctionSignature()->flags & uint32_t(transpiler::ScopeType::Mask);
+		uint32_t identifierScope = pDefinedIdentifier->flags & uint32_t(transpiler::ScopeType::Mask);
+		if (m_pTranspilerCtx->functionCtx.GetFunctionSignature())
+		{
+			if ((identifierScope > uint32_t(transpiler::ScopeType::Shard) && identifierScope < curFunctionScope) || identifierScope > curFunctionScope)
+			{
+				m_pErrorPortal->SetAnchor(ctx->start);
+				m_pErrorPortal->AddIdentifierScopeUnaccessibleError(identifierName, util::ScopeTypeToString(transpiler::ScopeType(identifierScope)), util::ScopeTypeToString(transpiler::ScopeType(curFunctionScope)));
+				return false;
+			}
+		}
 
+		outResult.type = pDefinedIdentifier->qualifiedType;
+		outResult.text = pDefinedIdentifier->outputName;
+		outResult.bIsTypeName = false;
+
+		// if we are inside a const function, all variables in the scope right outside it are limited to const access
+		if (m_pTranspilerCtx->thisPtrStack.stack.size() > 0
+			&& outerType == m_pTranspilerCtx->thisPtrStack.stack.back().thisType
+			&& m_pTranspilerCtx->thisPtrStack.stack.back().bIsConstPtr)
+			outResult.type.bIsConst = true;
+
+		if (identifierScope == uint32_t(transpiler::ScopeType::Global))
+		{
+			// set global state dependency flag
+			m_pTranspilerCtx->functionCtx.GetFunctionSignature()->flags |= uint32_t(transpiler::FunctionFlags::GlobalStateDependency);
+
+			// global state variables are read-only in non-global functions
+			if (curFunctionScope != uint32_t(transpiler::ScopeType::Global))
+				outResult.type.bIsConst = true;
+		}
+	}
 	return true;
 }
 
-bool ExpressionParser::ParsePrimaryExpression(PredaParser::PrimaryExpressionContext *ctx, ExpressionResult &outResult)
+bool ExpressionParser::ParsePrimaryExpression(PredaParser::PrimaryExpressionContext *ctx, ExpressionResult &outResult, bool requireConst)
 {
 	if (ctx->BooleanLiteral())
 	{
@@ -287,7 +320,7 @@ bool ExpressionParser::ParsePrimaryExpression(PredaParser::PrimaryExpressionCont
 		if (!IsIntegerLiteralInRange(literalBody, bitWidth, bIsSigned, ctx->DecimalIntegerLiteral() ? 10 : 16))
 		{
 			m_pErrorPortal->SetAnchor(ctx->start);
-			m_pErrorPortal->AddConstantTooLargeError();
+			m_pErrorPortal->AddConstantOutOfRangeError();
 			return false;
 		}
 		outResult.type = transpiler::QualifiedConcreteType(m_pTranspilerCtx->GetBuiltInIntegerType(bitWidth, bIsSigned), true, false);
@@ -338,7 +371,7 @@ bool ExpressionParser::ParsePrimaryExpression(PredaParser::PrimaryExpressionCont
 		std::string literalBody = ctx->getText();
 		std::string::size_type offset = literalBody.rfind(':');
 		std::string encoding = literalBody.substr(offset + 1);
-		if (encoding != "ed25519" || offset != 58)
+		if ((encoding != "ed25519" && encoding != "contract") || offset != 58)
 		{
 			m_pErrorPortal->SetAnchor(ctx->start);
 			m_pErrorPortal->AddInvalidAddressLiteralError(literalBody);
@@ -357,7 +390,7 @@ bool ExpressionParser::ParsePrimaryExpression(PredaParser::PrimaryExpressionCont
 		if (encoding != "hash" || offset != 52)
 		{
 			m_pErrorPortal->SetAnchor(ctx->start);
-			m_pErrorPortal->AddInvalidAddressLiteralError(literalBody);
+			m_pErrorPortal->AddInvalidHashLiteralError(literalBody);
 			return false;
 		}
 		outResult.type = transpiler::QualifiedConcreteType(m_pTranspilerCtx->GetBuiltInHashType(), false, false);
@@ -367,7 +400,7 @@ bool ExpressionParser::ParsePrimaryExpression(PredaParser::PrimaryExpressionCont
 	}
 	else if (ctx->identifier())
 	{
-		return ParseIdentifier_Internal(ctx->identifier(), outResult);
+		return ParseIdentifier_Internal(ctx->identifier(), outResult, requireConst);
 	}
 	else if (ctx->fundamentalTypeName())
 	{
@@ -428,9 +461,9 @@ bool ExpressionParser::ValidateExpressionResult(const ExpressionResult &result)
 	return true;
 }
 
-bool ExpressionParser::ParseExpression(PredaParser::ExpressionContext *ctx, ExpressionResult &outResult)
+bool ExpressionParser::ParseExpression(PredaParser::ExpressionContext *ctx, ExpressionResult &outResult, bool requireConst)
 {
-	if (!ParseExpression_Internal(ctx, outResult))
+	if (!ParseExpression_Internal(ctx, outResult, requireConst))
 		return false;
 
 	m_pErrorPortal->SetAnchor(ctx->start);
@@ -446,7 +479,7 @@ bool ExpressionParser::ParseIdentifierAsExpression(PredaParser::IdentifierContex
 	return ValidateExpressionResult(outResult);
 }
 
-bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *ctx, ExpressionResult &outResult)
+bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *ctx, ExpressionResult &outResult, bool requireConst)
 {
 	if (transpiler::PredaExpressionTypes(ctx->expressionType) == transpiler::PredaExpressionTypes::UnaryMinus && ctx->expression(0)->primaryExpression())
 	{
@@ -466,7 +499,7 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 			if (!IsIntegerLiteralInRange(literalBody, bitWidth, bIsSigned, ctx->expression(0)->primaryExpression()->DecimalIntegerLiteral() ? 10 : 16))
 			{
 				m_pErrorPortal->SetAnchor(ctx->start);
-				m_pErrorPortal->AddConstantTooLargeError();
+				m_pErrorPortal->AddConstantOutOfRangeError();
 				return false;
 			}
 			outResult.type = transpiler::QualifiedConcreteType(m_pTranspilerCtx->GetBuiltInIntegerType(bitWidth, bIsSigned), true, false);
@@ -510,7 +543,7 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 	std::vector<ExpressionResult> subExpRes(subExpressions.size());
 	for (size_t i = 0; i < subExpressions.size(); i++)
 	{
-		if (!ParseExpression_Internal(ctx->expression(i), subExpRes[i]))
+		if (!ParseExpression_Internal(ctx->expression(i), subExpRes[i], requireConst))
 			return false;
 
 		// type name expression can only be the first sub expression
@@ -523,7 +556,7 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 	}
 
 	if (transpiler::PredaExpressionTypes(ctx->expressionType) == transpiler::PredaExpressionTypes::Primary)
-		return ParsePrimaryExpression(ctx->primaryExpression(), outResult);
+		return ParsePrimaryExpression(ctx->primaryExpression(), outResult, requireConst);
 
 	// First handle the case of type name expressions
 	assert(subExpressions.size() > 0);
@@ -563,8 +596,8 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 
 			if (m_pTranspilerCtx->functionCtx.GetFunctionSignature())
 			{
-				uint32_t curFunctionContextClass = m_pTranspilerCtx->functionCtx.GetFunctionSignature()->flags & uint32_t(transpiler::PredaFunctionFlags::ContextClassMask);
-				uint32_t calleeContextClass = signature.flags & uint32_t(transpiler::PredaFunctionFlags::ContextClassMask);
+				uint32_t curFunctionContextClass = m_pTranspilerCtx->functionCtx.GetFunctionSignature()->flags & uint32_t(transpiler::ScopeType::Mask);
+				uint32_t calleeContextClass = signature.flags & uint32_t(transpiler::ScopeType::Mask);
 				if (curFunctionContextClass < calleeContextClass)
 				{
 					m_pErrorPortal->AddInternalError(ctx->start, "constructor of \"" + subExpressions[0]->getText() + "\" has a higher context class than the current function and is not accessible. Probably a compiler bug.");
@@ -615,7 +648,15 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 				transpiler::QualifiedConcreteType memberType = pMember->qualifiedType;
 
 				outResult.bIsTypeName = false;
-				outResult.text = subExpRes[0].text + (memberType.baseConcreteType->typeCategory == transpiler::ConcreteType::EnumType ? "__" : "") + "::" + pMember->outputName;
+				if (memberType.baseConcreteType->typeCategory == transpiler::ConcreteType::EnumType)
+				{
+					outResult.text = subExpRes[0].text + "(" + subExpRes[0].text + "__::" + pMember->outputName + ")";
+				}
+				else
+				{
+					outResult.text = subExpRes[0].text + "::" + pMember->outputName;
+				}
+
 				outResult.type = memberType;
 
 				return true;
@@ -910,7 +951,7 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 
 		transpiler::FunctionSignature &signature = subExpRes[0].type.baseConcreteType->vOverloadedFunctions[overloadFuncIndex];
 
-		if (subExpRes[0].type.bIsConst && ((signature.flags & uint32_t(transpiler::PredaFunctionFlags::IsConst)) == 0))
+		if (subExpRes[0].type.bIsConst && ((signature.flags & uint32_t(transpiler::FunctionFlags::IsConst)) == 0))
 		{
 			m_pErrorPortal->SetAnchor(ctx->start);
 			m_pErrorPortal->AddCallNonConstFromConstContextError(subExpressions[0]->getText());
@@ -919,19 +960,19 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 
 		if (m_pTranspilerCtx->functionCtx.GetFunctionSignature())
 		{
-			uint32_t curFunctionContextClass = m_pTranspilerCtx->functionCtx.GetFunctionSignature()->flags & uint32_t(transpiler::PredaFunctionFlags::ContextClassMask);
-			uint32_t calleeContextClass = signature.flags & uint32_t(transpiler::PredaFunctionFlags::ContextClassMask);
-			if (curFunctionContextClass < calleeContextClass)
+			uint32_t curFunctionScope = m_pTranspilerCtx->functionCtx.GetFunctionSignature()->flags & uint32_t(transpiler::ScopeType::Mask);
+			uint32_t calleeScope = signature.flags & uint32_t(transpiler::ScopeType::Mask);
+			if ((calleeScope > uint32_t(transpiler::ScopeType::Shard) && calleeScope < curFunctionScope) || calleeScope > curFunctionScope)
 			{
 				m_pErrorPortal->SetAnchor(ctx->start);
-				m_pErrorPortal->AddAccessFunctionOfHigherContextClassError(subExpressions[0]->getText());
+				m_pErrorPortal->AddIdentifierScopeUnaccessibleError(subExpressions[0]->getText(), util::ScopeTypeToString(transpiler::ScopeType(calleeScope)), util::ScopeTypeToString(transpiler::ScopeType(curFunctionScope)));
 				return false;
 			}
 
 			// A global function is accessible from non-global functions only if it is const and doesn't have relay@shards
-			if (curFunctionContextClass != uint32_t(transpiler::PredaFunctionFlags::ContextClassGlobal)
-				&& calleeContextClass == uint32_t(transpiler::PredaFunctionFlags::ContextClassGlobal)
-				&& (((signature.flags & uint32_t(transpiler::PredaFunctionFlags::IsConst)) == 0) || ((signature.flags & uint32_t(transpiler::PredaFunctionFlags::HasRelayShardsStatement)) != 0))
+			if (curFunctionScope != uint32_t(transpiler::ScopeType::Global)
+				&& calleeScope == uint32_t(transpiler::ScopeType::Global)
+				&& (((signature.flags & uint32_t(transpiler::FunctionFlags::IsConst)) == 0) || ((signature.flags & uint32_t(transpiler::FunctionFlags::HasRelayShardsStatement)) != 0))
 				)
 			{
 				m_pErrorPortal->SetAnchor(ctx->start);
@@ -1088,7 +1129,7 @@ int ExpressionParser::FindMatchingOverloadedFunction(const ConcreteTypePtr &call
 
 		if (parameterListMatch)
 		{
-			if ((functionSignature.flags & uint32_t(transpiler::PredaFunctionFlags::CallableFromSystem)) != 0)
+			if ((functionSignature.flags & uint32_t(transpiler::FunctionFlags::CallableFromSystem)) != 0)
 			{
 				m_pErrorPortal->SetAnchor(ctx->start);
 				m_pErrorPortal->AddCallSystemReservedFunctionError();
@@ -1107,7 +1148,7 @@ bool ExpressionParser::GenerateDebugPrintArguments(PredaParser::FunctionCallArgu
 {
 	std::vector<PredaParser::ExpressionContext *> argCtxs = ctx->expression();
 
-	outSynthesizedArgumentsString = "";
+	outSynthesizedArgumentsString = std::to_string((uint32_t)ctx->start->getLine()) + ", ";
 	bool bFirstArg = true;
 	for (size_t i = 0; i < argCtxs.size(); i++)
 	{

@@ -1,6 +1,7 @@
 #include <assert.h>
 #include "RvmContractDelegate.h"
 #include <sstream>
+#include <array>
 
 uint32_t PredaFunctionFlagsToRvmContractFlags(uint32_t flags)
 {
@@ -8,41 +9,27 @@ uint32_t PredaFunctionFlagsToRvmContractFlags(uint32_t flags)
 
 	// convert flags from preda definition to vm interface definition
 
-	// block dependency are no longer used, TODO: remove corresponding PREDA flags as well
-	//if (flags & uint32_t(transpiler::PredaFunctionFlags::BlockDependencyEntropy))
-	//	ret |= uint32_t(rvm::FunctionFlag::BlockDependencySecureEntropy);
-	//else if (flags & uint32_t(transpiler::PredaFunctionFlags::BlockDependencyPayload))
-	//	ret |= uint32_t(rvm::FunctionFlag::BlockDependencyBlock);
-	//else if (flags & uint32_t(transpiler::PredaFunctionFlags::BlockDependencyPosition))
-	//	ret |= uint32_t(rvm::FunctionFlag::BlockDependencyPosition);
-	//else
-	//	ret |= uint32_t(rvm::FunctionFlag::BlockDependencyNone);
-
 	// invokability
-	if (flags & uint32_t(transpiler::PredaFunctionFlags::CallableFromTransaction))
+	if (flags & uint32_t(transpiler::FunctionFlags::CallableFromTransaction))
 		ret |= uint32_t(rvm::FunctionFlag::InvokeByNormalTransaction);
-	if (flags & uint32_t(transpiler::PredaFunctionFlags::CallableFromRelay))
+	if (flags & uint32_t(transpiler::FunctionFlags::CallableFromRelay))
 		ret |= uint32_t(rvm::FunctionFlag::InvokeByRelayTransaction);
-	if (flags & uint32_t(transpiler::PredaFunctionFlags::CallableFromSystem))
+	if (flags & uint32_t(transpiler::FunctionFlags::CallableFromSystem))
 		ret |= uint32_t(rvm::FunctionFlag::InvokeBySystem);
 
-	// transaction dependency not longer used, TODO: remove corresponding PREDA flags as well
-	//if (flags & uint32_t(transpiler::PredaFunctionFlags::TransactionDependency))
-	//	ret |= uint32_t(rvm::FunctionFlag::TransactionDependency);
-
 	// const-ness
-	if (flags & uint32_t(transpiler::PredaFunctionFlags::IsConst))
+	if (flags & uint32_t(transpiler::FunctionFlags::IsConst))
 		ret |= uint32_t(rvm::FunctionFlag::StateImmutable);
 
 	// relays
-	if (flags & uint32_t(transpiler::PredaFunctionFlags::HasRelayAddressStatement))
+	if (flags & uint32_t(transpiler::FunctionFlags::HasRelayScopeStatement))
 		ret |= uint32_t(rvm::FunctionFlag::EmitRelayInAddressScope);
-	if (flags & uint32_t(transpiler::PredaFunctionFlags::HasRelayShardsStatement))
+	if (flags & uint32_t(transpiler::FunctionFlags::HasRelayShardsStatement))
 		ret |= uint32_t(rvm::FunctionFlag::EmitRelayInShardScope);
-	if (flags & uint32_t(transpiler::PredaFunctionFlags::HasRelayGlobalStatement))
+	if (flags & uint32_t(transpiler::FunctionFlags::HasRelayGlobalStatement))
 		ret |= uint32_t(rvm::FunctionFlag::EmitRelayInGlobalScope);
 
-	if (flags & uint32_t(transpiler::PredaFunctionFlags::GlobalStateDependency))
+	if (flags & uint32_t(transpiler::FunctionFlags::GlobalStateDependency))
 		ret |= uint32_t(rvm::FunctionFlag::GlobalStateDependency);
 
 	return ret;
@@ -59,19 +46,21 @@ RvmContractDelegate::RvmContractDelegate(ContractCompileData* pContractCompiledD
 	if (pContractCompiledData->globalDeployFunctionIdx >= 0)
 	{
 		m_flag |= uint32_t(rvm::ContractFlag::HasGlobalDeploy);
-		m_globalDeployOpCode = rvm::OpCode(pContractCompiledData->globalDeployFunctionIdx);
+		m_onDeployOpCode = rvm::OpCode(pContractCompiledData->globalDeployFunctionIdx);
 	}
 	if (pContractCompiledData->shardScaleOutFunctionIdx >= 0)
 	{
 		m_flag |= uint32_t(rvm::ContractFlag::HasShardScaleOut);
-		m_shardScaleOutOpCode = rvm::OpCode(pContractCompiledData->shardScaleOutFunctionIdx);
+		m_onScaleOutOpCode = rvm::OpCode(pContractCompiledData->shardScaleOutFunctionIdx);
 	}
 
+	// hash
+	m_hash = pContractCompiledData->intermediateHash;
+
 	// scopes
-	m_scopes.resize(3);
-	m_scopes[0] = { rvm::Scope::Global, 0, "global", rvm::_details::CONTRACT_SET_SCOPE(m_pDeployData ? m_pDeployData->contractId : rvm::ContractId(-1), rvm::Scope::Global) };
-	m_scopes[1] = { rvm::Scope::Shard, 0, "shard", rvm::_details::CONTRACT_SET_SCOPE(m_pDeployData ? m_pDeployData->contractId : rvm::ContractId(-1), rvm::Scope::Shard) };
-	m_scopes[2] = { rvm::Scope::Address, 0, "address", rvm::_details::CONTRACT_SET_SCOPE(m_pDeployData ? m_pDeployData->contractId : rvm::ContractId(-1), rvm::Scope::Address) };
+	// first check which scopes have state variables
+	std::array<std::underlying_type_t<rvm::ScopeDefinitionFlag>, int(transpiler::ScopeType::Num)> scopeFlags;
+	scopeFlags.fill(0);
 
 	{
 		auto NotEmptyStateSignature = [](const std::string& str)
@@ -82,17 +71,12 @@ RvmContractDelegate::RvmContractDelegate(ContractCompileData* pContractCompiledD
 			return a == "struct" && b != "0";
 		};
 
-		if (NotEmptyStateSignature(pContractCompiledData->globalStateVariableSignature))
-			m_scopes[uint32_t(rvm::Scope::Global)].flags |= uint32_t(rvm::ScopeDefinitionFlag::HasState);
-		if (NotEmptyStateSignature(pContractCompiledData->perShardStateVariableSignature))
-			m_scopes[uint32_t(rvm::Scope::Shard)].flags |= uint32_t(rvm::ScopeDefinitionFlag::HasState);
-		if (NotEmptyStateSignature(pContractCompiledData->perAddressStateVariableSignature))
-			m_scopes[uint32_t(rvm::Scope::Address)].flags |= uint32_t(rvm::ScopeDefinitionFlag::HasState);
+		for (int i = 0; i < int(transpiler::ScopeType::Num); i++)
+			if (NotEmptyStateSignature(pContractCompiledData->scopeStateVarMeta[i].signature))
+				scopeFlags[uint32_t(transpiler::ScopeType(i))] |= uint32_t(rvm::ScopeDefinitionFlag::HasState);
 	}
 
-	// hash
-	m_hash = pContractCompiledData->intermediateHash;
-
+	// and which scopes have function
 	for (size_t i = 0; i < pContractCompiledData->functions.size(); i++)
 	{
 		m_functions.push_back(Function());
@@ -105,23 +89,20 @@ RvmContractDelegate::RvmContractDelegate(ContractCompileData* pContractCompiledD
 
 		// function flags
 		m_functions.back().flags = rvm::FunctionFlag(PredaFunctionFlagsToRvmContractFlags(pContractCompiledData->functions[i].flags));
-		uint32_t sectionMask = pContractCompiledData->functions[i].flags & uint32_t(transpiler::PredaFunctionFlags::ContextClassMask);
-		if (sectionMask == uint32_t(transpiler::PredaFunctionFlags::ContextClassGlobal))
-		{
-			m_functions.back().scope = rvm::Scope::Global;
-			m_scopes[uint32_t(rvm::Scope::Global)].flags |= uint32_t(rvm::ScopeDefinitionFlag::HasFunction);
-		}
-		else if (sectionMask == uint32_t(transpiler::PredaFunctionFlags::ContextClassShard))
-		{
-			m_functions.back().scope = rvm::Scope::Shard;
-			m_scopes[uint32_t(rvm::Scope::Shard)].flags |= uint32_t(rvm::ScopeDefinitionFlag::HasFunction);
-		}
-		else if (sectionMask == uint32_t(transpiler::PredaFunctionFlags::ContextClassAddress))
-		{
-			m_functions.back().scope = rvm::Scope::Address;
-			m_scopes[uint32_t(rvm::Scope::Address)].flags |= uint32_t(rvm::ScopeDefinitionFlag::HasFunction);
-		}
+		uint32_t scopeType = pContractCompiledData->functions[i].flags & uint32_t(transpiler::FunctionFlags::ScopeTypeMask);
+		rvm::Scope rvmScope = _details::PredaScopeToRvmScope(transpiler::ScopeType(scopeType));
+		m_functions.back().scope = rvmScope;
+		scopeFlags[scopeType] |= uint32_t(rvm::ScopeDefinitionFlag::HasFunction);
 	}
+
+	// only count scopes that have state or function, do no report the others
+	static constexpr const char scopeTypeNames[int(transpiler::ScopeType::Num)][20] = { "none", "global", "shard", "address", "uint16", "uint32", "uint64", "uint256", "uint512" };
+	for (int i = 0; i < int(transpiler::ScopeType::Num); i++)
+		if (scopeFlags[i] != 0)
+		{
+			rvm::Scope rvmScope = _details::PredaScopeToRvmScope(transpiler::ScopeType(i));
+			m_scopes.push_back({ rvmScope, scopeFlags[i], scopeTypeNames[i], rvm::_details::CONTRACT_SET_SCOPE(m_pDeployData ? m_pDeployData->contractId : rvm::ContractId(-1), rvmScope) });
+		}
 }
 
 rvm::ConstString RvmContractDelegate::GetName() const
@@ -173,15 +154,24 @@ rvm::Scope RvmContractDelegate::GetFunctionScope(uint32_t idx) const
 }
 bool RvmContractDelegate::GetFunctionSignature(uint32_t idx, rvm::StringStream* signature_out) const
 {
-	// TODO: implement
-	return false;
+	if (idx >= uint32_t(m_functions.size()))
+		return false;
+	std::string tmp;
+	for (std::pair<std::string, std::string> p : m_pContractCompiledData->functions[idx].parameters)
+	{
+		tmp += p.first + " " + p.second + " ";
+	}
+	if(tmp.size() > 0)
+		signature_out->Append(tmp.c_str(), (uint32_t)tmp.length() - 1); //remove the last space
+
+	return true;
 }
 
 
 void RvmContractDelegate::GetSystemFunctionOpCodes(rvm::SystemFunctionOpCodes* out) const
 {
 	constexpr rvm::OpCode invalidOpCode = rvm::OpCode(std::numeric_limits<std::underlying_type_t<rvm::OpCode>>::max());
-	out->ShardScaleOut = (m_flag & uint32_t(rvm::ContractFlag::HasShardScaleOut)) != 0 ? m_shardScaleOutOpCode : invalidOpCode;
+	out->ShardScaleOut = (m_flag & uint32_t(rvm::ContractFlag::HasShardScaleOut)) != 0 ? m_onScaleOutOpCode : invalidOpCode;
 	out->ShardDeploy = (m_flag & uint32_t(rvm::ContractFlag::HasShardDeploy)) != 0 ? m_shardDeployOpCode : invalidOpCode;
-	out->GlobalDeploy = (m_flag & uint32_t(rvm::ContractFlag::HasGlobalDeploy)) != 0 ? m_globalDeployOpCode : invalidOpCode;
+	out->GlobalDeploy = (m_flag & uint32_t(rvm::ContractFlag::HasGlobalDeploy)) != 0 ? m_onDeployOpCode : invalidOpCode;
 }

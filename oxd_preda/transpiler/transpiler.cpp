@@ -317,66 +317,27 @@ public:
 		return int32_t(m_listener.m_implementedInterfaces[interfaceIdx].functionIds[functionIdx]);
 	}
 
-	virtual const char* GetPerAddressStateVariableSignature() const override
+	virtual const char* GetScopeStateVariableSignature(transpiler::ScopeType scope) const override
 	{
-		return m_listener.m_stateVariableSignature[uint8_t(transpiler::PredaDefinedVariableFlags::ContextClassAddress)].c_str();
+		return m_listener.m_stateVariableSignature[uint8_t(scope)].c_str();
 	}
-	virtual uint32_t GetNumPerAddressStateVariable() const override
+	virtual uint32_t GetNumScopeStateVariable(transpiler::ScopeType scope) const override
 	{
-		return (uint32_t)m_listener.m_stateVariableDoxygenComment[uint8_t(transpiler::PredaDefinedVariableFlags::ContextClassAddress)].size();
+		return (uint32_t)m_listener.m_stateVariableDoxygenComment[uint8_t(scope)].size();
 	}
-	virtual const char* GetPerAddressStateVariableComment(uint32_t varIdx) const override
+	virtual const char* GetScopeStateVariableComment(transpiler::ScopeType scope, uint32_t varIdx) const override
 	{
-		return m_listener.m_stateVariableDoxygenComment[uint8_t(transpiler::PredaDefinedVariableFlags::ContextClassAddress)].at(varIdx).c_str();
+		return m_listener.m_stateVariableDoxygenComment[uint8_t(scope)].at(varIdx).c_str();
 	}
-	virtual bool PerAddressStateVariableHasAsset() const override
+	virtual bool ScopeStateVariableHasAsset(transpiler::ScopeType scope) const override
 	{
-		return m_listener.m_stateVariableHasAsset[uint8_t(transpiler::PredaDefinedVariableFlags::ContextClassAddress)];
+		return m_listener.m_stateVariableHasAsset[uint8_t(scope)];
 	}
-	virtual bool PerAddressStateVariableHasBlob() const override
+	virtual bool ScopeStateVariableHasBlob(transpiler::ScopeType scope) const override
 	{
-		return m_listener.m_stateVariableHasBlob[uint8_t(transpiler::PredaDefinedVariableFlags::ContextClassAddress)];
+		return m_listener.m_stateVariableHasBlob[uint8_t(scope)];
 	}
-	virtual const char* GetPerShardStateVariableSignature() const override
-	{
-		return m_listener.m_stateVariableSignature[uint8_t(transpiler::PredaDefinedVariableFlags::ContextClassShard)].c_str();
-	}
-	virtual uint32_t GetNumPerShardStateVariable() const override
-	{
-		return (uint32_t)m_listener.m_stateVariableDoxygenComment[uint8_t(transpiler::PredaDefinedVariableFlags::ContextClassShard)].size();
-	}
-	virtual const char* GetPerShardStateVariableComment(uint32_t varIdx) const override
-	{
-		return m_listener.m_stateVariableDoxygenComment[uint8_t(transpiler::PredaDefinedVariableFlags::ContextClassShard)].at(varIdx).c_str();
-	}
-	virtual bool PerShardStateVariableHasAsset() const override
-	{
-		return m_listener.m_stateVariableHasAsset[uint8_t(transpiler::PredaDefinedVariableFlags::ContextClassShard)];
-	}
-	virtual bool PerShardStateVariableHasBlob() const override
-	{
-		return m_listener.m_stateVariableHasBlob[uint8_t(transpiler::PredaDefinedVariableFlags::ContextClassShard)];
-	}
-	virtual const char* GetGlobalStateVariableSignature() const override
-	{
-		return m_listener.m_stateVariableSignature[uint8_t(transpiler::PredaDefinedVariableFlags::ContextClassGlobal)].c_str();
-	}
-	virtual uint32_t GetNumGlobalStateVariable() const override
-	{
-		return (uint32_t)m_listener.m_stateVariableDoxygenComment[uint8_t(transpiler::PredaDefinedVariableFlags::ContextClassGlobal)].size();
-	}
-	virtual const char* GetGlobalStateVariableComment(uint32_t varIdx) const override
-	{
-		return m_listener.m_stateVariableDoxygenComment[uint8_t(transpiler::PredaDefinedVariableFlags::ContextClassGlobal)].at(varIdx).c_str();
-	}
-	virtual bool GlobalStateVariableHasAsset() const override
-	{
-		return m_listener.m_stateVariableHasAsset[uint8_t(transpiler::PredaDefinedVariableFlags::ContextClassGlobal)];
-	}
-	virtual bool GlobalStateVariableHasBlob() const override
-	{
-		return m_listener.m_stateVariableHasBlob[uint8_t(transpiler::PredaDefinedVariableFlags::ContextClassGlobal)];
-	}
+
 	virtual uint32_t GetNumEnumTypes() const override
 	{
 		return (uint32_t)m_listener.m_exportedEnums.size();

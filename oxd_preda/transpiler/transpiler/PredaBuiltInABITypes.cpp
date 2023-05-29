@@ -27,7 +27,7 @@ namespace transpiler {
 			bool res = true;
 			{
 				FunctionSignature signature;
-				signature.flags = uint32_t(PredaFunctionFlags::IsConst) | uint32_t(PredaFunctionFlags::BlockDependencyPosition);
+				signature.flags = uint32_t(FunctionFlags::IsConst);
 
 				signature.returnType = QualifiedConcreteType(pTranspilerContext->GetBuiltInIntegerType(64, false), true, false);
 				res = res && (DefineMemberFunction("get_height", signature, false) != nullptr);
@@ -39,7 +39,7 @@ namespace transpiler {
 
 			{
 				FunctionSignature signature;
-				signature.flags = uint32_t(PredaFunctionFlags::IsConst) | uint32_t(PredaFunctionFlags::BlockDependencyPosition) | uint32_t(PredaFunctionFlags::BlockDependencyPayload);
+				signature.flags = uint32_t(FunctionFlags::IsConst);
 				signature.returnType = QualifiedConcreteType(pTranspilerContext->GetBuiltInIntegerType(64, false), true, false);
 				res = res && (DefineMemberFunction("get_timestamp", signature, false) != nullptr);
 				res = res && (DefineMemberFunction("get_random_number", signature, false) != nullptr);
@@ -78,7 +78,7 @@ namespace transpiler {
 
 		{
 			bool res = true;
-			uint32_t flags = uint32_t(PredaFunctionFlags::IsConst);
+			uint32_t flags = uint32_t(FunctionFlags::IsConst);
 			{
 				ConcreteTypePtr transactionTypeEnumType = pTranspilerContext->globalType->CreateInnerEnumType("transaction_type");
 				assert(transactionTypeEnumType != nullptr);
@@ -90,11 +90,9 @@ namespace transpiler {
 				res = res && (DefineMemberFunction("get_type", FunctionSignature(QualifiedConcreteType(transactionTypeEnumType, true, false), std::vector<DefinedIdentifierPtr>(), flags), false) != nullptr);
 			}
 
-			res = res && (DefineMemberFunction("get_self_address", FunctionSignature(QualifiedConcreteType(pTranspilerContext->GetBuiltInAddressType(), true, false), std::vector<DefinedIdentifierPtr>(), flags | uint32_t(PredaFunctionFlags::ContextClassAddress)), false) != nullptr);
+			res = res && (DefineMemberFunction("get_self_address", FunctionSignature(QualifiedConcreteType(pTranspilerContext->GetBuiltInAddressType(), true, false), std::vector<DefinedIdentifierPtr>(), flags | uint32_t(ScopeType::Address)), false) != nullptr);
+			res = res && (DefineMemberFunction("get_sender", FunctionSignature(QualifiedConcreteType(pTranspilerContext->GetBuiltInAddressType(), true, false), std::vector<DefinedIdentifierPtr>(), flags), false) != nullptr);
 			res = res && (DefineMemberFunction("get_timestamp", FunctionSignature(QualifiedConcreteType(pTranspilerContext->GetBuiltInIntegerType(64, false), true, false), std::vector<DefinedIdentifierPtr>(), flags), false) != nullptr);
-
-			// All functions below are only available when a transaction is present
-			flags |= uint32_t(PredaFunctionFlags::TransactionDependency);
 
 			{
 				std::vector<ConcreteTypePtr> templateParams(1, pTranspilerContext->GetBuiltInAddressType());
@@ -151,11 +149,11 @@ namespace transpiler {
 		res = res && (uiEventStateEnumType->DefineMemberVariable(uiEventStateEnumType, "activated", 0, true, false, true) != nullptr);
 		res = res && (uiEventStateEnumType->DefineMemberVariable(uiEventStateEnumType, "locked", 0, true, false, true) != nullptr);
 		res = res && (uiEventStateEnumType->DefineMemberVariable(uiEventStateEnumType, "unlocked", 0, true, false, true) != nullptr);
-		res = res && (DefineMemberFunction("get_user_state", FunctionSignature(QualifiedConcreteType(uiEventStateEnumType, true, false), std::vector<DefinedIdentifierPtr>(), uint32_t(PredaFunctionFlags::IsConst)), false) != nullptr);
+		res = res && (DefineMemberFunction("get_user_state", FunctionSignature(QualifiedConcreteType(uiEventStateEnumType, true, false), std::vector<DefinedIdentifierPtr>(), uint32_t(FunctionFlags::IsConst)), false) != nullptr);
 
 		{
 			FunctionSignature signature;
-			signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+			signature.flags = uint32_t(FunctionFlags::IsConst);
 
 			signature.returnType = QualifiedConcreteType(nullptr, true, false);
 			signature.parameters.clear();
@@ -195,7 +193,7 @@ namespace transpiler {
 			bool res = true;
 			{
 				FunctionSignature signature;
-				signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+				signature.flags = uint32_t(FunctionFlags::IsConst);
 
 				signature.returnType = QualifiedConcreteType(nullptr, true, false);
 				signature.parameters.clear();
@@ -208,12 +206,13 @@ namespace transpiler {
 
 			{
 				FunctionSignature signature;
-				signature.flags = uint32_t(PredaFunctionFlags::IsConst);
+				signature.flags = uint32_t(FunctionFlags::IsConst);
 
 				signature.returnType = QualifiedConcreteType(nullptr, true, false);
 				signature.parameters.clear();
 				signature.parameters.push_back(Allocator::New<DefinedIdentifier>(pTranspilerContext->GetBuiltInBoolType(), true, true, "condition", 0));
-				//signature.parameters.push_back(Allocator::New<DefinedIdentifier>(pTranspilerContext->GetBuiltInStringType(), true, true, "message", 0));
+				res = res && (DefineMemberFunction("assert", signature, false) != nullptr);
+				signature.parameters.push_back(Allocator::New<DefinedIdentifier>(pTranspilerContext->GetBuiltInStringType(), true, true, "message", 0));
 				res = res && (DefineMemberFunction("assert", signature, false) != nullptr);
 			}
 

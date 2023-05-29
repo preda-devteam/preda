@@ -20,16 +20,28 @@ namespace prlrt {
 		relay_serialize_args(outBuffer, args...);
 	}
 
-	template<typename ...Args>
-	void relay(const __prlt_address &addr, uint32_t opCode, Args&& ...args)
+	//template<typename ...Args>
+	//void relay(const __prlt_address &addr, uint32_t opCode, Args&& ...args)
+	//{
+	//	std::vector<uint8_t> args_serialized;
+	//	g_inRelaySerialization = true;
+	//	relay_serialize_args(args_serialized, args...);
+	//	g_inRelaySerialization = false;
+
+	//	if (!PREDA_CALL(EmitRelayToAddress, (const uint8_t*)&addr, opCode, args_serialized.size() > 0 ? &args_serialized[0] : nullptr, uint32_t(args_serialized.size())))
+	//		throw preda_exception("relay@address error", prlrt::ExceptionType::RelayError);
+	//}
+
+	template<typename TScope, typename ...Args>
+	void relay(const TScope &scope_key, uint32_t scope_type, uint32_t opCode, Args&& ...args)
 	{
 		std::vector<uint8_t> args_serialized;
 		g_inRelaySerialization = true;
 		relay_serialize_args(args_serialized, args...);
 		g_inRelaySerialization = false;
 
-		if (!PREDA_CALL(EmitRelayToAddress, (const uint8_t*)&addr, opCode, args_serialized.size() > 0 ? &args_serialized[0] : nullptr, uint32_t(args_serialized.size())))
-			throw preda_exception("relay@address error", prlrt::ExceptionType::RelayError);
+		if (!PREDA_CALL(EmitRelayToScope, (const uint8_t*)&scope_key, sizeof(TScope), scope_type, opCode, args_serialized.size() > 0 ? &args_serialized[0] : nullptr, uint32_t(args_serialized.size())))
+			throw preda_exception("relay error", prlrt::ExceptionType::RelayError);
 	}
 
 	template<typename ...Args>

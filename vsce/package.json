@@ -2,7 +2,7 @@
   "name": "preda",
   "displayName": "PREDA Language Preview Toolchain",
   "description": "Local development environment for the PREDA smart contract programming language",
-  "version": "0.1.68",
+  "version": "0.1.79",
   "engines": {
     "vscode": "^1.56.0"
   },
@@ -20,6 +20,7 @@
     "onCommand:Preda.compileMultiple",
     "onCommand:Preda.view",
     "onLanguage:prdts",
+    "onLanguage:preda",
     "onLanguage:log"
   ],
   "main": "./out/src/extension.js",
@@ -249,10 +250,15 @@
     "webpack-cli": "^4.10.0"
   },
   "dependencies": {
+    "antlr4": "^4.12.0",
+    "antlr4ts": "^0.5.0-alpha.4",
     "dayjs": "^1.11.6",
     "ejs": "^3.1.8",
     "fs-extra": "^10.1.0",
-    "mustache": "^4.2.0"
+    "mustache": "^4.2.0",
+    "vscode-languageclient": "^8.1.0",
+    "vscode-languageserver": "^8.1.0",
+    "vscode-uri": "^3.0.7"
   },
   "repository": {
     "type": "git",

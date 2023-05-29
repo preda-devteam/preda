@@ -254,7 +254,7 @@
   }
   .shard-header {
     font-weight: 600;
-    font-size: 20px;
+    font-size: 16px;
     line-height: 24px;
     margin-bottom: 12px;
     margin-top: 24px;
@@ -465,8 +465,9 @@
   border-radius: 8px;
   margin-bottom: 24px;
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 240px auto;
   row-gap: 20px;
+  overflow-x: auto;
   .box-key {
     font-weight: 400;
     font-size: 16px;
@@ -476,6 +477,7 @@
     font-weight: 400;
     font-size: 16px;
     line-height: 20px;
+    overflow: unset!important;
   }
   &:not(:last-child) {
     margin-bottom: 20px;

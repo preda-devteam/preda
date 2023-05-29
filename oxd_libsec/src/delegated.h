@@ -20,10 +20,9 @@ namespace _details
 } // namespace _details
 
 
-#define DEF_DELEGATED_SUITE(id, name)							\
+#define DEF_SUITE(id, name, addr_size)							\
 	template<> struct SecSuite<id>								\
-	{	friend class SecuritySuite;								\
-	protected:													\
+	{															\
 		static const rt::String_Ref& Name(){ static const rt::SS r(name); return r; }	\
 		static const _details::SecSuiteEntry* _GetEntry()		\
 		{														\
@@ -33,7 +32,7 @@ namespace _details
 				_details::Delegated_GenerateKeypair,			\
 				_details::Delegated_DerivePublicKey,			\
 				_details::Delegated_DeriveAddress,				\
-				0, 0, 0, 32,									\
+				0, 0, 0, addr_size,								\
 				_details::Delegated_DeriveEncryptionPublicKey,	\
 				_details::Delegated_DeriveEncryptionPrivateKey,	\
 				_details::Delegated_Encrypt,					\
@@ -47,13 +46,19 @@ namespace _details
 		}														\
 	};
 
+#define DEF_DELEGATED_SUITE(id, name) DEF_SUITE(id, name, 32)
+
 DEF_DELEGATED_SUITE(SEC_SUITE_REGISTERED_DAPP, "dapp")			// [dapp_name].dapp registered by native contract
 DEF_DELEGATED_SUITE(SEC_SUITE_REGISTERED_TOKEN, "token")		// [token_name].token registered by native contract
 DEF_DELEGATED_SUITE(SEC_SUITE_REGISTERED_NONFUNGIBLE, "nft")	// [nonfungible_namespec] registered by native contract
 DEF_DELEGATED_SUITE(SEC_SUITE_REGISTERED_NAME, "name")			// [subname].[dapp_name].dapp registered by rvm contract
 DEF_DELEGATED_SUITE(SEC_SUITE_REGISTERED_DOMAIN, "domain")		// [subname].<root_name> registered by native contract
+
+DEF_SUITE(SEC_SUITE_CONTRACT, "contract", 8)					// a deployed contract
+DEF_SUITE(SEC_SUITE_CUSTOM, "custom", 32)						// a user-defined custom address
 																// root_name can be ISO3166-1 area code, or common-root (com dev org info net org app edu gov bit coin token team swarm group wire top usr bot), or [common-root].[ISO3166-1 area code]
 #undef DEF_DELEGATED_SUITE
+#undef DEF_SUITE
 
 } // namespace oxd
 

@@ -28,9 +28,9 @@ private:
 	const transpiler::PredaTranspilerOptions* m_pOptions = nullptr;
 
 private:
-	bool ParsePrimaryExpression(PredaParser::PrimaryExpressionContext *ctx, ExpressionResult &outResult);
-	bool ParseExpression_Internal(PredaParser::ExpressionContext *ctx, ExpressionResult &outResult);
-	bool ParseIdentifier_Internal(PredaParser::IdentifierContext *ctx, ExpressionResult &outResult);
+	bool ParsePrimaryExpression(PredaParser::PrimaryExpressionContext *ctx, ExpressionResult &outResult, bool requireConst = false);
+	bool ParseExpression_Internal(PredaParser::ExpressionContext *ctx, ExpressionResult &outResult, bool requireConst = false);
+	bool ParseIdentifier_Internal(PredaParser::IdentifierContext *ctx, ExpressionResult &outResult, bool requireConst = false);
 	bool GenerateDebugPrintArguments(PredaParser::FunctionCallArgumentsContext *ctx, std::string &outSynthesizedArgumentsString);
 	bool ValidateExpressionResult(const ExpressionResult &result);
 
@@ -58,6 +58,6 @@ public:
 
 
 	int FindMatchingOverloadedFunction(const ConcreteTypePtr &calledFunction, PredaParser::FunctionCallArgumentsContext *ctx, std::string &outSynthesizedArgumentsString);
-	bool ParseExpression(PredaParser::ExpressionContext *ctx, ExpressionResult &outResult);
+	bool ParseExpression(PredaParser::ExpressionContext *ctx, ExpressionResult &outResult, bool requireConst = false);
 	bool ParseIdentifierAsExpression(PredaParser::IdentifierContext *ctx, ExpressionResult &outResult);
 };
