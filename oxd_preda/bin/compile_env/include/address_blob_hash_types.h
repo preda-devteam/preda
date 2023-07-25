@@ -125,10 +125,6 @@ namespace prlrt {
 		{
 			return PREDA_CALL(IsNameAddress, this);
 		}
-		__prlt_bool __prli_is_domain()
-		{
-			return PREDA_CALL(IsDomainAddress, this);
-		}
 		__prlt_bool __prli_is_contract()
 		{
 			return PREDA_CALL(IsContractAddress, this);

@@ -175,9 +175,13 @@ public:
 	void	Iterate(FUNC&& it) const
 			{	
 				if(IsRanged())
-					for(UINT i=0; i<_Count(); i++)if(!rt::CallLambda(true, it, Ranged[i]))return;
+				{	for(UINT i=0; i<_Count(); i++)
+						if(!rt::CallLambda(true, it, Ranged[i]))return;
+				}
 				else
-					for(UINT i=0; i<_Count(); i++)if(!rt::CallLambda(true, it, Range{Flatten[i], 1}))return;
+				{	for(UINT i=0; i<_Count(); i++)
+						if(!rt::CallLambda(true, it, Range{Flatten[i], 1}))return;
+				}
 			}
 	void	Jsonify(rt::Json& append, bool bForcedRanged = false) const 
 	{ 
@@ -204,7 +208,7 @@ public:
 		   (!d.bPreferRangedEmbedding && d.TotalCount < 0x80000000U);
 	}
 	static auto&	Zero(){ static const UINT _zero(0); return (const ConsecutiveSet&)_zero; }
-	static void		GetTypeSignature(rt::String& n){ n += rt::SS("consecutive_set<"); _details::_TypeSignature<T>::Get(n); n += ','; _details::_TypeSignature<T_COUNT>::Get(n); n += '>'; }
+	static void		GetTypeSignature(rt::String& n){ n += rt::SS("consecutive_set<"); RvmTypeSignature<T>::Get(n); n += ','; RvmTypeSignature<T_COUNT>::Get(n); n += '>'; }
 };
 #pragma pack(pop)
 
@@ -424,20 +428,10 @@ public:
 
 };
 
-namespace _details
-{
-	template<typename T, typename T_COUNT>
-	struct _TypeTraits<ConsecutiveSet<T, T_COUNT>, false>
-	{	typedef ConsecutiveSet<T, T_COUNT>			Immutable;
-		typedef ConsecutiveSetMutable<T, T_COUNT>	Mutable;	
-		static const bool IsMutable =	false;
-	};
-	template<typename T, typename T_COUNT>
-	struct _TypeTraits<ConsecutiveSetMutable<T, T_COUNT>, false>
-	{	typedef ConsecutiveSet<T, T_COUNT>			Immutable;
-		typedef ConsecutiveSetMutable<T, T_COUNT>	Mutable;
-		static const bool IsMutable = true;
-	};
-}
-
 } // namespace rvm
+
+RVM_TYPETRAITS_GENERIC_DEF(
+	MARCO_CONCAT(typename T, typename T_COUNT),
+	MARCO_CONCAT(ConsecutiveSet<T, T_COUNT>), 
+	MARCO_CONCAT(ConsecutiveSetMutable<T, T_COUNT>)
+)

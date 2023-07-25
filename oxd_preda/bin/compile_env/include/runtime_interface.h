@@ -8,11 +8,13 @@ namespace prlrt {
 		Global = 1,
 		Shard = 2,
 		Address = 3,
-		Uint16 = 4,
-		Uint32 = 5,
-		Uint64 = 6,
-		Uint256 = 7,
-		Uint512 = 8,
+		Uint32 = 4,
+		Uint64 = 5,
+		Uint96 = 6,
+		Uint128 = 7,
+		Uint160 = 8,
+		Uint256 = 9,
+		Uint512 = 10,
 		Num
 	};
 
@@ -60,6 +62,7 @@ namespace prlrt {
 		GasUsedUp = 30,
 		TokenMint_NegativeAmount = 31,
 		InvalidTokenId = 32,
+		DeployFailed = 33,
 	};
 
 	struct CBigInt;
@@ -200,22 +203,21 @@ namespace prlrt {
 	V(bool, EmitRelayToGlobal, uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)\
 	V(bool, EmitRelayToShards, uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)\
 	V(bool, HashToString, const void* pData, uint32_t dataLen, char* out) \
-	V(uint32_t, CrossCall, uint64_t contractId, uint32_t opCode, const void** ptrs, uint32_t numPtrs)\
-	V(uint32_t, InterfaceCall, uint64_t contractId, const char *interfaceName, uint32_t funcIdx, const void** ptrs, uint32_t numPtrs)\
+	V(uint32_t, CrossCall, uint64_t cvId, int64_t templateContractImportSlot, uint32_t opCode, const void** ptrs, uint32_t numPtrs)\
+	V(uint32_t, InterfaceCall, uint64_t cvId, int64_t interfaceContractImportSlot, uint32_t slotIdx, uint32_t funcIdx, const void** ptrs, uint32_t numPtrs)\
+	V(uint64_t, DeployCall, int64_t templateContractImportSlot, const void** ptrs, uint32_t numPtrs)\
 	V(void, ReportOrphanToken, uint64_t id, ::prlrt::BigintPtr amount)\
 	V(void, ReportReturnValue, const char* type_export_name, const uint8_t* serialized_data, uint32_t serialized_data_size)\
 	V(void, DebugPrintBufferAppendSerializedData, const char* type_export_name, const uint8_t* serialized_data, uint32_t serialized_data_size)\
 	V(void, DebugPrintOutputBuffer, uint32_t line)\
 	V(void, DebugAssertionFailure, uint32_t line)\
 	V(void, DebugAssertionFailureMessage, uint32_t line, const char* message, uint32_t length)\
-	V(uint32_t, GetTokenIdByName, const char* name)\
 \
 	V(bool, IsUserAddress, const void* pAddress)\
 	V(bool, IsDelegatedAddress, const void* pAddress)\
 	V(bool, IsDAppAddress, const void* pAddress)\
 	V(bool, IsAssetAddress, const void* pAddress)\
 	V(bool, IsNameAddress, const void* pAddress)\
-	V(bool, IsDomainAddress, const void* pAddress)\
 	V(bool, IsContractAddress, const void* pAddress)\
 	V(bool, IsCustomAddress, const void* pAddress)\
 	V(void, SetAsContractAddress, void* pAddress, uint64_t contract_id)\
@@ -251,7 +253,7 @@ namespace prlrt {
 	V(void, Transaction_GetSender, uint8_t* out)\
 	V(uint64_t, Transaction_GetTimeStamp, )\
 	V(void, Transaction_GetSigner, uint32_t signerIdx, uint8_t* out)\
-	V(const uint32_t, Transaction_GetSingerCount, )\
+	V(const uint32_t, Transaction_GetSignerCount, )\
 	V(bool, Transaction_VerifySignerByIndex, uint32_t signerIdx)\
 	V(bool, Transaction_VerifySignerByAddress, const uint8_t* pSignerAddress)\
 	V(uint32_t, Transaction_GetOriginatedShardIndex, )\

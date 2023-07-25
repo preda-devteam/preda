@@ -10,5 +10,5 @@ rvm::Contract* ContractDatabaseEntry::GetDelegate()
 
 void ContractDatabaseEntry::CreateDelegate()
 {
-	contractDelegate = std::shared_ptr<RvmContractDelegate>(new RvmContractDelegate(&compileData, &deployData));
+	contractDelegate = std::shared_ptr<RvmContractDelegate>(new RvmContractDelegate(&compileData));
 }

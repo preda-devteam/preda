@@ -128,9 +128,9 @@ void ErrorPortal::AddRelayToNoneRelayFunctionError(const std::string &identifier
 	AddError(ErrorCode::RelayToNoneRelayFunction, "relay target \"" + identifierName + "\" must be a relay function.");
 }
 
-void ErrorPortal::AddMoveOnlyParamOfTxnFunctionError()
+void ErrorPortal::AddMoveOnlyParamOfTxnFunctionOrConstructorError()
 {
-	AddError(ErrorCode::MoveOnlyParamOfTxnFunction, "transaction function parameter cannot be of move-only type.");
+	AddError(ErrorCode::MoveOnlyParamOfTxnFunctionOrConstructor, "transaction function or contract constructor cannot have move-only type as parameter.");
 }
 
 void ErrorPortal::AddContinueOutsideLoopError()
@@ -434,10 +434,31 @@ void ErrorPortal::AddInvalidRelayTargetTypeError(const std::string& targetType)
 	AddError(ErrorCode::InvalidScope, "invalid relay target type \"" + targetType + "\".");
 }
 
-void ErrorPortal::InvalidConstMemberVarType()
+void ErrorPortal::AddInvalidConstMemberVarTypeError()
 {
 	AddError(ErrorCode::InvalidConstMemberVarType, "Invalid constant member variable type. Only string, enum, and value types are supported.");
 }
+
+void ErrorPortal::AddNonDeployableTypeError(const std::string& expressionText)
+{
+	AddError(ErrorCode::NonDeployableType, "\"" + expressionText + "\" is not a deployable type.");
+}
+
+void ErrorPortal::AddMultipleConstructorError()
+{
+	AddError(ErrorCode::MultipleConstructor, "More than one constructor defined.");
+}
+
+void ErrorPortal::AddDeployInNonGlobalError()
+{
+	AddError(ErrorCode::DeployInNonGlobal, "deploy expression can only be used in non-const global functions.");
+}
+
+void ErrorPortal::AddUseCurrentContractTypeError()
+{
+	AddError(ErrorCode::UseCurrentContractType, "using current contract type is not supported.");
+}
+
 
 void ErrorPortal::AddSyntaxError(uint32_t line, uint32_t pos, const std::string &msg)
 {

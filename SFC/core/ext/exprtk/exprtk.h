@@ -122,7 +122,7 @@ public:
 				rt::String estr = translated.c_str();
 				int padding = 0;
 
-				for (std::size_t i = 0; i < parser.error_count(); ++i)
+				for(std::size_t i = 0; i < parser.error_count(); ++i)
 				{
 					exprtk::parser_error::type error = parser.get_error(i);
 					_LastErrMsg += rt::SS("ExprTk ERR: ") + (int)error.token.position + 

@@ -9,9 +9,11 @@ enum class ScopeType : uint32_t {
 	Global,
 	Shard,
 	Address,
-	Uint16,
 	Uint32,
 	Uint64,
+	Uint96,				// currently reserved but not enabled in grammar
+	Uint128,
+	Uint160,
 	Uint256,
 	Uint512,
 	Num,

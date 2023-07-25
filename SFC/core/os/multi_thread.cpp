@@ -498,7 +498,7 @@ void os::ConsolePrompt::Term()
 			ke.dwControlKeyState = 0;
 
 			DWORD ret = 0;
-			HANDLE hcon = CreateFile(L"CONIN$", FILE_GENERIC_WRITE, FILE_SHARE_READ || FILE_SHARE_WRITE, 0, OPEN_EXISTING, 0, 0);
+			HANDLE hcon = CreateFile(L"CONIN$", FILE_GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, OPEN_EXISTING, 0, 0);
 			if (::WriteConsoleInput(hcon, &ir, 1, &ret) == false)
 			{
 				ret = GetLastError();
@@ -817,10 +817,10 @@ bool os::LaunchProcess::IsRunning()
 
 void os::LaunchProcess::_HookedOutput(char* buffer, UINT dwRead)
 {
-	if(_Flag&FLAG_ROUTE_OUTPUT){ buffer[dwRead]=0; printf(buffer); }
+	if(_Flag&FLAG_ROUTE_OUTPUT){ buffer[dwRead]=0; puts(buffer); }
 	if(_Flag&FLAG_SAVE_OUTPUT)
 	{	EnterCSBlock(_CCS);
-		int i = (int)_Output.GetLength();
+		//int i = (int)_Output.GetLength();
 		_RemoveCarriageReturn(_Output, rt::String_Ref(buffer, dwRead));
 	}
 	if(_Callback)

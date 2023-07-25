@@ -5,89 +5,89 @@
 namespace rvm
 {
 
-#define STRUCT_WITH_1_MEMBER(name1)	\
+#define RVM_STRUCT_WITH_1_MEMBER(name1)	\
 			static const LPCSTR* AllNames(){ static const LPCSTR n[] = {#name1}; return n; } \
 			static_assert(MemberCount == 1, "Definition of the Struct type is not single member"); \
-			auto&	name1(){ return Member<0>(); }	\
-			auto&	name1() const { return Member<0>(); }	\
+			auto&	name1(){ return _Member<0>(); }	\
+			auto&	name1() const { return _Member<0>(); }	\
 
-#define STRUCT_WITH_2_MEMBER(name1, name2)	\
+#define RVM_STRUCT_WITH_2_MEMBER(name1, name2)	\
 			static const LPCSTR* AllNames(){ static const LPCSTR n[] = {#name1, #name2}; return n; } \
 			static_assert(MemberCount == 2, "Definition of the Struct type is not 2-members"); \
-			auto&	name1() const { return Member<0>(); }	\
-			auto&	name2() const { return Member<1>(); }	\
-			auto&	name1(){ return Member<0>(); }	\
-			auto&	name2(){ return Member<1>(); }	\
+			auto&	name1() const { return _Member<0>(); }	\
+			auto&	name2() const { return _Member<1>(); }	\
+			auto&	name1(){ return _Member<0>(); }	\
+			auto&	name2(){ return _Member<1>(); }	\
 		
-#define STRUCT_WITH_3_MEMBER(name1, name2, name3)	\
+#define RVM_STRUCT_WITH_3_MEMBER(name1, name2, name3)	\
 			static const LPCSTR* AllNames(){ static const LPCSTR n[] = {#name1, #name2, #name3}; return n; } \
 			static_assert(MemberCount == 3, "Definition of the Struct type is not 3-members"); \
-			auto&	name1() const { return Member<0>(); }	\
-			auto&	name2() const { return Member<1>(); }	\
-			auto&	name3() const { return Member<2>(); }	\
-			auto&	name1(){ return Member<0>(); }	\
-			auto&	name2(){ return Member<1>(); }	\
-			auto&	name3(){ return Member<2>(); }	\
+			auto&	name1() const { return _Member<0>(); }	\
+			auto&	name2() const { return _Member<1>(); }	\
+			auto&	name3() const { return _Member<2>(); }	\
+			auto&	name1(){ return _Member<0>(); }	\
+			auto&	name2(){ return _Member<1>(); }	\
+			auto&	name3(){ return _Member<2>(); }	\
 
-#define STRUCT_WITH_4_MEMBER(name1, name2, name3, name4)	\
+#define RVM_STRUCT_WITH_4_MEMBER(name1, name2, name3, name4)	\
 			static const LPCSTR* AllNames(){ static const LPCSTR n[] = {#name1, #name2, #name3, #name4}; return n; } \
 			static_assert(MemberCount == 4, "Definition of the Struct type is not 4-members"); \
-			auto&	name1() const { return Member<0>(); }	\
-			auto&	name2() const { return Member<1>(); }	\
-			auto&	name3() const { return Member<2>(); }	\
-			auto&	name4() const { return Member<3>(); }	\
-			auto&	name1(){ return Member<0>(); }	\
-			auto&	name2(){ return Member<1>(); }	\
-			auto&	name3(){ return Member<2>(); }	\
-			auto&	name4(){ return Member<3>(); }	\
+			auto&	name1() const { return _Member<0>(); }	\
+			auto&	name2() const { return _Member<1>(); }	\
+			auto&	name3() const { return _Member<2>(); }	\
+			auto&	name4() const { return _Member<3>(); }	\
+			auto&	name1(){ return _Member<0>(); }	\
+			auto&	name2(){ return _Member<1>(); }	\
+			auto&	name3(){ return _Member<2>(); }	\
+			auto&	name4(){ return _Member<3>(); }	\
 
-#define STRUCT_WITH_5_MEMBER(name1, name2, name3, name4, name5)	\
+#define RVM_STRUCT_WITH_5_MEMBER(name1, name2, name3, name4, name5)	\
 			static const LPCSTR* AllNames(){ static const LPCSTR n[] = {#name1, #name2, #name3, #name4, #name5}; return n; } \
 			static_assert(MemberCount == 5, "Definition of the Struct type is not 5-members"); \
-			auto&	name1() const { return Member<0>(); }	\
-			auto&	name2() const { return Member<1>(); }	\
-			auto&	name3() const { return Member<2>(); }	\
-			auto&	name4() const { return Member<3>(); }	\
-			auto&	name5() const { return Member<4>(); }	\
-			auto&	name1(){ return Member<0>(); }	\
-			auto&	name2(){ return Member<1>(); }	\
-			auto&	name3(){ return Member<2>(); }	\
-			auto&	name4(){ return Member<3>(); }	\
-			auto&	name5(){ return Member<4>(); }	\
+			auto&	name1() const { return _Member<0>(); }	\
+			auto&	name2() const { return _Member<1>(); }	\
+			auto&	name3() const { return _Member<2>(); }	\
+			auto&	name4() const { return _Member<3>(); }	\
+			auto&	name5() const { return _Member<4>(); }	\
+			auto&	name1(){ return _Member<0>(); }	\
+			auto&	name2(){ return _Member<1>(); }	\
+			auto&	name3(){ return _Member<2>(); }	\
+			auto&	name4(){ return _Member<3>(); }	\
+			auto&	name5(){ return _Member<4>(); }	\
 
-#define STRUCT_WITH_6_MEMBER(name1, name2, name3, name4, name5, name6)	\
+#define RVM_STRUCT_WITH_6_MEMBER(name1, name2, name3, name4, name5, name6)	\
 			static const LPCSTR* AllNames(){ static const LPCSTR n[] = {#name1, #name2, #name3, #name4, #name5, #name6}; return n; } \
 			static_assert(MemberCount == 6, "Definition of the Struct type is not 6-members"); \
-			auto&	name1() const { return Member<0>(); }	\
-			auto&	name2() const { return Member<1>(); }	\
-			auto&	name3() const { return Member<2>(); }	\
-			auto&	name4() const { return Member<3>(); }	\
-			auto&	name5() const { return Member<4>(); }	\
-			auto&	name6() const { return Member<5>(); }	\
-			auto&	name1(){ return Member<0>(); }	\
-			auto&	name2(){ return Member<1>(); }	\
-			auto&	name3(){ return Member<2>(); }	\
-			auto&	name4(){ return Member<3>(); }	\
-			auto&	name5(){ return Member<4>(); }	\
-			auto&	name6(){ return Member<5>(); }	\
+			auto&	name1() const { return _Member<0>(); }	\
+			auto&	name2() const { return _Member<1>(); }	\
+			auto&	name3() const { return _Member<2>(); }	\
+			auto&	name4() const { return _Member<3>(); }	\
+			auto&	name5() const { return _Member<4>(); }	\
+			auto&	name6() const { return _Member<5>(); }	\
+			auto&	name1(){ return _Member<0>(); }	\
+			auto&	name2(){ return _Member<1>(); }	\
+			auto&	name3(){ return _Member<2>(); }	\
+			auto&	name4(){ return _Member<3>(); }	\
+			auto&	name5(){ return _Member<4>(); }	\
+			auto&	name6(){ return _Member<5>(); }	\
 
-#define STRUCT_WITH_7_MEMBER(name1, name2, name3, name4, name5, name6, name7)	\
+#define RVM_STRUCT_WITH_7_MEMBER(name1, name2, name3, name4, name5, name6, name7)	\
 			static const LPCSTR* AllNames(){ static const LPCSTR n[] = {#name1, #name2, #name3, #name4, #name5, #name6, #name7}; return n; } \
 			static_assert(MemberCount == 7, "Definition of the Struct type is not 7-members"); \
-			auto&	name1() const { return Member<0>(); }	\
-			auto&	name2() const { return Member<1>(); }	\
-			auto&	name3() const { return Member<2>(); }	\
-			auto&	name4() const { return Member<3>(); }	\
-			auto&	name5() const { return Member<4>(); }	\
-			auto&	name6() const { return Member<5>(); }	\
-			auto&	name7() const { return Member<6>(); }	\
-			auto&	name1(){ return Member<0>(); }	\
-			auto&	name2(){ return Member<1>(); }	\
-			auto&	name3(){ return Member<2>(); }	\
-			auto&	name4(){ return Member<3>(); }	\
-			auto&	name5(){ return Member<4>(); }	\
-			auto&	name6(){ return Member<5>(); }	\
-			auto&	name7(){ return Member<6>(); }	\
+			auto&	name1() const { return _Member<0>(); }	\
+			auto&	name2() const { return _Member<1>(); }	\
+			auto&	name3() const { return _Member<2>(); }	\
+			auto&	name4() const { return _Member<3>(); }	\
+			auto&	name5() const { return _Member<4>(); }	\
+			auto&	name6() const { return _Member<5>(); }	\
+			auto&	name7() const { return _Member<6>(); }	\
+			auto&	name1(){ return _Member<0>(); }	\
+			auto&	name2(){ return _Member<1>(); }	\
+			auto&	name3(){ return _Member<2>(); }	\
+			auto&	name4(){ return _Member<3>(); }	\
+			auto&	name5(){ return _Member<4>(); }	\
+			auto&	name6(){ return _Member<5>(); }	\
+			auto&	name7(){ return _Member<6>(); }	\
 
 namespace _details
 {
@@ -162,17 +162,17 @@ struct _MemberIteration
 {
 	static void Jsonify(const STATE& s, rt::String& append)
 	{
-		auto& x = s.template Member<IDX>();
-		append += '"' + rt::String_Ref(s.template Name<IDX>()) + '"' + ':';
-		_Jsonify(x, append);
+		auto& x = s.template _Member<IDX>();
+		append += '"' + rt::String_Ref(s.template _Name<IDX>()) + '"' + ':';
+		RvmTypeJsonify(x, (rt::Json&)append);
 		append += ',';
 		_MemberIteration<STATE, IDX+1>::Jsonify(s, append);
 	}
 	static void GetTypeSignature(rt::String& n)
 	{
-		_TypeSignature<typename _StructMemberType<STATE::MemberCount - IDX, typename STATE::MemberList>::MemberType>::Get(n);
+		RvmTypeSignature<typename _StructMemberType<STATE::MemberCount - IDX, typename STATE::MemberList>::MemberType>::Get(n);
 		n += ' ';
-		n += rt::String_Ref(STATE::template Name<IDX>());
+		n += rt::String_Ref(STATE::template _Name<IDX>());
 		n += ';';
 		_MemberIteration<STATE, IDX+1>::GetTypeSignature(n);
 	}
@@ -189,15 +189,15 @@ struct _StructMutableDef: public _StructMutableDef<StructType, MEM_INCL-1>
 {
 	typedef typename StructType::OffsetValueType*	LPOFFSETVALUETYPE;
 	typedef typename _StructMemberType<StructType::MemberCount - (MEM_INCL-1), typename StructType::MemberList>::MemberType	Type;
-	typedef typename _TypeTraits<Type>::Mutable		Mutable;
+	typedef typename TypeTraits<Type>::Mutable		Mutable;
 	typedef _Embed<Type, Mutable>					Embed;
 
 	Mutable	Member;
 
 	bool	JsonParse(const rt::JsonObject& json)
 			{	bool exist = false;
-				rt::String_Ref a = json.GetValueRaw(StructType::template Name<MEM_INCL-1>(), exist);
-				if(!exist || !_JsonParse(Member, a))return false;
+				rt::String_Ref a = json.GetValueRaw(StructType::template _Name<MEM_INCL-1>(), exist);
+				if(!exist || !RvmTypeJsonParse(Member, a))return false;
 				return _StructMutableDef<StructType, MEM_INCL-1>::JsonParse(json);
 			}
 	UINT	GetEmbeddedSize() const
@@ -225,15 +225,15 @@ struct _StructMutableDef: public _StructMutableDef<StructType, MEM_INCL-1>
 	{
 		typedef typename StructType::OffsetValueType*	LPOFFSETVALUETYPE;
 		typedef typename _StructMemberType<StructType::MemberCount, typename StructType::MemberList>::MemberType	Type;
-		typedef typename _TypeTraits<Type>::Mutable		Mutable;
+		typedef typename TypeTraits<Type>::Mutable		Mutable;
 		typedef _Embed<Type, Mutable>					Embed;
 
 		Mutable	Member;
 
 		bool	JsonParse(const rt::JsonObject& json)
 				{	bool exist = false;
-					rt::String_Ref a = json.GetValue(StructType::template Name<0>(), exist);
-					if(!exist || !_JsonParse(Member, a))return false;
+					rt::String_Ref a = json.GetValue(StructType::template _Name<0>(), exist);
+					if(!exist || !RvmTypeJsonParse(Member, a))return false;
 					return true;
 				}
 		UINT	GetEmbeddedSize() const
@@ -272,6 +272,8 @@ class StructMutable: public _details::_StructMutableDef<StructType>
 {
 	typedef _details::_StructMutableDef<StructType> _SC;
 public:
+	typedef StructMutable		MutableType;
+	typedef StructType			ImmutableType;
 	UINT	GetEmbeddedSize() const
 			{	return _SC::GetEmbeddedSize() + sizeof(typename StructType::OffsetValueType)*(1 + StructType::MemberCount);
 			}
@@ -287,7 +289,7 @@ public:
 	typedef OFFSET_TYPE										OffsetValueType;
 	typedef StructTypeHeaderT<OffsetValueType, MemberCount> HeaderType;
 	typedef StructMutable<T_Derived>						MutableType;
-	typedef Struct											ImmutableType;
+	typedef T_Derived										ImmutableType;
 
 protected:
 	HeaderType	Header;
@@ -296,20 +298,18 @@ protected:
 public:
 	UINT		GetEmbeddedSize() const { return Header.GetStateSize(); }
 	template<UINT IDX>
-	auto&		Member()
+	auto&		_Member()
 				{	typedef typename _details::_StructMemberType<MemberList::MemberCount - IDX, MemberList>::MemberType RET;
 					static_assert(IDX<MemberCount, "Member index out-of-range");
 					if(!Header.IsEmpty())
 						return Header.template Get<RET, IDX>();
 					else
-					{	static const _details::_InitZeros<RET>	_;
-						return (RET&)_;
-					}
+						return (RET&)rvm::RvmTypeZero<RET>();
 				}
 	template<UINT IDX>
-	const auto&	Member() const { return rt::_CastToNonconst(this)-> template Member<IDX>(); }
+	const auto&	_Member() const { return rt::_CastToNonconst(this)-> template _Member<IDX>(); }
 	template<UINT IDX> static
-	LPCSTR 		Name(){ return T_Derived::AllNames()[IDX]; }
+	LPCSTR 		_Name(){ return T_Derived::AllNames()[IDX]; }
 	bool		IsEmpty() const { return Header.IsEmpty(); }
 	void		Jsonify(rt::Json& json) const 
 				{	auto& append = (rt::String&)json;
@@ -349,6 +349,5 @@ public:
 	TYPETRAITS_DECLARE_NON_POD;
 };
 #pragma pack(pop)
-
 
 } // namespace rvm

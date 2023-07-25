@@ -17,7 +17,7 @@ class ContractModuleLoaded {
 public:
 	virtual ~ContractModuleLoaded() = default;
 
-	virtual std::unique_ptr<ContractRuntimeInstance> NewInstance(CExecutionEngine&) = 0;
+	virtual std::unique_ptr<ContractRuntimeInstance> NewInstance(CExecutionEngine&, rvm::ContractVersionId cvId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts) = 0;
 };
 
 class ContractModule {
@@ -31,8 +31,17 @@ public:
 
 class ContractRuntimeInstance {
 public:
-	PredaContractDID deployId;
-	rvm::ContractId contractId;
+	rvm::ContractModuleID mId;
+	
+	// here uses ContractVersionId + ContractContextType instead of ContractInvokeId because
+	// currentMappedContractContextLevel might be changed during a call chain. e.g.
+	// 1. A.f() calls B.g() (shard)
+	// 2. B.g() returns
+	// 3. A.f() then calls B.h() (custom scope, e.g. address)
+	// In this case, at step 3, the instance of B created at step will be reused. (and has to,
+	// be reused, otherwise any shard state changed by B.g() is not reflected.) It's mapped level
+	// will then be changed from shard to address
+	rvm::ContractVersionId cvId;
 	prlrt::ContractContextType currentMappedContractContextLevel;
 
 	virtual ~ContractRuntimeInstance() = default;

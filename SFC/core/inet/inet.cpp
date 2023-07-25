@@ -134,7 +134,7 @@ UINT GetLocalAddressT(t_ADDR* pOut, UINT OutSize, bool no_loopback, t_ADDR* broa
 		//memset(&aiHints, 0, sizeof(aiHints));
 		rt::Zero(aiHints);
 		aiHints.ai_family = OP::SIN_FAMILY;
-		int ret = false;
+		//int ret = false;
 		if(0 == getaddrinfo(szHostname, NULL, &aiHints, &aiList) && aiList)
 		{	
 			struct addrinfo *p = aiList;

@@ -55,6 +55,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual antlrcpp::Any visitConstVariableDeclaration(PredaParser::ConstVariableDeclarationContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual antlrcpp::Any visitScope(PredaParser::ScopeContext *ctx) override {
     return visitChildren(ctx);
   }

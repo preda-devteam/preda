@@ -52,13 +52,14 @@ protected:
 protected:
 	///////////////////////////////////////////////////////
 	// From rvm::BlockchainRuntime
-	virtual int32_t						JsonifyCoreType(rvm::NativeTypeId tid, const rvm::ConstData* serialized, rvm::StringStream* json_out) const override;
-	virtual bool						JsonParseCoreType(rvm::NativeTypeId tid, const rvm::ConstString* json, rvm::DataBuffer* serialized_out) const override;
-
 	virtual rvm::ConstString			GetCoreDAppName() const override { return {"core", 4}; }
-	virtual rvm::AggregatedRepository*	GetContractRepository() override { return nullptr; }
-
+	virtual rvm::ContractRepository*	GetContractRepository() override { return nullptr; }
 	virtual void						DebugPrint(rvm::DebugMessageType type, const rvm::ConstString* string, const rvm::ExecutionState* ctx_opt, const rvm::Contract* contract_opt, int32_t line) override;
+
+	virtual rvm::DAppId					GetDAppByName(const rvm::ConstString* dapp_name) const { return _pGlobalShard->GetDAppByName(dapp_name); }
+	virtual rvm::ContractVersionId		GetContractByName(const rvm::ConstString* dapp_period_contract_name) const { return _pGlobalShard->GetContractByName(dapp_period_contract_name); }
+	virtual rvm::BuildNum				GetContractEffectiveBuild(rvm::ContractId contract) const { return _pGlobalShard->GetContractEffectiveBuild(contract); }
+	virtual const rvm::DeployedContract*GetContractDeployed(rvm::ContractVersionId contract) const { return _pGlobalShard->GetContractDeployed(contract); }
 
 protected:
 	// Scripting
@@ -120,8 +121,11 @@ protected:
 	rvm::InvokeResult*				_GetTxnResult(const SimuTxn* txn);
 	rvm::ConstData					_ComposeState(oxd::SimuShard* s, rvm::BuildNum build, rvm::ContractScopeId csid, InputParametrized& input, const rt::String& in_state, rvm::Address* addr = nullptr);
 	bool							_ComposeSolJson(rt::JsonObject inJson, rt::Json& out, rt::String fn);
+	void							_RunDeployAsTxn(const CmdParse& cmd);
+	bool							_Step();
 
 	rvm::EngineId					ResolveRTEngine(rt::String in, rt::String& filename);
+	bool							_ParseSolidityFunc(const rt::String& functionName, rt::String& argument);
 
 #endif
 public:
@@ -129,8 +133,8 @@ public:
 	~Simulator(){ Term(); }
 
 	rvm::Scope		PrepareTxn(rvm::ContractId cid, rvm::OpCode opcode, rvm::BuildNum& buildnum_inout) const;
-	uint32_t		GetShardIndex(const rvm::Address& a) const { return rvm::_details::ADDRESS_SHARD_DWORD(a)&_ShardBitmask; }
-	uint32_t		GetShardIndex(const ScopeTarget& a) const { return rvm::_details::SCOPEKEY_SHARD_DWORD(rvm::ScopeKey{ (uint8_t*)&a, a.target_size }) &_ShardBitmask; }
+	uint32_t		GetShardIndex(const rvm::Address& a) const { return rvm::ADDRESS_SHARD_DWORD(a)&_ShardBitmask; }
+	uint32_t		GetShardIndex(const ScopeTarget& a) const { return rvm::SCOPEKEY_SHARD_DWORD(rvm::ScopeKey{ (uint8_t*)&a, a.target_size }) &_ShardBitmask; }
 	uint32_t		GetShardCount() const { return 1<<_ShardOrder; }
 	auto*			GetShard(uint32_t i){ return _Shards[i]; }
 	auto*			GetShard(uint32_t i) const { return _Shards[i]; }
@@ -141,7 +145,7 @@ public:
 	bool			Init(uint32_t shard_order, bool async_shard, bool defaultWASM, bool viz_to_console);
 	void			Term();
 
-	void			CreateExecuteUnit(ExecuteUnit* out) const;
+	void			CreateExecuteUnit(ExecutionUnit* out) const;
 	auto&			GetMiner() const { return _Users[0].Addr; }
 	bool			CompleteShardExecution();
 	bool			IsShardingAsync() const { return _bShardAsync; }
@@ -159,14 +163,14 @@ public:
 
 	bool			ExecuteCommand(const rt::String_Ref& cmd);
 	void			Run(rt::Buffer<rt::String_Ref>& input_files);
-	bool			Build(ExecuteUnit& exec_units, const rt::String_Ref& file_list, bool within_script);
+	bool			Deploy(ExecutionUnit& exec_units, const rt::String_Ref* filenames, const rt::String_Ref* ctor_args, uint32_t count, bool within_script, rvm::InvokeResult &ctor_invoke_result);
 	bool			Compile(rvm::EngineId e, rt::Buffer<rt::String>& sources, rt::Buffer<rt::String_Ref>& code_fns);
 
 	void			OnTxnPushed(){ if(os::AtomicIncrement(&_PendingTxnCount) < 2)_ChainIdle.Reset(); }
 	void			OnTxnPushed(uint32_t co){ if(os::AtomicAdd(co, &_PendingTxnCount) < (int)(2 + co))_ChainIdle.Reset(); }
 	void			OnTxnsConfirmed(uint32_t co)
 					{
-						if(os::AtomicAdd(-(int32_t)co, &_PendingTxnCount) < 1)_ChainIdle.Set();
+						os::AtomicAdd(-(int32_t)co, &_PendingTxnCount); //ChainIdle will be set when all shards finish block creation and pendingTxnCount reaches zero
 						os::AtomicAdd(co, &_ExecutedTxnCount);
 					}
 	uint32_t		GetPendingTxnCount() const { return _PendingTxnCount; }
@@ -175,11 +179,13 @@ public:
 	rvm::RvmEngine* GetEngine(rvm::EngineId e) const {
 		return _Engines[(int)e].pEngine;
 	}
-	const EngineEntry* GetAllEngines() const { return &_Engines[0]; }
-	auto*			GetGlobalState() const { return (const rvm::ChainState*)(*_pGlobalShard); }
+	const auto*		GetAllEngines() const { return &_Engines[0]; }
+	auto*			GetGlobalStates() const { return (const rvm::GlobalStates*)(_pGlobalShard); }
 	rvm::EngineId	GetPredaBuildTarget(const rt::String_Ref& code) const;
 
 	uint32_t		GetLineNum() const { return LineNum; }
+	rvm::InvokeResult	DeployFromStatement(const rt::String_Ref& deployStatement);
+	void			SetChainIdle() { _ChainIdle.Set();}
 public:
 	JsonLogError	JsonLog;
 	uint32_t		LineNum;

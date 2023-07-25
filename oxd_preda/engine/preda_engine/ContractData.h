@@ -16,6 +16,7 @@ struct ContractFunction
 	std::vector<std::pair<std::string, std::string>> parameters;
 	std::string doxygenComment;
 	uint32_t flags;
+	std::string signatureHash;
 };
 
 struct ContractStruct
@@ -41,6 +42,8 @@ struct ContractInterface
 struct ContractImplementedInterface
 {
 	std::string name;
+	rvm::ContractModuleID interfaceDefContractModuleId;
+	uint32_t interfaceDefSlot;
 	std::vector<int32_t> functionIds;
 };
 
@@ -52,6 +55,7 @@ struct ContractCompileData
 	std::string exportUniqueString;
 
 	rvm::HashValue intermediateHash;
+	rvm::ContractModuleID moduleId;
 
 	std::vector<ContractFunction> functions;
 	int32_t globalDeployFunctionIdx;
@@ -75,13 +79,6 @@ struct ContractCompileData
 	std::vector<std::string> importedContracts;
 };
 
-// data only available after deploy
-struct ContractDeployData
-{
-	rvm::ContractId contractId;
-	std::vector<rvm::ContractId> importedContractIds;
-};
-
 struct ContractLinkData
 {
 	std::string binaryPathFileName;
@@ -89,44 +86,31 @@ struct ContractLinkData
 	std::string intermediatePathFileName;
 };
 
-using PredaContractDID = uint64_t;
+
+
 
 namespace _details {
-	static const PredaContractDID PredaContractDIDInvalid = (PredaContractDID)0;
-	inline constexpr PredaContractDID RvmCDIDToPredaCDID(const rvm::ContractDID* rvmCDId)
+	struct ModuleIdCompare
 	{
-		return rvmCDId ? *(PredaContractDID*)rvmCDId : PredaContractDIDInvalid;
-	}
-	inline constexpr void PredaCDIDToRvmCDID(PredaContractDID predaCDId, rvm::ContractDID* rvmCDId)
-	{
-		if (rvmCDId)
+		bool operator() (const rvm::ContractModuleID& lhs, const rvm::ContractModuleID& rhs) const
 		{
-			rt::Zero(*rvmCDId);
-			*(PredaContractDID*)rvmCDId = predaCDId;
+			return memcmp(&lhs, &rhs, sizeof(lhs)) < 0;
 		}
-	}
+	};
+
+
 	// returns rvm::contractIdInvalid if not found
-	static rvm::ContractId GetOnChainContractIdFromContractFullName(const rvm::ChainState* pChainState, const std::string& fullName)
+	static rvm::ContractVersionId GetOnChainContractIdFromContractFullName(const rvm::GlobalStates* pChainGlobalState, const std::string& fullName)
 	{
-		std::string::size_type dotPos = fullName.find('.');
-		if (dotPos != std::string::npos)
-		{
-			rvm::ConstString dappName = { fullName.c_str(), uint32_t(dotPos) };
-			rvm::DAppId dAppId = pChainState->GetDAppByName(&dappName);
-			if (dAppId != rvm::DAppIdInvalid)
-			{
-				rvm::ConstString contractName = { fullName.c_str() + dotPos + 1, uint32_t(fullName.size() - dotPos - 1) };
-				return pChainState->GetContractByName(dAppId, &contractName);
-			}
-		}
-
-		return rvm::ContractIdInvalid;
+		rvm::ConstString contractName = { fullName.c_str(), uint32_t(fullName.size()) };
+		return pChainGlobalState->GetContractByName(&contractName);
 	}
 
-	static PredaContractDID GetOnChainPredaContractDIdFromFullName(const rvm::ChainState* pChainState, const std::string& fullName, rvm::BuildNum buildNum = rvm::BuildNumLatest)
+	static const rvm::ContractModuleID* GetOnChainContractModuleIdFromFullName(const rvm::GlobalStates* pChainGlobalState, const std::string& fullName)
 	{
-		rvm::ContractId contractId = GetOnChainContractIdFromContractFullName(pChainState, fullName);
-		return RvmCDIDToPredaCDID(pChainState->GetContractDeploymentIdentifier(contractId, buildNum));
+		rvm::ContractVersionId contractVId = GetOnChainContractIdFromContractFullName(pChainGlobalState, fullName);
+		const rvm::DeployedContract *pContract = pChainGlobalState->GetContractDeployed(contractVId);
+		return pContract ? &pContract->Module : nullptr;
 	}
 
 	static transpiler::ScopeType RvmScopeToPredaScope(rvm::Scope scope)
@@ -139,15 +123,19 @@ namespace _details {
 			return transpiler::ScopeType::Shard;
 		case rvm::Scope::Address:
 			return transpiler::ScopeType::Address;
-		case rvm::_details::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt16, 0):
-			return transpiler::ScopeType::Uint16;
-		case rvm::_details::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt32, 0):
+		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt32, 0):
 			return transpiler::ScopeType::Uint32;
-		case rvm::_details::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt64, 0):
+		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt64, 0):
 			return transpiler::ScopeType::Uint64;
-		case rvm::_details::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt256, 0):
+		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt96, 0):
+			return transpiler::ScopeType::Uint96;
+		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt128, 0):
+			return transpiler::ScopeType::Uint128;
+		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt160, 0):
+			return transpiler::ScopeType::Uint160;
+		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt256, 0):
 			return transpiler::ScopeType::Uint256;
-		case rvm::_details::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt512, 0):
+		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt512, 0):
 			return transpiler::ScopeType::Uint512;
 		default:
 			return transpiler::ScopeType::None;
@@ -164,18 +152,22 @@ namespace _details {
 			return rvm::Scope::Shard;
 		case transpiler::ScopeType::Address:
 			return rvm::Scope::Address;
-		case transpiler::ScopeType::Uint16:
-			return rvm::Scope::UInt16;
 		case transpiler::ScopeType::Uint32:
-			return rvm::Scope::UInt32;
+			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt32, 0);
 		case transpiler::ScopeType::Uint64:
-			return rvm::Scope::UInt64;
+			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt64, 0);
+		case transpiler::ScopeType::Uint96:
+			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt96, 0);
+		case transpiler::ScopeType::Uint128:
+			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt128, 0);
+		case transpiler::ScopeType::Uint160:
+			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt160, 0);
 		case transpiler::ScopeType::Uint256:
-			return rvm::Scope::UInt256;
+			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt256, 0);
 		case transpiler::ScopeType::Uint512:
-			return rvm::Scope::UInt512;
+			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt512, 0);
 		default:
-			return rvm::Scope::Neutral;
+			return rvm::Scope::_Bitmask;
 		}
 	}
 
@@ -191,12 +183,16 @@ namespace _details {
 			return prlrt::ContractContextType::Shard;
 		case transpiler::ScopeType::Address:
 			return prlrt::ContractContextType::Address;
-		case transpiler::ScopeType::Uint16:
-			return prlrt::ContractContextType::Uint16;
 		case transpiler::ScopeType::Uint32:
 			return prlrt::ContractContextType::Uint32;
 		case transpiler::ScopeType::Uint64:
 			return prlrt::ContractContextType::Uint64;
+		case transpiler::ScopeType::Uint96:
+			return prlrt::ContractContextType::Uint96;
+		case transpiler::ScopeType::Uint128:
+			return prlrt::ContractContextType::Uint128;
+		case transpiler::ScopeType::Uint160:
+			return prlrt::ContractContextType::Uint160;
 		case transpiler::ScopeType::Uint256:
 			return prlrt::ContractContextType::Uint256;
 		case transpiler::ScopeType::Uint512:
@@ -218,12 +214,16 @@ namespace _details {
 			return transpiler::ScopeType::Shard;
 		case prlrt::ContractContextType::Address:
 			return transpiler::ScopeType::Address;
-		case prlrt::ContractContextType::Uint16:
-			return transpiler::ScopeType::Uint16;
 		case prlrt::ContractContextType::Uint32:
 			return transpiler::ScopeType::Uint32;
 		case prlrt::ContractContextType::Uint64:
 			return transpiler::ScopeType::Uint64;
+		case prlrt::ContractContextType::Uint96:
+			return transpiler::ScopeType::Uint96;
+		case prlrt::ContractContextType::Uint128:
+			return transpiler::ScopeType::Uint128;
+		case prlrt::ContractContextType::Uint160:
+			return transpiler::ScopeType::Uint160;
 		case prlrt::ContractContextType::Uint256:
 			return transpiler::ScopeType::Uint256;
 		case prlrt::ContractContextType::Uint512:

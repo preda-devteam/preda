@@ -19,6 +19,7 @@ namespace transpiler {
 		UnaryMinus,
 		LogicalNot,
 		BitwiseNot,
+		Deploy,
 		Multiply,
 		Divide,
 		Modulo,

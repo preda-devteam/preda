@@ -2,6 +2,7 @@
 #pragma warning(disable:4244)
 #include "../../SFC/core/ext/bignum/ttmath/ttmath.h"
 #pragma warning(pop)
+#include "../../SFC/core/ext/botan/botan.h"
 #include "shard_data.h"
 #include "simulator.h"
 #include "simu_global.h"
@@ -11,10 +12,10 @@ namespace oxd
 {
 namespace _details
 {
-const rvm::Contract* GetDeployedContract(rvm::RvmEngine* engine, rvm::ContractId cid, rvm::BuildNum version)
+const rvm::Contract* GetDeployedContract(rvm::RvmEngine* engine, rvm::ContractVersionId cid)
 {
-	auto* cdid = Simulator::Get().GetGlobalState()->GetContractDeploymentIdentifier(cid, version);
-	return cdid?engine->GetContract(cdid):nullptr;
+	auto* cdid = Simulator::Get().GetGlobalStates()->GetContractDeployed(cid);
+	return cdid?engine->GetContract(&cdid->Module):nullptr;
 
 }
 } // namespace _details
@@ -101,48 +102,54 @@ SimuTxn* PendingTxns::Pop()
 	return _Queue.Pop(txn)?txn:nullptr;
 }
 #ifdef _VIZ
-void SimuTxn::Jsonify(rvm::RvmEngine* engine, const rvm::ChainState* ps, rt::Json& append, rvm::InvokeResult* result) const
+void SimuTxn::Jsonify(rvm::RvmEngine* engine, rt::Json& append, rvm::InvokeResult* result) const
 {
 	append.AppendKeyWithString("InvokeContextType", rt::EnumStringify(Type));
-	char addr_buf[rvm::_details::ADDRESS_BASE32_LEN];
-
-	rvm::Scope scope = GetScope();
-	switch (scope)
+	if (rvm::Scope scope = GetScope(); scope != rvm::Scope::Global && scope != rvm::Scope::Shard)
 	{
-	case rvm::Scope::Address:
-		rvm::_details::ADDRESS_TO_STRING(Target.addr, addr_buf);
-		append.AppendKeyWithString("Target", rt::String(addr_buf, rvm::_details::ADDRESS_BASE32_LEN) + rt::SS(":") +
-															oxd::SecuritySuite::IdToString(Target.addr._SSID));
-		if(Target_index >= 0){
-			append.AppendKeyWithString("AddressIndex", rt::String('@') + Target_index);
+		static const rt::SS szTarget("Target");
+		rvm::ScopeKeySize kst = rvm::SCOPE_KEYSIZETYPE(scope);
+		switch (kst)
+		{
+		case rvm::ScopeKeySize::Address:
+			append.AppendKeyWithString(szTarget, oxd::SecureAddress::String(Target.addr));
+			if (TargetIndex >= 0)
+				append.AppendKeyWithString("AddressIndex", rt::SS() + ('@') + TargetIndex);
+			break;
+		case rvm::ScopeKeySize::UInt32:
+			append.AppendKeyWithString(szTarget, rt::tos::Number(Target.u32) + "u32");
+			break;
+		case rvm::ScopeKeySize::UInt64:
+			append.AppendKeyWithString(szTarget, rt::tos::Number(Target.u64) + "u64");
+			break;
+		case rvm::ScopeKeySize::UInt96:
+			append.AppendKeyWithString(szTarget, (*(ttmath::UInt<96 / 32>*) & Target.u96).ToString() + "u96");
+			break;
+		case rvm::ScopeKeySize::UInt128:
+			append.AppendKeyWithString(szTarget, (*(ttmath::UInt<128 / 32>*) & Target.u256).ToString() + "u128");
+			break;
+		case rvm::ScopeKeySize::UInt160:
+			append.AppendKeyWithString(szTarget, (*(ttmath::UInt<160 / 32>*) & Target.u256).ToString() + "u160");
+			break;
+		case rvm::ScopeKeySize::UInt256:
+			append.AppendKeyWithString(szTarget, (*(ttmath::UInt<256 / 32>*) & Target.u256).ToString() + "u256");
+			break;
+		case rvm::ScopeKeySize::UInt512:
+			append.AppendKeyWithString(szTarget, (*(ttmath::UInt<512 / 32>*) & Target.u512).ToString() + "u512");
+			break;
+		default:
+			ASSERT(0);
+			break;
 		}
-		break;
-	case rvm::Scope::UInt16:
-		append.AppendKeyWithString("Target", std::to_string(Target.u16) + "u16");
-		break;
-	case rvm::Scope::UInt32:
-		append.AppendKeyWithString("Target", std::to_string(Target.u32) + "u32");
-		break;
-	case rvm::Scope::UInt64:
-		append.AppendKeyWithString("Target", std::to_string(Target.u64) + "u64");
-		break;
-	case rvm::Scope::UInt256:
-		append.AppendKeyWithString("Target", (*(ttmath::UInt<8>*) & Target.u256).ToString() + "u256");
-		break;
-	break;
-	case rvm::Scope::UInt512:
-		append.AppendKeyWithString("Target", (*(ttmath::UInt<16>*) & Target.u512).ToString() + "u512");
-		break;
-	default:
-		break;
 	}
 
 	if(IsRelay())
 	{
-		rvm::_details::ADDRESS_TO_STRING(Initiator, addr_buf);
 		append << ((
-			J(Initiator) = rt::String(addr_buf, rvm::_details::ADDRESS_BASE32_LEN) + rt::SS(":") + oxd::SecuritySuite::IdToString(Initiator._SSID),
-			J(OriginateHeight) = OriginateHeight));
+			J(Initiator) = oxd::SecureAddress::String(Initiator),
+			J(OriginateHeight) = OriginateHeight
+		));
+
 		if(OriginateShardIndex == 65535)
 		{
 			append << ((J(OriginateShardIndex) = "g"));
@@ -153,28 +160,41 @@ void SimuTxn::Jsonify(rvm::RvmEngine* engine, const rvm::ChainState* ps, rt::Jso
 		append << ((J(OriginateShardOrder) = OriginateShardOrder));
 	}
 
-	const rvm::Contract* contract = _details::GetDeployedContract(engine, rvm::_details::CONTRACT_UNSET_SCOPE(Contract), BuildNum);
-	if(!contract)
+	if (Type == rvm::InvokeContextType::System)
 	{
-		append.Empty();
-		return;
+		append << ((
+			J(BuildNum) = 0,
+			J(Timestamp) = Timestamp,
+			J(Contract) = "chain.deploy",
+			J(Function) = "deploy"
+			));
 	}
-	append << ((
-		J(BuildNum) = BuildNum,
-		J(Timestamp) = Timestamp,
-		J(Contract) = contract->GetName().Str(),
-		J(Function) = contract->GetFunctionName((uint32_t)Op).Str()
-		));
+	else
+	{
+		const rvm::Contract* contract = _details::GetDeployedContract(engine, rvm::CONTRACT_UNSET_SCOPE(Contract));
+		if (!contract)
+		{
+			append.Empty();
+			return;
+		}
+		append << ((
+			J(BuildNum) = rvm::CONTRACT_BUILD(Contract),
+			J(Timestamp) = Timestamp,
+			J(Contract) = contract->GetName().Str(),
+			J(Function) = contract->GetFunctionName((uint32_t)Op).Str()
+			));
+	}
+	
 	if(result)
 	{
 		append << ((J(InvokeResult) = rt::EnumStringify(result->Code)));
 	}
-	if(ArgsSerializedSize > 0)
+	if(Type != rvm::InvokeContextType::System && ArgsSerializedSize > 0)
 	{
-		StreamByString _((rt::String&)append);
+		rvm::StringStreamImpl str_out(append.GetInternalString());
 		auto s2 = append.ScopeAppendingKey("Arguments");
 		rvm::ConstData data({ ArgsSerializedData, ArgsSerializedSize });
-		engine->ArgumentsJsonify(BuildNum, Contract, Op, &data, &_, ps);
+		engine->ArgumentsJsonify(Contract, Op, &data, &str_out);
 	}
 	append << ((J(Height) = Height));
 
@@ -188,9 +208,12 @@ void SimuTxn::Jsonify(rvm::RvmEngine* engine, const rvm::ChainState* ps, rt::Jso
 	append << ((J(ShardOrder) = ShardOrder));
 }
 #endif
+
 SimuTxn* SimuTxn::Create(uint32_t args_size)
 {
-	auto* ret = (SimuTxn*)_Malloc8AL(uint8_t, args_size + offsetof(SimuTxn, ArgsSerializedData));
+	uint32_t size = args_size + offsetof(SimuTxn, ArgsSerializedData);
+	auto* ret = (SimuTxn*)_Malloc8AL(uint8_t, size);
+	rt::Zero(ret, size);
 	ret->ArgsSerializedSize = args_size;
 
 	return ret;
@@ -276,7 +299,7 @@ InputParametrized::Segment::Segment(const rt::String_Ref& s, bool is_static, Sim
 			UserIndex = s.TrimLeft(1).ToNumber<uint32_t>();
 			if(UserIndex >= simu.GetScriptAddressCount())
 			{
-				_LOG_WARNING("[BC]: user index out of range: '"<<s<<"'. (Address Count: "<<simu.GetScriptAddressCount()<<')');
+				_LOG_WARNING("[PRD]: User index out of range: '"<<s<<"'. (Address Count: "<<simu.GetScriptAddressCount()<<')');
 				Type = ST_ERROR;
 			}
 		}
@@ -290,7 +313,7 @@ InputParametrized::Segment::Segment(const rt::String_Ref& s, bool is_static, Sim
 			}
 			else
 			{
-				_LOG_WARNING("[BC]: expression error: "<<Expression->GetLastError());
+				_LOG_WARNING("[PRD]: Expression error: "<<Expression->GetLastError());
 				Type = ST_ERROR;
 			}
 		}
@@ -394,7 +417,7 @@ void InputParametrized::Evaluate(rt::String& out, int loop_index) const
 	}
 }
 
-rvm::ConstData InputParametrized::ComposeState(rvm::BuildNum build_num, rvm::ContractScopeId cid, int loop_index)
+rvm::ConstData InputParametrized::ComposeState(rvm::ContractInvokeId cid, int loop_index)
 {
 	auto& str = _TempString();
 	Evaluate(str, loop_index);
@@ -403,7 +426,7 @@ rvm::ConstData InputParametrized::ComposeState(rvm::BuildNum build_num, rvm::Con
 	data.Empty();
 
 	rvm::ConstString s = { str.Begin(), (uint32_t)str.GetLength() };
-	if(_Simulator.GetEngine(rvm::_details::CONTRACT_ENGINE(cid))->StateJsonParse(build_num, cid, &s, &data, *_Simulator.GetGlobalShard(), &_Simulator.JsonLog))
+	if(_Simulator.GetEngine(rvm::CONTRACT_ENGINE(cid))->StateJsonParse(cid, &s, &data, &_Simulator.JsonLog))
 	{
 		return { data.GetData(), data.GetSize() };
 	}
@@ -413,7 +436,7 @@ rvm::ConstData InputParametrized::ComposeState(rvm::BuildNum build_num, rvm::Con
 	}
 }
 
-SimuTxn* InputParametrized::ComposeTxn(rvm::BuildNum build_num, rvm::ContractScopeId cid, rvm::OpCode opcode, int loop_index)
+SimuTxn* InputParametrized::ComposeTxn(rvm::ContractInvokeId cid, rvm::OpCode opcode, int loop_index)
 {
 	auto& str = _TempString();
 	Evaluate(str, loop_index);
@@ -422,13 +445,12 @@ SimuTxn* InputParametrized::ComposeTxn(rvm::BuildNum build_num, rvm::ContractSco
 	data.Empty();
 
 	rvm::ConstString s = { str.Begin(), (uint32_t)str.GetLength() };
-	if(_Simulator.GetEngine(rvm::_details::CONTRACT_ENGINE(cid))->ArgumentsJsonParse(build_num, cid, opcode, &s, &data, *_Simulator.GetGlobalShard(), &_Simulator.JsonLog))
+	if(_Simulator.GetEngine(rvm::CONTRACT_ENGINE(cid))->ArgumentsJsonParse(cid, opcode, &s, &data, &_Simulator.JsonLog))
 	{
 		auto* txn = SimuTxn::Create(data.GetSize());
 		txn->Type = rvm::InvokeContextType::Normal;
 		txn->Contract = cid;
 		txn->Op = opcode;
-		txn->BuildNum = build_num;
 		txn->Timestamp = os::Timestamp::Get();
 		txn->Flag = (SimuTxnFlag)0;
 		txn->OriginateHeight = 0;
@@ -440,11 +462,13 @@ SimuTxn* InputParametrized::ComposeTxn(rvm::BuildNum build_num, rvm::ContractSco
 		ASSERT(txn->ArgsSerializedSize == data.GetSize());
 		memcpy(txn->ArgsSerializedData, data.GetData(), data.GetSize());
 
+		sec::Hash<sec::HASH_SHA256>().Calculate(((char*)txn) + sizeof(rvm::HashValue), txn->GetSize() - sizeof(rvm::HashValue), &txn->Hash);
+
 		return txn;
 	}
 	else
 	{
-		_LOG("[BC] Line " << _Simulator.GetLineNum() << ": Invalid function argument/s")
+		_LOG("[PRD] Line " << _Simulator.GetLineNum() << ": Invalid function argument/s")
 		return nullptr;
 	}
 }

@@ -233,6 +233,13 @@ bool ExpressionParser::ParseIdentifier_Internal(PredaParser::IdentifierContext *
 	// first check if it's a type
 	if (type != nullptr)
 	{
+		if (type == m_pTranspilerCtx->thisPtrStack.stack[0].thisType)
+		{
+			m_pErrorPortal->SetAnchor(ctx->start);
+			m_pErrorPortal->AddUseCurrentContractTypeError();
+			return false;
+		}
+
 		outResult.type.baseConcreteType = type;
 		outResult.text = type->outputFullName;
 		outResult.bIsTypeName = true;
@@ -240,7 +247,7 @@ bool ExpressionParser::ParseIdentifier_Internal(PredaParser::IdentifierContext *
 	}
 
 	// otherwise it's an identifier
-	bool isConstMem = m_pIdentifierHub->GetConstMemberDefinition(pDefinedIdentifier, outResult.text); //is iddentifier is a const member var, outResult.text will be set to its definition
+	bool isConstMem = m_pIdentifierHub->GetConstMemberDefinition(pDefinedIdentifier, outResult.text); //is identifier is a const member var, outResult.text will be set to its definition
 	//if requireConst is true, ParseIdentifier_Internal is called from defineConstVariable
 	if (requireConst) {
 		bool tmp;
@@ -559,113 +566,201 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 		return ParsePrimaryExpression(ctx->primaryExpression(), outResult, requireConst);
 
 	// First handle the case of type name expressions
-	assert(subExpressions.size() > 0);
-	if (subExpRes[0].bIsTypeName)
+	if (subExpressions.size() > 0)
 	{
-		// type name expression has only 3 possibilities:
-		// 1. with "()", which evaluates to the constructor
-		// 2. with ".", and evaluates to a sub type
-		// 3. with ".", and evaluates to a static member, currently the only possibilities are:
-		//   a. an enumerator of an enumeration type
-		//   b. __id() of contract type
-		switch (transpiler::PredaExpressionTypes(ctx->expressionType))
+		if (subExpRes[0].bIsTypeName)
 		{
-		case transpiler::PredaExpressionTypes::Parentheses:
-		{
-			transpiler::DefinedIdentifierPtr pMember = subExpRes[0].type.baseConcreteType->GetMember("@constructor", nullptr);
-			if (pMember == nullptr)
+			// type name expression has only 3 possibilities:
+			// 1. with "()", which evaluates to the constructor
+			// 2. with ".", and evaluates to a sub type
+			// 3. with ".", and evaluates to a static member, currently the only possibilities are:
+			//   a. an enumerator of an enumeration type
+			//   b. function of a contract, which will be routed to the base contract id of that contract type
+			// 4. with "deploy", which evaluates to contract deployment
+			switch (transpiler::PredaExpressionTypes(ctx->expressionType))
 			{
-				m_pErrorPortal->SetAnchor(ctx->start);
-				m_pErrorPortal->AddNoMatchingConstructorError(subExpressions[0]->getText());
-				return false;
-			}
-
-			ConcreteTypePtr constructorType = pMember->qualifiedType.baseConcreteType;
-			if (constructorType->typeCategory != transpiler::ConcreteType::FunctionType)
+			case transpiler::PredaExpressionTypes::Parentheses:
 			{
-				m_pErrorPortal->AddInternalError(ctx->start, "constructor of \"" + subExpressions[0]->getText() + "\" is not a function. Probably compiler bug.");
-				return false;
-			}
-
-			std::string functionArgumentsSynthesizeResult;
-			int overloadFuncIndex = FindMatchingOverloadedFunction(constructorType, ctx->functionCallArguments(), functionArgumentsSynthesizeResult);
-			if (overloadFuncIndex == -1)
-				return false;
-
-			transpiler::FunctionSignature &signature = constructorType->vOverloadedFunctions[overloadFuncIndex];
-
-			if (m_pTranspilerCtx->functionCtx.GetFunctionSignature())
-			{
-				uint32_t curFunctionContextClass = m_pTranspilerCtx->functionCtx.GetFunctionSignature()->flags & uint32_t(transpiler::ScopeType::Mask);
-				uint32_t calleeContextClass = signature.flags & uint32_t(transpiler::ScopeType::Mask);
-				if (curFunctionContextClass < calleeContextClass)
-				{
-					m_pErrorPortal->AddInternalError(ctx->start, "constructor of \"" + subExpressions[0]->getText() + "\" has a higher context class than the current function and is not accessible. Probably a compiler bug.");
-					return false;
-				}
-
-				auto itor = m_pFunctionCallGraph->m_functionCallerSets.try_emplace(&signature).first;
-				itor->second.insert(m_pTranspilerCtx->functionCtx.GetFunctionSignature());
-			}
-
-			outResult.text = subExpRes[0].text + "(" + functionArgumentsSynthesizeResult + ")";
-			outResult.type = signature.returnType;
-
-			return true;
-		}
-		case transpiler::PredaExpressionTypes::Dot:
-		{
-			std::string identifierText = ctx->identifier()->getText();
-
-			// first check for sub types
-			{
-				ConcreteTypePtr type = subExpRes[0].type.baseConcreteType->FindInnerConcreteType(identifierText);
-				if (type != nullptr)
-				{
-					outResult.bIsTypeName = true;
-					outResult.text = type->outputFullName;
-					outResult.type.baseConcreteType = type;
-					return true;
-				}
-			}
-
-			// check for static members
-			{
-				bool bStatic;
-				transpiler::DefinedIdentifierPtr pMember = subExpRes[0].type.baseConcreteType->GetMember(identifierText, &bStatic);
+				transpiler::DefinedIdentifierPtr pMember = subExpRes[0].type.baseConcreteType->GetMember("@constructor", nullptr);
 				if (pMember == nullptr)
 				{
-					m_pErrorPortal->SetAnchor(ctx->identifier()->start);
-					m_pErrorPortal->AddNotAMemberOfError(identifierText, subExpressions[0]->getText());
+					m_pErrorPortal->SetAnchor(ctx->start);
+					m_pErrorPortal->AddNoMatchingConstructorError(subExpressions[0]->getText());
 					return false;
 				}
-				if (!bStatic)
+
+				ConcreteTypePtr constructorType = pMember->qualifiedType.baseConcreteType;
+				if (constructorType->typeCategory != transpiler::ConcreteType::FunctionType)
 				{
-					m_pErrorPortal->SetAnchor(ctx->identifier()->start);
-					m_pErrorPortal->AddIllegalReferenceToNonStaticMemberError(identifierText);
+					m_pErrorPortal->AddInternalError(ctx->start, "constructor of \"" + subExpressions[0]->getText() + "\" is not a function. Probably compiler bug.");
 					return false;
 				}
-				transpiler::QualifiedConcreteType memberType = pMember->qualifiedType;
 
-				outResult.bIsTypeName = false;
-				if (memberType.baseConcreteType->typeCategory == transpiler::ConcreteType::EnumType)
+				std::string functionArgumentsSynthesizeResult;
+				int overloadFuncIndex = FindMatchingOverloadedFunction(constructorType, ctx->functionCallArguments(), functionArgumentsSynthesizeResult);
+				if (overloadFuncIndex == -1)
+					return false;
+
+				transpiler::FunctionSignature& signature = constructorType->vOverloadedFunctions[overloadFuncIndex];
+
+				if (m_pTranspilerCtx->functionCtx.GetFunctionSignature())
 				{
-					outResult.text = subExpRes[0].text + "(" + subExpRes[0].text + "__::" + pMember->outputName + ")";
-				}
-				else
-				{
-					outResult.text = subExpRes[0].text + "::" + pMember->outputName;
+					uint32_t curFunctionContextClass = m_pTranspilerCtx->functionCtx.GetFunctionSignature()->flags & uint32_t(transpiler::ScopeType::Mask);
+					uint32_t calleeContextClass = signature.flags & uint32_t(transpiler::ScopeType::Mask);
+					if (curFunctionContextClass < calleeContextClass)
+					{
+						m_pErrorPortal->AddInternalError(ctx->start, "constructor of \"" + subExpressions[0]->getText() + "\" has a higher context class than the current function and is not accessible. Probably a compiler bug.");
+						return false;
+					}
+
+					auto itor = m_pFunctionCallGraph->m_functionCallerSets.try_emplace(&signature).first;
+					itor->second.insert(m_pTranspilerCtx->functionCtx.GetFunctionSignature());
 				}
 
-				outResult.type = memberType;
+				outResult.text = subExpRes[0].text + "(" + functionArgumentsSynthesizeResult + ")";
+				outResult.type = signature.returnType;
 
 				return true;
 			}
-		}
-		default:
-			m_pErrorPortal->SetAnchor(ctx->expression(0)->start);
-			m_pErrorPortal->AddIllegalUseOfTypeAsExpressionError();
-			return false;
+			case transpiler::PredaExpressionTypes::Dot:
+			{
+				std::string identifierText = ctx->identifier()->getText();
+
+				// first check for sub types
+				{
+					ConcreteTypePtr type = subExpRes[0].type.baseConcreteType->FindInnerConcreteType(identifierText);
+					if (type != nullptr)
+					{
+						outResult.bIsTypeName = true;
+						outResult.text = type->outputFullName;
+						outResult.type.baseConcreteType = type;
+						return true;
+					}
+				}
+
+				// check for static members
+				{
+					bool bStatic;
+					transpiler::DefinedIdentifierPtr pMember = subExpRes[0].type.baseConcreteType->GetMember(identifierText, &bStatic);
+					if (pMember == nullptr)
+					{
+						m_pErrorPortal->SetAnchor(ctx->identifier()->start);
+						m_pErrorPortal->AddNotAMemberOfError(identifierText, subExpressions[0]->getText());
+						return false;
+					}
+					if (!bStatic)
+					{
+						// members of contracts, when directly called on the type instead of its instances, is routed to the base instance of it
+						if (subExpRes[0].type.baseConcreteType->typeCategory == transpiler::ConcreteType::ContractType)
+						{
+							auto itor = m_importedContractsData.find(subExpRes[0].type.baseConcreteType);
+							if (itor == m_importedContractsData.end())
+							{
+								m_pErrorPortal->AddInternalError(ctx->expression(0)->start, "Contract type not found in imported contract list. Probably a compiler error");
+								return false;
+							}
+
+							outResult.bIsTypeName = false;
+							outResult.text = "imported_contract_" + std::to_string(itor->second.importSlotIndex) + "." + pMember->outputName;
+							outResult.type = pMember->qualifiedType;
+
+							return true;
+						}
+						else
+						{
+							m_pErrorPortal->SetAnchor(ctx->identifier()->start);
+							m_pErrorPortal->AddIllegalReferenceToNonStaticMemberError(identifierText);
+							return false;
+						}
+					}
+					transpiler::QualifiedConcreteType memberType = pMember->qualifiedType;
+
+					outResult.bIsTypeName = false;
+					if (memberType.baseConcreteType->typeCategory == transpiler::ConcreteType::EnumType)
+					{
+						outResult.text = subExpRes[0].text + "(" + subExpRes[0].text + "__::" + pMember->outputName + ")";
+					}
+					else
+					{
+						outResult.text = subExpRes[0].text + "::" + pMember->outputName;
+					}
+
+					outResult.type = memberType;
+
+					return true;
+				}
+			}
+			case transpiler::PredaExpressionTypes::Deploy:
+			{
+				if (subExpRes[0].type.baseConcreteType->typeCategory != transpiler::ConcreteType::ContractType)
+				{
+					m_pErrorPortal->SetAnchor(subExpressions[0]->start);
+					m_pErrorPortal->AddNonDeployableTypeError(subExpressions[0]->getText());
+				}
+
+				if (subExpRes[0].type.baseConcreteType == m_pTranspilerCtx->thisPtrStack.stack[0].thisType)
+				{
+					m_pErrorPortal->SetAnchor(subExpressions[0]->start);
+					m_pErrorPortal->AddUseCurrentContractTypeError();
+					return false;
+				}
+
+				uint32_t curFunctionScope = m_pTranspilerCtx->functionCtx.GetFunctionSignature()->flags & uint32_t(transpiler::ScopeType::Mask);
+				if (curFunctionScope != uint32_t(transpiler::ScopeType::Global))
+				{
+					m_pErrorPortal->SetAnchor(subExpressions[0]->start);
+					m_pErrorPortal->AddDeployInNonGlobalError();
+				}
+
+				std::vector<PredaParser::ExpressionContext*> argCtxs = ctx->functionCallArguments()->expression();
+				std::vector<ExpressionResult> args(argCtxs.size());
+
+				std::string synthesizedArgumentsString = "";
+				for (size_t i = 0; i < argCtxs.size(); i++)
+				{
+					if (!ParseExpression(argCtxs[i], args[i]))
+						return false;
+
+					synthesizedArgumentsString += ", " + args[i].text;
+				}
+
+				uint32_t numExpectedParam = 0;
+				auto itor = m_importedContractsData.find(subExpRes[0].type.baseConcreteType);
+				if (itor == m_importedContractsData.end())
+				{
+					m_pErrorPortal->AddInternalError(ctx->expression(0)->start, "Contract type not found in imported contract list. Probably a compiler error");
+					return false;
+				}
+				else
+					numExpectedParam = uint32_t(itor->second.constructorParamList.size());
+
+				PredaParser::FunctionCallArgumentsContext* pArgs = ctx->functionCallArguments();
+				if (pArgs->expression().size() != numExpectedParam)
+				{
+					m_pErrorPortal->SetAnchor(subExpressions[0]->start);
+					m_pErrorPortal->AddArgumentListLengthMismatchError(numExpectedParam, pArgs->expression().size());
+					return false;
+				}
+
+				for (size_t i = 0; i < args.size(); i++)
+					if (args[i].type.baseConcreteType != itor->second.constructorParamList[i])
+					{
+						m_pErrorPortal->SetAnchor(argCtxs[i]->start);
+						m_pErrorPortal->AddTypeMismatchError(itor->second.constructorParamList[i], args[i].type.baseConcreteType);
+						return false;
+					}
+
+				outResult.bIsTypeName = false;
+				outResult.type = transpiler::QualifiedConcreteType(m_pTranspilerCtx->GetBuiltInIntegerType(64, false), false, false);
+				outResult.text = "prlrt::deploy_call(" + std::to_string(itor->second.importSlotIndex) + synthesizedArgumentsString + ")";
+
+				return true;
+			}
+			default:
+				m_pErrorPortal->SetAnchor(ctx->expression(0)->start);
+				m_pErrorPortal->AddIllegalUseOfTypeAsExpressionError();
+				return false;
+			}
 		}
 	}
 
@@ -689,49 +784,50 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 
 	static const ExpressionDesc predaExpressions[uint8_t(transpiler::PredaExpressionTypes::Max)] =
 	{
-		{transpiler::OperatorTypeBitMask::PostIncrementBit,			"++",	true,	1,	ExpressionResultType::Void},										//		PostIncrement = 0,
-		{transpiler::OperatorTypeBitMask::PostDecrementBit,			"--",	true,	1,	ExpressionResultType::Void},										//		PostDecrement,
-		{transpiler::OperatorTypeBitMask::BracketBit,				"[]",	false,	2,	ExpressionResultType::Custom},										//		Bracket,
-		{transpiler::OperatorTypeBitMask::ParenthesesBit,			"()",	false,	1,	ExpressionResultType::Custom},										//		Parentheses,
-		{transpiler::OperatorTypeBitMask::DotBit,					".",	false,	1,	ExpressionResultType::Custom},										//		Dot,
-		{transpiler::OperatorTypeBitMask(0),						"",		false,	1,	ExpressionResultType::SameAsFirstOperand},							//		SurroundWithParentheses,
-		{transpiler::OperatorTypeBitMask::PreIncrementBit,			"++",	true,	1,	ExpressionResultType::Void},										//		PreIncrement,
-		{transpiler::OperatorTypeBitMask::PreDecrementBit,			"--",	true,	1,	ExpressionResultType::Void},										//		PreDecrement,
-		{transpiler::OperatorTypeBitMask::UnaryPlusBit,				"+",	false,	1,	ExpressionResultType::SameAsFirstOperand},							//		UnaryPlus,
-		{transpiler::OperatorTypeBitMask::UnaryMinusBit,			"-",	false,	1,	ExpressionResultType::SameAsFirstOperand},							//		UnaryMinus,
-		{transpiler::OperatorTypeBitMask::LogicalNotBit,			"!",	false,	1,	ExpressionResultType::SameAsFirstOperand},							//		LogicalNot,
-		{transpiler::OperatorTypeBitMask::BitwiseNotBit,			"~",	false,	1,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseNot,
-		{transpiler::OperatorTypeBitMask::MultiplyBit,				"*",	false,	2,	ExpressionResultType::Custom},										//		Multiply,
-		{transpiler::OperatorTypeBitMask::DivideBit,				"/",	false,	2,	ExpressionResultType::Custom},										//		Divide,
-		{transpiler::OperatorTypeBitMask::ModuloBit,				"%",	false,	2,	ExpressionResultType::Custom},										//		Modulo,
-		{transpiler::OperatorTypeBitMask::AddBit,					"+",	false,	2,	ExpressionResultType::Custom},										//		Add,
-		{transpiler::OperatorTypeBitMask::SubtractBit,				"-",	false,	2,	ExpressionResultType::Custom},										//		Subtract,
-		{transpiler::OperatorTypeBitMask::ShiftLeftBit,				"<<",	false,	2,	ExpressionResultType::SameAsFirstOperand},							//		ShiftLeft,
-		{transpiler::OperatorTypeBitMask::ShiftRightBit,			">>",	false,	2,	ExpressionResultType::SameAsFirstOperand},							//		ShiftRight,
-		{transpiler::OperatorTypeBitMask::LessThanBit,				"<",	false,	2,	ExpressionResultType::Bool},										//		LessThan,
-		{transpiler::OperatorTypeBitMask::GreaterThanBit,			">",	false,	2,	ExpressionResultType::Bool},										//		GreaterThan,
-		{transpiler::OperatorTypeBitMask::LessThanOrEqualBit,		"<=",	false,	2,	ExpressionResultType::Bool},										//		LessThanOrEqual,
-		{transpiler::OperatorTypeBitMask::GreaterThanOrEqualBit,	">=",	false,	2,	ExpressionResultType::Bool},										//		GreaterThanOrEqual,
-		{transpiler::OperatorTypeBitMask::EqualBit,					"==",	false,	2,	ExpressionResultType::Bool},										//		Equal,
-		{transpiler::OperatorTypeBitMask::NotEqualBit,				"!=",	false,	2,	ExpressionResultType::Bool},										//		NotEqual,
-		{transpiler::OperatorTypeBitMask::BitwiseAndBit,			"&",	false,	2,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseAnd,
-		{transpiler::OperatorTypeBitMask::BitwiseXorBit,			"^",	false,	2,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseXor,
-		{transpiler::OperatorTypeBitMask::BitwiseOrBit,				"|",	false,	2,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseOr,
-		{transpiler::OperatorTypeBitMask::LogicalAndBit,			"&&",	false,	2,	ExpressionResultType::Bool},										//		LogicalAnd,
-		{transpiler::OperatorTypeBitMask::LogicalOrBit,				"||",	false,	2,	ExpressionResultType::Bool},										//		LogicalOr,
-		{transpiler::OperatorTypeBitMask(0),						"?:",	false,	3,	ExpressionResultType::Custom},								//		TernaryConditional,
-		{transpiler::OperatorTypeBitMask::AssignmentBit,			"=",	true,	2,	ExpressionResultType::Void},										//		Assignment,
-		{transpiler::OperatorTypeBitMask::AssignmentAddBit,			"+=",	true,	2,	ExpressionResultType::Void},										//		AssignmentAdd,
-		{transpiler::OperatorTypeBitMask::AssignmentSubtractBit,	"-=",	true,	2,	ExpressionResultType::Void},										//		AssignmentSubtract,
-		{transpiler::OperatorTypeBitMask::AssignmentMultiplyBit,	"*=",	true,	2,	ExpressionResultType::Void},										//		AssignmentMultiply,
-		{transpiler::OperatorTypeBitMask::AssignmentDivideBit,		"/=",	true,	2,	ExpressionResultType::Void},										//		AssignmentDivide,
-		{transpiler::OperatorTypeBitMask::AssignmentModuloBit,		"%=",	true,	2,	ExpressionResultType::Void},										//		AssignmentModulo,
-		{transpiler::OperatorTypeBitMask::AssignmentShiftLeftBit,	"<<=",	true,	2,	ExpressionResultType::Void},										//		AssignmentShiftLeft,
-		{transpiler::OperatorTypeBitMask::AssignmentShiftRightBit,	">>=",	true,	2,	ExpressionResultType::Void},										//		AssignmentShiftRight,
-		{transpiler::OperatorTypeBitMask::AssignmentBitwiseAndBit,	"&=",	true,	2,	ExpressionResultType::Void},										//		AssignmentBitwiseAnd,
-		{transpiler::OperatorTypeBitMask::AssignmentBitwiseXorBit,	"^=",	true,	2,	ExpressionResultType::Void},										//		AssignmentBitwiseXor,
-		{transpiler::OperatorTypeBitMask::AssignmentBitwiseOrBit,	"|=",	true,	2,	ExpressionResultType::Void},										//		AssignmentBitwiseOr,
-		{transpiler::OperatorTypeBitMask(0),						"",		false,	2,	ExpressionResultType::Custom}										//		Primary,
+		{transpiler::OperatorTypeBitMask::PostIncrementBit,			"++",		true,	1,	ExpressionResultType::Void},										//		PostIncrement = 0,
+		{transpiler::OperatorTypeBitMask::PostDecrementBit,			"--",		true,	1,	ExpressionResultType::Void},										//		PostDecrement,
+		{transpiler::OperatorTypeBitMask::BracketBit,				"[]",		false,	2,	ExpressionResultType::Custom},										//		Bracket,
+		{transpiler::OperatorTypeBitMask::ParenthesesBit,			"()",		false,	1,	ExpressionResultType::Custom},										//		Parentheses,
+		{transpiler::OperatorTypeBitMask::DotBit,					".",		false,	1,	ExpressionResultType::Custom},										//		Dot,
+		{transpiler::OperatorTypeBitMask(0),						"",			false,	1,	ExpressionResultType::SameAsFirstOperand},							//		SurroundWithParentheses,
+		{transpiler::OperatorTypeBitMask::PreIncrementBit,			"++",		true,	1,	ExpressionResultType::Void},										//		PreIncrement,
+		{transpiler::OperatorTypeBitMask::PreDecrementBit,			"--",		true,	1,	ExpressionResultType::Void},										//		PreDecrement,
+		{transpiler::OperatorTypeBitMask::UnaryPlusBit,				"+",		false,	1,	ExpressionResultType::SameAsFirstOperand},							//		UnaryPlus,
+		{transpiler::OperatorTypeBitMask::UnaryMinusBit,			"-",		false,	1,	ExpressionResultType::SameAsFirstOperand},							//		UnaryMinus,
+		{transpiler::OperatorTypeBitMask::LogicalNotBit,			"!",		false,	1,	ExpressionResultType::SameAsFirstOperand},							//		LogicalNot,
+		{transpiler::OperatorTypeBitMask::BitwiseNotBit,			"~",		false,	1,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseNot,
+		{transpiler::OperatorTypeBitMask::DeployBit,				"deploy",	false,	1,	ExpressionResultType::Custom},										//		Deploy,
+		{transpiler::OperatorTypeBitMask::MultiplyBit,				"*",		false,	2,	ExpressionResultType::Custom},										//		Multiply,
+		{transpiler::OperatorTypeBitMask::DivideBit,				"/",		false,	2,	ExpressionResultType::Custom},										//		Divide,
+		{transpiler::OperatorTypeBitMask::ModuloBit,				"%",		false,	2,	ExpressionResultType::Custom},										//		Modulo,
+		{transpiler::OperatorTypeBitMask::AddBit,					"+",		false,	2,	ExpressionResultType::Custom},										//		Add,
+		{transpiler::OperatorTypeBitMask::SubtractBit,				"-",		false,	2,	ExpressionResultType::Custom},										//		Subtract,
+		{transpiler::OperatorTypeBitMask::ShiftLeftBit,				"<<",		false,	2,	ExpressionResultType::SameAsFirstOperand},							//		ShiftLeft,
+		{transpiler::OperatorTypeBitMask::ShiftRightBit,			">>",		false,	2,	ExpressionResultType::SameAsFirstOperand},							//		ShiftRight,
+		{transpiler::OperatorTypeBitMask::LessThanBit,				"<",		false,	2,	ExpressionResultType::Bool},										//		LessThan,
+		{transpiler::OperatorTypeBitMask::GreaterThanBit,			">",		false,	2,	ExpressionResultType::Bool},										//		GreaterThan,
+		{transpiler::OperatorTypeBitMask::LessThanOrEqualBit,		"<=",		false,	2,	ExpressionResultType::Bool},										//		LessThanOrEqual,
+		{transpiler::OperatorTypeBitMask::GreaterThanOrEqualBit,	">=",		false,	2,	ExpressionResultType::Bool},										//		GreaterThanOrEqual,
+		{transpiler::OperatorTypeBitMask::EqualBit,					"==",		false,	2,	ExpressionResultType::Bool},										//		Equal,
+		{transpiler::OperatorTypeBitMask::NotEqualBit,				"!=",		false,	2,	ExpressionResultType::Bool},										//		NotEqual,
+		{transpiler::OperatorTypeBitMask::BitwiseAndBit,			"&",		false,	2,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseAnd,
+		{transpiler::OperatorTypeBitMask::BitwiseXorBit,			"^",		false,	2,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseXor,
+		{transpiler::OperatorTypeBitMask::BitwiseOrBit,				"|",		false,	2,	ExpressionResultType::SameAsFirstOperand},							//		BitwiseOr,
+		{transpiler::OperatorTypeBitMask::LogicalAndBit,			"&&",		false,	2,	ExpressionResultType::Bool},										//		LogicalAnd,
+		{transpiler::OperatorTypeBitMask::LogicalOrBit,				"||",		false,	2,	ExpressionResultType::Bool},										//		LogicalOr,
+		{transpiler::OperatorTypeBitMask(0),						"?:",		false,	3,	ExpressionResultType::Custom},								//		TernaryConditional,
+		{transpiler::OperatorTypeBitMask::AssignmentBit,			"=",		true,	2,	ExpressionResultType::Void},										//		Assignment,
+		{transpiler::OperatorTypeBitMask::AssignmentAddBit,			"+=",		true,	2,	ExpressionResultType::Void},										//		AssignmentAdd,
+		{transpiler::OperatorTypeBitMask::AssignmentSubtractBit,	"-=",		true,	2,	ExpressionResultType::Void},										//		AssignmentSubtract,
+		{transpiler::OperatorTypeBitMask::AssignmentMultiplyBit,	"*=",		true,	2,	ExpressionResultType::Void},										//		AssignmentMultiply,
+		{transpiler::OperatorTypeBitMask::AssignmentDivideBit,		"/=",		true,	2,	ExpressionResultType::Void},										//		AssignmentDivide,
+		{transpiler::OperatorTypeBitMask::AssignmentModuloBit,		"%=",		true,	2,	ExpressionResultType::Void},										//		AssignmentModulo,
+		{transpiler::OperatorTypeBitMask::AssignmentShiftLeftBit,	"<<=",		true,	2,	ExpressionResultType::Void},										//		AssignmentShiftLeft,
+		{transpiler::OperatorTypeBitMask::AssignmentShiftRightBit,	">>=",		true,	2,	ExpressionResultType::Void},										//		AssignmentShiftRight,
+		{transpiler::OperatorTypeBitMask::AssignmentBitwiseAndBit,	"&=",		true,	2,	ExpressionResultType::Void},										//		AssignmentBitwiseAnd,
+		{transpiler::OperatorTypeBitMask::AssignmentBitwiseXorBit,	"^=",		true,	2,	ExpressionResultType::Void},										//		AssignmentBitwiseXor,
+		{transpiler::OperatorTypeBitMask::AssignmentBitwiseOrBit,	"|=",		true,	2,	ExpressionResultType::Void},										//		AssignmentBitwiseOr,
+		{transpiler::OperatorTypeBitMask(0),						"",			false,	2,	ExpressionResultType::Custom}										//		Primary,
 	};
 
 	static_assert(sizeof(predaExpressions) / sizeof(predaExpressions[0]) == uint8_t(transpiler::PredaExpressionTypes::Max), "predaExpressions has wrong size");
@@ -987,14 +1083,6 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 		outResult.text = subExpRes[0].text + "(" + functionArgumentsSynthesizeResult + ")";
 		outResult.type = signature.returnType;
 
-		// special HACK for .__self() of contract types
-		if (outResult.type.baseConcreteType && outResult.type.baseConcreteType->typeCategory == transpiler::ConcreteType::ContractType)
-		{
-			// __self() return value const-ness is the same as the const-ness of contract function scope
-			if (m_pTranspilerCtx->thisPtrStack.stack.size() == 2)
-				outResult.type.bIsConst = m_pTranspilerCtx->thisPtrStack.stack[1].bIsConstPtr;
-		}
-
 		return true;
 	}
 	case transpiler::PredaExpressionTypes::Dot:
@@ -1019,11 +1107,6 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 		return true;
 	}
 	case transpiler::PredaExpressionTypes::SurroundWithParentheses:
-		//if (subExpRes[0].type.baseConcreteType->typeCategory == transpiler::ConcreteType::FunctionType)
-		//{
-		//	m_pErrorPortal->AddInternalError(subExpressions[0]->start, "cannot surround with parentheses.");
-		//	return false;
-		//}
 		outResult.text = "(" + subExpRes[0].text + ")";
 		outResult.type = subExpRes[0].type;
 		return true;
@@ -1168,4 +1251,10 @@ bool ExpressionParser::GenerateDebugPrintArguments(PredaParser::FunctionCallArgu
 	}
 
 	return true;
+}
+
+bool ExpressionParser::AddImportedContract(ConcreteTypePtr contract, const std::vector<ConcreteTypePtr>& paramList, uint32_t id)
+{
+	// returns true if the contract didn't have constructor added
+	return m_importedContractsData.try_emplace(contract, ImportedContractData { paramList, id }).second;
 }

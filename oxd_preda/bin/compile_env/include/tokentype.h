@@ -184,8 +184,4 @@ namespace prlrt {
 		ret.ptr->amount = amount;
 		return ret;
 	}
-	uint32_t token_name_to_id(const char *name)
-	{
-		return PREDA_CALL(GetTokenIdByName, name);
-	}
 }

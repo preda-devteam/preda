@@ -4,25 +4,27 @@ PredaCompiledContracts::PredaCompiledContracts(const char *dAppName, rvm::Engine
 {
 	m_dAppName = dAppName;
 	m_engineId = engineId;
-	m_contracts.reserve(maxCount);
-	m_contractSourceCodes.reserve(maxCount);
-	m_contractIntermediateCodes.reserve(maxCount);
-	m_contractDelegates.reserve(maxCount);
+	m_contracts.resize(maxCount);		// m_contractDelegates keeps pointers to the contract object, therefore preallocate space here to avoid resizing
+	m_contractSourceCodes.resize(maxCount);
+	m_contractIntermediateCodes.resize(maxCount);
+	m_contractDelegates.resize(maxCount, RvmContractDelegate(nullptr));
 }
 
-void PredaCompiledContracts::AddContract(const ContractCompileData &entry, const char *sourceCode, const std::string &intermediateCode)
+void PredaCompiledContracts::AddContract(const ContractCompileData &entry, const char *sourceCode, const std::string &intermediateCode, uint32_t slot)
 {
-	ASSERT(m_contracts.capacity() > m_contracts.size());
+	ASSERT(slot < m_contracts.size());
 
-	m_contracts.push_back(entry);
-	m_contractSourceCodes.push_back(sourceCode);
-	m_contractIntermediateCodes.push_back(intermediateCode);
-	m_contractDelegates.emplace_back(&m_contracts.back(), nullptr);
+	m_contracts[slot] = entry;
+	m_contractSourceCodes[slot] = sourceCode;
+	m_contractIntermediateCodes[slot] = intermediateCode;
+	m_contractDelegates[slot] = RvmContractDelegate(&m_contracts[slot]);		// The delegate keeps a pointer to the contract object, therefore it must persist in memory
+
+	m_compileOrder.push_back(slot);
 
 	for (auto &imported : entry.importedContracts)
 	{
 		// already in the dependency list
-		if (m_externalDependencies.FindString(imported.c_str()) != -1)
+		if (m_externalDependencies.FindString((imported + ',').c_str()) != -1)
 			continue;
 
 		// if it's internal dependency
@@ -35,9 +37,8 @@ void PredaCompiledContracts::AddContract(const ContractCompileData &entry, const
 			}
 		if (!bInternalDependency)
 		{
-			if (m_externalDependencies.GetLength() > 0)
-				m_externalDependencies += ',';
 			m_externalDependencies += imported.c_str();
+			m_externalDependencies += ',';
 		}
 	}
 }
@@ -67,7 +68,18 @@ const ContractLinkData* PredaCompiledContracts::GetLinkData(uint32_t contractIdx
 	return contractIdx >= m_contractsLinkData.size() ? nullptr : &m_contractsLinkData[contractIdx];
 }
 
-// interfaces from rvm::CompiledContracts
+void PredaCompiledContracts::SetDependencyData(std::vector<uint8_t>&& data)
+{
+	m_dependencyData = data;
+}
+
+const std::vector<uint32_t>& PredaCompiledContracts::GetCompileOrder() const
+{
+	return m_compileOrder;
+}
+
+
+// interfaces from rvm::CompiledModules
 rvm::EngineId PredaCompiledContracts::GetEngineId() const
 {
 	return m_engineId;
@@ -95,6 +107,35 @@ const rvm::Contract* PredaCompiledContracts::GetContract(uint32_t idx) const
 rvm::ConstString PredaCompiledContracts::GetExternalDependencies() const
 {
 	return *(rvm::ConstString*)&m_externalDependencies;
+}
+
+rvm::ConstData PredaCompiledContracts::GetDependencyData() const
+{
+	return rvm::ConstData{ m_dependencyData.size() ? &m_dependencyData[0] : nullptr, uint32_t(m_dependencyData.size()) };
+}
+
+bool PredaCompiledContracts::ValidateDependency(const rvm::GlobalStates* chain_state) const
+{
+	if (m_dependencyData.size() == 0)
+		return true;
+
+	const rt::String_Ref depStr((char*)m_dependencyData[0], uint32_t(m_dependencyData.size()));
+	int32_t nameLen = int32_t(depStr.FindCharacterReverse(';'));
+	if (nameLen == -1)
+		return true;
+	uint32_t depCount = uint32_t(depStr.GetLength() - nameLen) / uint32_t(sizeof(rvm::ContractModuleID));
+	std::vector<rt::String_Ref> names(depCount);
+	if (rt::String_Ref(depStr.GetString(), nameLen).Split(&names[0], depCount, ';') != depCount)
+		return false;
+
+	// all imported contracts must have the same deploy id as at the time of compile
+	for (uint32_t i = 0; i < depCount; i++)
+	{
+		const rvm::ContractModuleID *moduleId = _details::GetOnChainContractModuleIdFromFullName(chain_state, std::string(names[i].GetString(), names[i].GetLength()));
+		if (moduleId == nullptr || memcmp(moduleId, ((const rvm::ContractModuleID*)depStr.GetString()) + i, sizeof(rvm::ContractModuleID)) != 0)
+			return false;
+	}
+	return true;
 }
 
 bool PredaCompiledContracts::IsLinked() const

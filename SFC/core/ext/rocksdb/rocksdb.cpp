@@ -1,4 +1,20 @@
 #include "../../os/platform.h"
+
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wmicrosoft-include"
+#pragma GCC diagnostic ignored "-Wshift-negative-value"
+#pragma GCC diagnostic ignored "-Wself-assign"
+#pragma GCC diagnostic ignored "-Wtautological-constant-out-of-range-compare"
+#pragma GCC diagnostic ignored "-Wimplicit-function-declaration"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-private-field"
+#pragma GCC diagnostic ignored "-Wmissing-braces"
+#endif
+
+#define _CRT_SECURE_NO_WARNINGS		1
+#define	_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS	1
+
 #include "rocksdb.inc"  // should come before "rocksdb.h"
 #include "rocksdb.h"
 

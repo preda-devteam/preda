@@ -102,7 +102,7 @@ void Blob::Jsonify(rt::Json& json) const
 	}
 	else
 	{	// blob:[hash_string]:xxx
-		append += rt::SS("\"blob:(") + BlobMimeToName((BlobMime)(Mime&BMIME_BITMASK)) + rt::SS(")=[") + oxd::b32str(DataHash) + ']' + ':' + DataSize + '"';
+		append += rt::SS("\"blob:(") + BlobMimeToName((BlobMime)(Mime&BMIME_BITMASK)) + rt::SS(")=[") + b32s(DataHash) + ']' + ':' + DataSize + '"';
 	}
 }
 

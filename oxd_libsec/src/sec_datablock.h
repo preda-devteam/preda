@@ -47,19 +47,16 @@ struct b32str: public rt::tos::Base32CrockfordLowercaseOnStack<>
 {	
 	void	_ShowTrailingZero(){ for(LPSTR p = &Last(); *p == 'o' && p>=_p; p--)*p = '0'; }
 public:
-	template<UINT _LEN, bool is_sensitive = false>
-	b32str(const sec::DataBlock<_LEN, is_sensitive>& x):rt::tos::Base32CrockfordLowercaseOnStack<>(&x, _LEN){ _ShowTrailingZero(); }
-	template<UINT _LEN>
-	b32str(const typename sec::DataBlockRef<_LEN>& x):rt::tos::Base32CrockfordLowercaseOnStack<>(x.GetBytes(), _LEN){ _ShowTrailingZero(); }
 	template<typename T>
 	b32str(const T& x):rt::tos::Base32CrockfordLowercaseOnStack<>(&x, sizeof(T)){ static_assert(rt::TypeTraits<T>::IsPOD); _ShowTrailingZero(); }
 	b32str(LPCVOID p, UINT size):rt::tos::Base32CrockfordLowercaseOnStack<>(p, size){ _ShowTrailingZero(); }
-	const b32str& Shorten(bool as_addr = false)
+	const b32str& Shorten()
 	{	if(GetLength()>=6)
 		{
-			*(DWORD*)&_p[4] = *(DWORD*)&_p[_len-4];		_p[4] = ':'; 		_p[8] = as_addr?']':'>';
-			_p[3] = _p[2];		_p[2] = _p[1];			_p[1] = _p[0];		_p[0] = as_addr?'[':'<';
-			_len = 9;
+			_p[3] = _p[2];		_p[2] = _p[1];			_p[1] = _p[0];		_p[0] = '[';
+			_p[8] = _p[_len-1];	_p[7] = _p[_len-2];		_p[6] = _p[_len-3];	_p[9] = ']';
+			_p[4] = _p[5] = '.';
+			_len = 10;
 		}
 		return *this;
 	}
@@ -69,8 +66,5 @@ public:
 		return os::Base32CrockfordDecode(out, out_size, str, str_len);
 	}
 };
-
-#define b32shorten(x)			((rt::String_Ref&)oxd::b32str(x).Shorten())
-#define b32shorten_address(x)	((rt::String_Ref&)oxd::b32str(x).Shorten(true))
 
 } // namespace oxd

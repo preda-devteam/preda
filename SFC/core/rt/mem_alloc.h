@@ -87,8 +87,6 @@ extern bool	IsMemoryExceptionEnabledInThread();
 namespace rt
 {
 
-#define EnterPoolAllocatorScope(x)		rt::PooledAllocator::Scope MARCO_JOIN(_CS_Holder_,__COUNTER__)(x);
-
 //////////////////////////////////////////////////////////////////////////////////
 //	Single-thread memory allocator (optimized for speed, memory amplication is 2x)
 //
@@ -96,6 +94,8 @@ namespace rt
 //	~:= BlockOrderSlot[_BlockOrderMax - _BlockOrderMin + 1]
 //		BlockOrderSlot:= BlockBank[BlockBankCount], dynamic sized
 //						 BlockBank:= Block[BlockCount], fixed size
+
+#define EnterPoolAllocatorScope(x)		rt::PooledAllocator::Scope MARCO_JOIN(_CS_Holder_,__COUNTER__)(x);
 
 class PooledAllocator // not thread-safe
 {
@@ -133,7 +133,6 @@ protected:
 
 protected:
 #pragma pack(push, 1)
-	struct BlockBank;
 	struct BlockOrderSlot // collection of BlockBank, up to 64k BlockBank(s)
 	{
 		PooledAllocator*_pAllocator;

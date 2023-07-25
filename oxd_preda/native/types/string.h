@@ -1,10 +1,12 @@
-#pragma once
+﻿#pragma once
 #include "type_def.h"
 
 
 namespace rvm
 {
 #pragma pack(push, 1)
+
+struct StringMutable;
 
 struct String
 {
@@ -36,12 +38,22 @@ struct String
 	bool operator	<=(const String& x) const { return Str() <= x.Str(); }
 	bool operator	==(const String& x) const { return Str() == x.Str(); }
 	void			Jsonify(rt::Json& append) const { append.String(Str()); }
+	void			ToString(rt::String& append) const { append += Str(); }
 
 	static auto&	Zero(){ static const String _zero(0); return _zero; }
 	static void		GetTypeSignature(rt::String& n){ n += rt::SS("string"); }
 };
 
-typedef rt::String	StringMutable;
+struct StringMutable: public rt::String
+{
+	typedef rt::String _SC;
+	auto&	operator = (const rt::String_Ref& s){ *(_SC*)this = s; return *this; }
+	bool	JsonParse(const rt::String_Ref& s){ rt::JsonObject::UnescapeStringValue(s.TrimQuotes(), *this); return true; }
+	StringMutable() = default;
+	StringMutable(const rt::String_Ref& s):_SC(s){}
+	template<typename str_expr>
+	StringMutable(const str_expr& x):_SC(x){}
+};
 
 #pragma pack(pop)
 } // namespace oxd

@@ -325,18 +325,26 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 		return {};
 	}
 	if (!linker.func_wrap("env", "predaCrossCall",
-		[&engine](wasmtime::Caller caller, uint64_t contractId, uint32_t opCode, WasmPtrT ptrs, uint32_t numPtrs) -> uint32_t {
+		[&engine](wasmtime::Caller caller, uint64_t cvId, int64_t templateContractImportSlot, uint32_t opCode, WasmPtrT ptrs, uint32_t numPtrs) -> uint32_t {
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
-			return engine.runtimeInterface().CrossCall(contractId, opCode,
+			return engine.runtimeInterface().CrossCall(cvId, templateContractImportSlot, opCode,
 				reinterpret_cast<const void**>(static_cast<uintptr_t>(ptrs)), numPtrs);
 		})) {
 		return {};
 	}
 	if (!linker.func_wrap("env", "predaInterfaceCall",
-		[&engine](wasmtime::Caller caller, uint64_t contractId, WasmPtrT interface_name_offset, uint32_t funcIdx, WasmPtrT ptrs, uint32_t numPtrs) -> uint32_t {
+		[&engine](wasmtime::Caller caller, uint64_t contractId, int64_t interfaceContractImportSlot, uint32_t interfaceSlot, uint32_t funcIdx, WasmPtrT ptrs, uint32_t numPtrs) -> uint32_t {
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
 			return engine.runtimeInterface().InterfaceCall(contractId,
-				WasmPtrToPtr<const char*>(mem, interface_name_offset), funcIdx,
+				interfaceContractImportSlot, interfaceSlot, funcIdx,
+				reinterpret_cast<const void**>(static_cast<uintptr_t>(ptrs)), numPtrs);
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaDeployCall",
+		[&engine](wasmtime::Caller caller, int64_t templateContractImportSlot, WasmPtrT ptrs, uint32_t numPtrs) -> uint64_t {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			return engine.runtimeInterface().DeployCall(templateContractImportSlot,
 				reinterpret_cast<const void**>(static_cast<uintptr_t>(ptrs)), numPtrs);
 		})) {
 		return {};
@@ -417,13 +425,6 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 		[&engine](wasmtime::Caller caller, WasmPtrT address_offset) -> uint32_t {
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
 			return engine.runtimeInterface().IsNameAddress(WasmPtrToPtr<const void*>(mem, address_offset));
-		})) {
-		return {};
-	}
-	if (!linker.func_wrap("env", "predaIsDomainAddress",
-		[&engine](wasmtime::Caller caller, WasmPtrT address_offset) -> uint32_t {
-			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
-			return engine.runtimeInterface().IsDomainAddress(WasmPtrToPtr<const void*>(mem, address_offset));
 		})) {
 		return {};
 	}
@@ -794,9 +795,9 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 		})) {
 		return {};
 	}
-	if (!linker.func_wrap("env", "predaTransaction_GetSingerCount",
+	if (!linker.func_wrap("env", "predaTransaction_GetSignerCount",
 		[&engine](wasmtime::Caller caller) -> uint32_t {
-			return engine.runtimeInterface().Transaction_GetSingerCount();
+			return engine.runtimeInterface().Transaction_GetSignerCount();
 		})) {
 		return {};
 	}

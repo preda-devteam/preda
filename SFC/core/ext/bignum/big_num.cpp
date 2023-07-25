@@ -1129,7 +1129,7 @@ void BN_Div(const BN_Ref& a, const BN_Ref& b, ext::BigNumMutable *remainder, ext
 	b_temp += b;
 	a_temp._Sign = false;
 	b_temp._Sign = false;
-	uint32_t m = a_temp.GetLength();
+	//uint32_t m = a_temp.GetLength();
 	uint32_t n = b_temp.GetLength();
 	uint32_t j = a_temp.GetLength() - b_temp.GetLength();
 	if(_details::Div_Standard_test(a_temp, b_temp)){

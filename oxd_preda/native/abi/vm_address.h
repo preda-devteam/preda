@@ -24,12 +24,11 @@ enum class SecSuite: uint8_t
 	NoSigningMax,
 
 	Delegated	= 8,			// address is not based on a public key, signing is delegated to a address of Cryptography type
-	RegisteredDapp = Delegated,
-	RegisteredToken,
-	RegisteredNonfungible,
-	RegisteredDomain,
-	RegisteredName,
-	RegisteredMax,
+	DelegatedAsHash = Delegated,
+	DelegatedAsName,
+	DelegatedAsDApp,
+	DelegatedAsToken,
+	DelegatedMax,
 			
 	None = 0xff
 };
@@ -48,42 +47,41 @@ struct Address
 typedef const Address ConstAddress;
 static_assert(sizeof(Address) == 36);
 
-// 12-bit
-enum class ScopeKeySize : uint16_t
+// 6-bit
+enum class ScopeKeySize : uint8_t
 {
 	// non-Enumerable
-	Default = 0,	// based on actual scope id, 36 (address) or n/a
-	Address = 0,	// address
-	UInt16,			// uint16_t
-	UInt32,			// uint32_t
-	UInt64,			// uint64_t
-	UInt160,		// SHA160
-	UInt256,		// SHA256
-	UInt512,		// SHA512
-	VaryingSize,	// varying size < 256B
+	Default = 0,	// actual scope is defined on scope_slot
+	Address = 0,	// address (slot #0, #1, #2 were occupied for ScopeType::Contract, slot for customized address scope should starts from #3)
+	UInt32,			// uint32_t	: 4B
+	UInt64,			// uint64_t	: 8B
+	UInt96,			// uint96_t	: 12B
+	UInt128,		// SHA128	: 16B
+	UInt160,		// SHA160	: 20B
+	UInt256,		// SHA256	: 32B
+	UInt512,		// SHA512	: 64B
 	// Enumerable
 	AddressEnumerable = 0x20,	// address
-	UInt16Enumerable,			// uint16_t
 	UInt32Enumerable,			// uint32_t
 	UInt64Enumerable,			// uint64_t
-	UInt160Enumerable,			// SHA160
-	UInt256Enumerable,			// SHA256
+	UInt96Enumerable,			// uint96_t
+	UInt128Enumerable,			// MD5/uint128_t
+	UInt160Enumerable,			// SHA160		
+	UInt256Enumerable,			// SHA256		
 	UInt512Enumerable,			// SHA512
-	VaryingSizeEnumerable,		// varying size < 256B
 
 	Bitmask = 0x3fu,
 	BaseTypeBitmask = 0x1fu,
 	IsEnumerable = 0x20u
 };
 
+static const ScopeKeySize ScopeKeySizeInvalid = ScopeKeySize::Bitmask;
+
 struct ScopeKey
 {
 	const uint8_t*	Data;
 	uint32_t		Size;
 };
-
-namespace _details
-{
 
 template<int SZ>
 inline constexpr uint32_t	SCOPEKEY_SHARD_DWORD(const uint8_t* p)
@@ -104,10 +102,15 @@ inline uint32_t				SCOPEKEY_SHARD_BITMASK(uint32_t shard_order){ return ~(((uint
 inline uint32_t				SCOPEKEY_SHARD_BRANCH_BIT(uint32_t shard_order){ return shard_order?(1U<<(shard_order-1)):0; } // 0 for base, otherwise for up
 inline constexpr int		SCOPEKEY_SIZE(ScopeKeySize t)
 							{	switch((ScopeKeySize)(uint16_t(ScopeKeySize::BaseTypeBitmask)& uint16_t(t)))
-								{	case ScopeKeySize::Default: return 36;
-									case ScopeKeySize::VaryingSize: return 0;
+								{	case ScopeKeySize::UInt32: return 4;
+									case ScopeKeySize::UInt64: return 8;
+									case ScopeKeySize::UInt96: return 12;
+									case ScopeKeySize::UInt128: return 16;
 									case ScopeKeySize::UInt160: return 20;
-									default: return 1<<((uint16_t(ScopeKeySize::BaseTypeBitmask) & uint16_t(t))-1);
+									case ScopeKeySize::UInt256: return 32;
+									case ScopeKeySize::Address: return 36;
+									case ScopeKeySize::UInt512: return 64;
+									default: return -1;
 								}
 							}
 inline constexpr bool		SCOPEKEYSIZE_SHOULD_REFER(ScopeKeySize t){ return t==ScopeKeySize::Default || ((int)t&(int)ScopeKeySize::BaseTypeBitmask) >= (int)ScopeKeySize::UInt160; }
@@ -122,9 +125,5 @@ inline 			 uint32_t	ADDRESS_SHARD_INDEX(const Address& a, uint32_t shard_order){
 inline constexpr SecSuite	ADDRESS_SECSUITE_ID(const Address& a){ return (SecSuite)(a._SSID); }
 inline			 bool		ADDRESS_IS_VALID(const Address& a){ return !(0xfffffff0 & (a._CheckSum ^ os::crc32c(a._, RVM_HASH_SIZE, (uint32_t)ADDRESS_SECSUITE_ID(a)))); }
 inline			 void		ADDRESS_SET_SECSUITE(Address& a, SecSuite ssid){ a._CheckSum = ((uint8_t)ssid&0xf) | (0xfffffff0 & os::crc32c(a._, RVM_HASH_SIZE, (uint32_t)ssid)); }
-inline			 bool		ADDRESS_FROM_STRING(const char str_in[ADDRESS_BASE32_LEN], Address& a){ return os::Base32CrockfordDecode(&a, sizeof(a), str_in, ADDRESS_BASE32_LEN); }
-inline			 void		ADDRESS_TO_STRING(const Address& a, char str_out[ADDRESS_BASE32_LEN]){ os::Base32CrockfordEncodeLowercase(str_out, &a, sizeof(a)); }
-inline			 void		ADDRESS_TO_ABBREVIATION(const Address& a, char str_out[ADDRESS_ABBREVIATION_LEN]){ char tt[ADDRESS_BASE32_LEN]; ADDRESS_TO_STRING(a,tt); *(uint32_t*)str_out = *(uint32_t*)tt; *(uint32_t*)&str_out[3] = *(uint32_t*)&tt[ADDRESS_BASE32_LEN-4];	str_out[3] = ':'; }
-} // namespace _details
 
 } // namespace rvm

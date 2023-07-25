@@ -181,14 +181,12 @@ public:
 				s += '{';
 				for(UINT i=0; i<This()->GetCount(); i++)
 				{	auto& item = This()->_GetByPos(i);
-					_details::_JsonDictKey(item.key(), s);
-					s += ':';
-					_details::_Jsonify(item.val(), s);
-					s += ',';
+					s += '"';	RvmTypeToString(item.key(), s);			s += '"';
+					s += ':';	RvmTypeJsonify(item.val(), append);		s += ',';
 				}
 				s.EndClosure('}');
 			}
-	static void	GetTypeSignature(rt::String& n){ n += name_prefix::name() + rt::SS("map<"); _details::_TypeSignature<KEY>::Get(n); n += ','; _details::_TypeSignature<VAL>::Get(n); n += '>'; }
+	static void	GetTypeSignature(rt::String& n){ n += name_prefix::name() + rt::SS("map<"); RvmTypeSignature<KEY>::Get(n); n += ','; RvmTypeSignature<VAL>::Get(n); n += '>'; }
 };
 	template<typename MAP, typename KEY, typename name_prefix>
 	class _MapJsonify<MAP, KEY, void, name_prefix>
@@ -198,12 +196,12 @@ public:
 				{	auto& s = append.GetInternalString();
 					s += '[';
 					for(UINT i=0; i<This()->GetCount(); i++)
-					{	_details::_Jsonify(This()->_GetByPos(i).key(), s);
+					{	RvmTypeJsonify(This()->_GetByPos(i).key(), append);
 						s += ',';
 					}
 					s.EndClosure(']');
 				}
-		static void	GetTypeSignature(rt::String& n){ n += name_prefix::name() + rt::SS("set<"); _details::_TypeSignature<KEY>::Get(n); n += '>'; }
+		static void	GetTypeSignature(rt::String& n){ n += name_prefix::name() + rt::SS("set<"); RvmTypeSignature<KEY>::Get(n); n += '>'; }
 	};
 
 #pragma pack(pop)
@@ -238,7 +236,7 @@ struct _MapMutableOp;
 	};
 	template<typename MAP, typename KEY, typename VAL>
 	struct _MapMutableOp<MAP, KEY, VAL, false, true>
-	{	typedef typename _details::_TypeTraits<KEY>::Mutable KEY_MUTABLE;
+	{	typedef typename TypeTraits<KEY>::Mutable KEY_MUTABLE;
 		bool Set(const KEY_MUTABLE& k, const VAL& v){ return ((MAP*)this)->_Set(RvmImmutableTypeCompose(k), RVMPTR_TAKE, &v, RVMPTR_COPY); }
 		bool Append(const KEY_MUTABLE& k, const VAL& v){ return ((MAP*)this)->_Append(RvmImmutableTypeCompose(k), RVMPTR_TAKE, &v, RVMPTR_COPY); }
 		bool Set(const KEY* k, RvmTypePointerSupplyMode kmode, const VAL& v){ return ((MAP*)this)->_Set(k, kmode, &v, RVMPTR_COPY); }
@@ -251,7 +249,7 @@ struct _MapMutableOp;
 	};
 	template<typename MAP, typename KEY, typename VAL>
 	struct _MapMutableOp<MAP, KEY, VAL, true, false>
-	{	typedef typename _details::_TypeTraits<VAL>::Mutable VAL_MUTABLE;
+	{	typedef typename TypeTraits<VAL>::Mutable VAL_MUTABLE;
 		bool Set(const KEY& k, const VAL_MUTABLE& v){ return ((MAP*)this)->_Set(&k, RVMPTR_COPY, RvmImmutableTypeCompose(v), RVMPTR_TAKE); }
 		void Set(const _mutable_pair<KEY, VAL>* keys_sorted, UINT count, RvmTypePointerSupplyMode mode = RVMPTR_COPY){ ((MAP*)this)->_Set(keys_sorted, count, mode); }
 		bool Append(const KEY& k, const VAL_MUTABLE& v){ return ((MAP*)this)->_Append(&k, RVMPTR_COPY, RvmImmutableTypeCompose(v), RVMPTR_TAKE); }
@@ -263,8 +261,8 @@ struct _MapMutableOp;
 	};
 	template<typename MAP, typename KEY, typename VAL>
 	struct _MapMutableOp<MAP, KEY, VAL, false, false>
-	{	typedef typename _details::_TypeTraits<KEY>::Mutable KEY_MUTABLE;
-		typedef typename _details::_TypeTraits<VAL>::Mutable VAL_MUTABLE;
+	{	typedef typename TypeTraits<KEY>::Mutable KEY_MUTABLE;
+		typedef typename TypeTraits<VAL>::Mutable VAL_MUTABLE;
 		bool Set(const KEY_MUTABLE& k, const VAL_MUTABLE& v){ return ((MAP*)this)->_Set(RvmImmutableTypeCompose(k), RVMPTR_TAKE, RvmImmutableTypeCompose(v), RVMPTR_TAKE); }
 		void Set(const _mutable_pair<KEY, VAL>* keys_sorted, UINT count, RvmTypePointerSupplyMode mode = RVMPTR_COPY){ ((MAP*)this)->_Set(keys_sorted, count, mode); }
 		bool Append(const KEY_MUTABLE& k, const VAL_MUTABLE& v){ return ((MAP*)this)->_Append(RvmImmutableTypeCompose(k), RVMPTR_TAKE, RvmImmutableTypeCompose(v), RVMPTR_TAKE); }
@@ -286,7 +284,7 @@ struct _MapMutableOp;
 	};
 	template<typename MAP, typename KEY>
 	struct _MapMutableOp<MAP, KEY, void, false, true>
-	{	typedef typename _details::_TypeTraits<KEY>::Mutable KEY_MUTABLE;
+	{	typedef typename TypeTraits<KEY>::Mutable KEY_MUTABLE;
 		bool Insert(const KEY_MUTABLE& k){ return ((MAP*)this)->_Set(RvmImmutableTypeCompose(k), RVMPTR_TAKE, nullptr, RVMPTR_KEEP); }
 		bool Append(const KEY_MUTABLE& k){ return ((MAP*)this)->_Append(RvmImmutableTypeCompose(k), RVMPTR_TAKE, nullptr, RVMPTR_KEEP); }
 		bool Insert(const KEY* k, RvmTypePointerSupplyMode kmode){ return ((MAP*)this)->_Set(k, kmode, nullptr, RVMPTR_KEEP); }

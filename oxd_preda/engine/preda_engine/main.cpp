@@ -1,6 +1,8 @@
 #include <memory>
 #include "ContractDatabase.h"
+#ifdef ENABLE_EVM
 #include "../evm_engine/EVMContractDataBase.h"
+#endif
 
 extern "C" {
 #if	defined(__linux__) || defined(__linux) || defined(__APPLE__)
@@ -13,8 +15,10 @@ extern "C" {
 			return new CContractDatabase(RuntimeMode::CWASM);
 		else if (config == std::string("-native"))
 			return new CContractDatabase(RuntimeMode::NATIVE);
+#ifdef ENABLE_EVM
 		else if (config == std::string("-evm"))
 			return new preda_evm::ContractDatabase();
+#endif
 		else
 			return nullptr;
 	}

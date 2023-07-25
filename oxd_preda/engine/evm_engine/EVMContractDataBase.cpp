@@ -4,6 +4,8 @@
 #include "../../../oxd_libsec/oxd_libsec.h"
 #include "../../native/types/typetraits.h"
 
+#ifdef ENABLE_EVM
+
 namespace preda_evm {
 	template <typename T>
 	struct AutoRelease
@@ -61,7 +63,7 @@ namespace preda_evm {
 		{
 			rt::String jsonStr(json.GetValue("inter_hash", bExist));
 			if (!bExist) return false;
-			::rvm::_details::_JsonParse(outEntry.compileData.intermediateHash, jsonStr);
+			::rvm::RvmTypeJsonParse(outEntry.compileData.intermediateHash, jsonStr);
 		}
 
 		{
@@ -86,7 +88,7 @@ namespace preda_evm {
 	rt::String ConvertEntryToJSON(const ContractDatabaseEntry& entry)
 	{
 		rt::String res;
-		::rvm::_details::_Jsonify(entry.compileData.intermediateHash, res);
+		::rvm::RvmTypeJsonify(entry.compileData.intermediateHash, res);
 
 		rt::Json json;
 		json.Object() << (
@@ -172,11 +174,11 @@ namespace preda_evm {
 		return *(rvm::ConstString*)&tmp;
 	}
 
-	bool ContractDatabase::Compile(const rvm::ChainState* chain_state, const rvm::ConstString* dapp_name, uint32_t contract_count, const rvm::ConstData* deploy_data_array, rvm::CompilationFlag flag, rvm::CompiledContracts** compiled_output, rvm::DataBuffer* dependency, rvm::LogMessageOutput* log_msg_output)
+	bool ContractDatabase::Compile(const rvm::ChainStates* chain_state, const rvm::ConstString* dapp_name, uint32_t contract_count, const rvm::ConstData* deploy_data_array, rvm::CompilationFlag flag, rvm::CompiledModules** compiled_output, rvm::DataBuffer* dependency, rvm::LogMessageOutput* log_msg_output)
 	{
 		EnterCSBlock(m_barrier);
 		
-		AutoRelease<CompiledContracts> compiled_contracts(new CompiledContracts(dapp_name->StrPtr));
+		AutoRelease<CompiledModules> compiled_contracts(new CompiledModules(dapp_name->StrPtr));
 
 		for (size_t i = 0; i < contract_count; i++)
 		{
@@ -214,7 +216,7 @@ namespace preda_evm {
 						J(optimizer) = (J(enabled) = true),
 						J(outputSelection) = (
 							rt::_JTag(entry_file) = (
-								rt::_JTag(entry_contract) = JA("metadata", "evm.bytecode")
+								rt::_JTag(entry_contract) = JA("metadata", "evm.bytecode", "abi", "evm.methodIdentifiers")
 								)
 							)
 						)
@@ -334,7 +336,47 @@ namespace preda_evm {
 			if (!os::Base16Decode(object, object_binary)) {
 				return false;
 			}
-
+			rt::JsonArray functionABI = contract.GetValue("abi", exist, true);
+			rt::JsonObject curFucABI;
+			rt::JsonObject funcHash = contract.GetValue("evm.methodIdentifiers");
+			std::map<rt::String, rt::String> funcSigToHashMap;
+			rt::JsonKeyValuePair p;
+			while (funcHash.GetNextKeyValuePair(p))
+			{
+				funcSigToHashMap.emplace(p.GetKey(), p.GetValue());
+			}
+			while (functionABI.GetNextObjectRaw(curFucABI))
+			{
+				rt::String funcType = curFucABI.GetValue("type");
+				if (funcType == "function")
+				{
+					rt::String funcName = curFucABI.GetValue("name");
+					rt::String funcSignature = funcName + "(";
+					rt::JsonArray funcInputs = curFucABI.GetValue("inputs");
+					std::vector<std::pair<std::string, std::string>> inputTypeIdList;
+					rt::JsonObject curInput;
+					
+					while (funcInputs.GetNextObjectRaw(curInput))
+					{
+						rt::String paramType = curInput.GetValue("type");
+						rt::String paramName = curInput.GetValue("name");
+						inputTypeIdList.push_back({ std::string(paramType.Begin(), paramType.GetLength()), std::string(paramName.Begin(), paramName.GetLength()) });
+						funcSignature += paramType + rt::SS(",");
+					}
+					funcSignature.EndClosure(')');
+					auto iter = funcSigToHashMap.find(funcSignature);
+					if (iter == funcSigToHashMap.end())
+					{
+						return false;
+					}
+					rt::String hash = iter->second;
+					ContractFunction func;
+					func.name = funcName;
+					func.signatureHash = hash;
+					func.parameters = inputTypeIdList;
+					compile_data.AddFunction(func);
+				}
+			}
 			rt::String calldata_binary;
 
 			rt::String_Ref calldata = compile_json.GetValue("calldata", exist);
@@ -357,11 +399,11 @@ namespace preda_evm {
 		return true;
 	}
 
-	bool ContractDatabase::Link(rvm::CompiledContracts* compiled, rvm::LogMessageOutput* log_msg_output)
+	bool ContractDatabase::Link(rvm::CompiledModules* compiled, rvm::LogMessageOutput* log_msg_output)
 	{
 		EnterCSBlock(m_barrier);
 
-		CompiledContracts* compiled_contracts = (CompiledContracts*)compiled;
+		CompiledModules* compiled_contracts = (CompiledModules*)compiled;
 
 		uint32_t count = compiled_contracts->GetCount();
 		bool success = true;
@@ -374,7 +416,7 @@ namespace preda_evm {
 		return true;
 	}
 
-	bool ContractDatabase::ValidateDependency(const rvm::ChainState* chain_state, rvm::CompiledContracts* compiled, const rvm::ConstData* dependency)
+	bool ContractDatabase::ValidateDependency(const rvm::ChainStates* chain_state, rvm::CompiledModules* compiled, const rvm::ConstData* dependency)
 	{
 		return true;
 	}
@@ -384,34 +426,34 @@ namespace preda_evm {
 		return new EVMExecutionEngine(this);
 	}
 
-	bool ContractDatabase::StateJsonify(rvm::BuildNum build_num, rvm::ContractScopeId contract, const rvm::ConstData* pState, rvm::StringStream* json_out, const rvm::ChainState* ps) const
+	bool ContractDatabase::StateJsonify(rvm::BuildNum build_num, rvm::ContractScopeId contract, const rvm::ConstData* pState, rvm::StringStream* json_out, const rvm::ChainStates* ps) const
 	{
 		return true;
 	}
 
-	bool ContractDatabase::StateJsonParse(rvm::BuildNum build_num, rvm::ContractScopeId contract, const rvm::ConstString* json, rvm::DataBuffer* state_out, const rvm::ChainState* ps, rvm::LogMessageOutput* og) const
+	bool ContractDatabase::StateJsonParse(rvm::BuildNum build_num, rvm::ContractScopeId contract, const rvm::ConstString* json, rvm::DataBuffer* state_out, const rvm::ChainStates* ps, rvm::LogMessageOutput* og) const
 	{
 		return true;
 	}
 
-	bool ContractDatabase::ArgumentsJsonify(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::OpCode opCode, const rvm::ConstData* args_serialized, rvm::StringStream* json_out, const rvm::ChainState* ps) const
+	bool ContractDatabase::ArgumentsJsonify(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::OpCode opCode, const rvm::ConstData* args_serialized, rvm::StringStream* json_out, const rvm::ChainStates* ps) const
 	{
 		return true;
 	}
 
-	bool ContractDatabase::ArgumentsJsonParse(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::OpCode opCode, const rvm::ConstString* json, rvm::DataBuffer* args_out, const rvm::ChainState* ps, rvm::LogMessageOutput* log) const
+	bool ContractDatabase::ArgumentsJsonParse(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::OpCode opCode, const rvm::ConstString* json, rvm::DataBuffer* args_out, const rvm::ChainStates* ps, rvm::LogMessageOutput* log) const
 	{
 		uint8_t* data = args_out->SetSize(json->Length);
 		std::copy(json->StrPtr, json->StrPtr + json->Length, data);
 		return true;
 	}
 
-	const rvm::Contract* ContractDatabase::GetContract(const rvm::ContractDID* deploy_id) const
+	const rvm::Contract* ContractDatabase::GetContract(const rvm::ContractModuleID* deploy_id) const
 	{
 		return GetContract(_details::RvmCDIDToEVMCDID(deploy_id));
 	}
 
-	const rvm::Contract* ContractDatabase::GetContract(ContractDID deploy_id) const
+	const rvm::Contract* ContractDatabase::GetContract(ContractModuleID deploy_id) const
 	{
 		EnterCSBlock(m_barrier);
 
@@ -423,22 +465,22 @@ namespace preda_evm {
 		return const_cast<ContractDatabaseEntry*>(pContractEntry)->GetDelegate();
 	}
 
-	uint32_t ContractDatabase::GetContractEnumSignatures(rvm::BuildNum build_num, rvm::ContractId contract, rvm::StringStream* signature_out, const rvm::ChainState* ps) const
+	uint32_t ContractDatabase::GetContractEnumSignatures(rvm::BuildNum build_num, rvm::ContractId contract, rvm::StringStream* signature_out, const rvm::ChainStates* ps) const
 	{
 		return 0;
 	}
 
-	bool ContractDatabase::GetContractFunctionArgumentsSignature(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::OpCode opcode, rvm::StringStream* signature_out, const rvm::ChainState* ps) const
+	bool ContractDatabase::GetContractFunctionArgumentsSignature(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::OpCode opcode, rvm::StringStream* signature_out, const rvm::ChainStates* ps) const
 	{
 		return false;
 	}
 
-	bool ContractDatabase::GetContractStateSignature(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::StringStream* signature_out, const rvm::ChainState* ps) const
+	bool ContractDatabase::GetContractStateSignature(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::StringStream* signature_out, const rvm::ChainStates* ps) const
 	{
 		return false;
 	}
 
-	const ContractDatabaseEntry* ContractDatabase::FindContractEntry(ContractDID deployId) const
+	const ContractDatabaseEntry* ContractDatabase::FindContractEntry(ContractModuleID deployId) const
 	{
 		EnterCSBlock(m_barrier);
 
@@ -449,13 +491,13 @@ namespace preda_evm {
 		return &itor->second;
 	}
 
-	bool ContractDatabase::Deploy(const rvm::ChainState* chain_state, const rvm::ContractId* contractIds, const evmc::address* addresses, rvm::CompiledContracts* linked, rvm::ContractDID* deployment_identifiers_out, rvm::InterfaceDID** interface_deployment_ids_out, rvm::LogMessageOutput* log_msg_output)
+	bool ContractDatabase::Deploy(const rvm::ChainStates* chain_state, const rvm::ContractId* contractIds, const evmc::address* addresses, rvm::CompiledModules* linked, rvm::ContractModuleID* deployment_identifiers_out, rvm::InterfaceModuleID** interface_deployment_ids_out, rvm::LogMessageOutput* log_msg_output)
 	{
 		EnterCSBlock(m_barrier);
 
 		bool bSuccess = true;
 
-		CompiledContracts* pCompiledContracts = (CompiledContracts*)linked;
+		CompiledModules* pCompiledContracts = (CompiledModules*)linked;
 
 		assert(pCompiledContracts->IsLinked());
 
@@ -500,3 +542,4 @@ namespace preda_evm {
 }
 
 
+#endif

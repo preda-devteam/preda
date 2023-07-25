@@ -2,7 +2,7 @@ random.reseed
 allocate.address 1024
 chain.gaslimit 256
 
-chain.deploy Token.prd
+chain.deploy @1 Token.prd
 
 log.highlight Airdrop test
 log Perparing test transactions ($~count$)

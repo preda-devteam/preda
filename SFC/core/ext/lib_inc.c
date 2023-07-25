@@ -1,3 +1,13 @@
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wmicrosoft-include"
+#pragma GCC diagnostic ignored "-Wshift-negative-value"
+#pragma GCC diagnostic ignored "-Wself-assign"
+#pragma GCC diagnostic ignored "-Wtautological-constant-out-of-range-compare"
+#pragma GCC diagnostic ignored "-Wimplicit-function-declaration"
+#pragma GCC diagnostic ignored "-Wenum-conversion"
+#pragma GCC diagnostic ignored "-Wunused-function"
+#else
 #pragma warning(disable: 4819)
 #pragma warning(disable: 4996)
 #pragma warning(disable: 4101)
@@ -5,6 +15,7 @@
 #pragma warning(disable: 4267)
 #pragma warning(disable: 4018)
 #pragma warning(disable: 4028)
+#endif
 
 #include "../os/predefines.h"
 #include "ipp/ipp_config.h"

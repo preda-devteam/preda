@@ -42,25 +42,20 @@ struct ISymbolDatabaseForJsonifier
 	virtual const char* GetEnumStringFromValue(const std::string &enumTypeName, uint16_t value) = 0;
 };
 
-class CDataJsonifier
+class RvmDataJsonifier
 {
 	std::string m_simplifiedTypeString;
 	std::stringstream m_typeStrStream;
 	ISymbolDatabaseForJsonifier *m_pSymbolDatabase;
-	const uint8_t *m_pData;
-	uint32_t m_dataSize;
-	bool m_bWrapValueWithQuotation;
+
+	bool _Jsonify(std::string& outJson, const uint8_t* &pData, uint32_t &dataSize, bool bWrapValueWithQuotation);
 
 public:
-	CDataJsonifier(const char *pTypeStr, ISymbolDatabaseForJsonifier *pSymbolDatabase, const uint8_t *pData, uint32_t dataSize, bool bWrapValueWithQuotation);
-	bool Jsonify(std::string &outJson);
-	uint32_t GetRemainingDataSize()
-	{
-		return m_dataSize;
-	}
+	RvmDataJsonifier(const char *pTypeStr, ISymbolDatabaseForJsonifier *pSymbolDatabase);
+	int Jsonify(std::string &outJson, const uint8_t* pData, uint32_t dataSize, bool bWrapValueWithQuotation);		// returns the number of bytes in pData consumed. returns -1 when error
 };
 
-class CDataJsonParser
+class RvmDataJsonParser
 {
 	std::string m_simplifiedTypeString;
 	std::stringstream m_typeStrStream;
@@ -79,10 +74,10 @@ class CDataJsonParser
 	}
 
 public:
-	CDataJsonParser(const char *pTypeStr, ISymbolDatabaseForJsonifier *pSymbolDatabase);
+	RvmDataJsonParser(const char *pTypeStr, ISymbolDatabaseForJsonifier *pSymbolDatabase);
 	bool JsonParse(const rt::String_Ref &jsonStr, std::vector<uint8_t> &outBuffer);
-	bool IsIntegerLiteralInRange(const rt::String_Ref& literalBody, size_t bitWidth, bool bIsSigned);
-	bool IsLongIntegerLiteralInRange(const rt::String_Ref& literalBody, size_t bitWidth, bool bIsSigned);
+	static bool IsIntegerLiteralInRange(const rt::String_Ref& literalBody, size_t bitWidth, bool bIsSigned);
+	static bool IsLongIntegerLiteralInRange(const rt::String_Ref& literalBody, size_t bitWidth, bool bIsSigned);
 	JsonParseErrorCode GetErrorCode() { return m_errorCode; }
 	const std::string& GetErrorMsg() { return m_errorMsg; }
 	const char* GetErrorPos() { return m_pErrorPos; }
@@ -90,8 +85,8 @@ public:
 
 struct FunctionArgumentUtil
 {
-	bool JsonifyArguments(const char *pArgSignatureStr, ISymbolDatabaseForJsonifier *pSymbolDatabase, const uint8_t *pData, uint32_t dataSize, bool bWrapValueWithQuotation, std::string &outJson);
-	bool JsonParseArguments(const char *pArgSignatureStr, ISymbolDatabaseForJsonifier *pSymbolDatabase, const rt::String_Ref &jsonStr, std::vector<uint8_t> &outBuffer);
+	static bool JsonifyArguments(const char *pArgSignatureStr, ISymbolDatabaseForJsonifier *pSymbolDatabase, const uint8_t *pData, uint32_t dataSize, bool bWrapValueWithQuotation, std::string &outJson);
+	static bool JsonParseArguments(const char *pArgSignatureStr, ISymbolDatabaseForJsonifier *pSymbolDatabase, const rt::String_Ref &jsonStr, std::vector<uint8_t> &outBuffer);
 };
 
 } // namespace rvm

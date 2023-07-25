@@ -47,17 +47,13 @@ namespace _details
 	};
 
 #define DEF_DELEGATED_SUITE(id, name) DEF_SUITE(id, name, 32)
-
-DEF_DELEGATED_SUITE(SEC_SUITE_REGISTERED_DAPP, "dapp")			// [dapp_name].dapp registered by native contract
-DEF_DELEGATED_SUITE(SEC_SUITE_REGISTERED_TOKEN, "token")		// [token_name].token registered by native contract
-DEF_DELEGATED_SUITE(SEC_SUITE_REGISTERED_NONFUNGIBLE, "nft")	// [nonfungible_namespec] registered by native contract
-DEF_DELEGATED_SUITE(SEC_SUITE_REGISTERED_NAME, "name")			// [subname].[dapp_name].dapp registered by rvm contract
-DEF_DELEGATED_SUITE(SEC_SUITE_REGISTERED_DOMAIN, "domain")		// [subname].<root_name> registered by native contract
-
-DEF_SUITE(SEC_SUITE_CONTRACT, "contract", 8)					// a deployed contract
-DEF_SUITE(SEC_SUITE_CUSTOM, "custom", 32)						// a user-defined custom address
-																// root_name can be ISO3166-1 area code, or common-root (com dev org info net org app edu gov bit coin token team swarm group wire top usr bot), or [common-root].[ISO3166-1 area code]
+DEF_DELEGATED_SUITE(SEC_SUITE_DELEGATED_HASH, "hash")
+DEF_DELEGATED_SUITE(SEC_SUITE_DELEGATED_NAME, "name")
+DEF_DELEGATED_SUITE(SEC_SUITE_DELEGATED_DAPP, "dapp")
+DEF_DELEGATED_SUITE(SEC_SUITE_DELEGATED_TOKEN, "token")
 #undef DEF_DELEGATED_SUITE
+
+DEF_SUITE(SEC_SUITE_CONTRACT, "contract", 8)					// a deployed contract id
 #undef DEF_SUITE
 
 } // namespace oxd

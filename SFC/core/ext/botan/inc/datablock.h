@@ -1,6 +1,6 @@
 #pragma once
 
-//////////////////////////////////////////////////////////////////////
+/*********************************************************************
 // System Foundation Classes(SFC)
 //
 // Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,7 @@
 // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//////////////////////////////////////////////////////////////////////
+*********************************************************************/
 
 #include "../../../rt/string_type.h"
 #include "../../../os/kernel.h"
@@ -273,8 +273,7 @@ public:
 
 	template<typename OStream>
 	friend OStream& operator <<(OStream& s, const DataBlock& d)
-	{	return s << rt::tos::Base32LowercaseOnStack<_LEN*8/5 + 4>((LPCBYTE)d, _LEN);
-	}
+	{ return s << rt::tos::Base64OnStack<_LEN*8/5 + 4>((LPCBYTE)d, _LEN); }
 };
 #pragma pack(pop)
 /** @}*/

@@ -259,6 +259,11 @@ namespace prlrt {
 			return *this;
 		}
 
+		__prlt_uint16 __prli_length() const
+		{
+			return __prlt_uint16(ptr->length());
+		}
+
 		// serialization-related interface
 		serialize_size_type get_serialize_size() const
 		{

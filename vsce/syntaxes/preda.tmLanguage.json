@@ -333,6 +333,17 @@
               "name": "entity.name.type.contract.preda"
             }
           }
+        },
+        {
+          "match": "\\b([A-Z]{1}[a-z_]\\w*)\\.([A-Za-z_]\\w*)\\(",
+          "captures": {
+            "1": {
+              "name": "entity.name.type.contract.preda"
+            },
+            "2": {
+              "name": "entity.name.function.preda"
+            }
+          }
         }
       ]
     },

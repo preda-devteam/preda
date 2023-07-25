@@ -512,7 +512,6 @@ __NumFloat(long double	,long double,_typeid_64f	,LDBL_EPSILON*100			,-LDBL_MAX	,
 //all built-in num types
 /////////////////////////////////////////////////////////////////
 
-
 //////////////////////////////////////////////////
 // Trait num type properties
 namespace _details
@@ -543,58 +542,59 @@ struct NumericTraits
 	static const bool IsUnsigned = _Typeid==_typeid_8u || _Typeid==_typeid_16u || _Typeid==_typeid_32u || _Typeid==_typeid_64u;
 	static const bool IsSigned = _Typeid==_typeid_8s || _Typeid==_typeid_16s || _Typeid==_typeid_32s || _Typeid==_typeid_64s || _Typeid==_typeid_32f || _Typeid==_typeid_64f;
 	static const bool IsBuiltInNumeric = (_Typeid>=_typeid_bool)&&(_Typeid<=_typeid_64f);
-	static bool		  IsEqual(T a, T b){ return _details::NumericTraits_Equal<T>::equ(a, b); }
-	static bool		  IsNotEqual(T a, T b){ return _details::NumericTraits_Equal<T>::not_equ(a, b); }
-	// non-num is rated as 0xffff
+	template<typename ARG>
+	static bool		  IsEqual(ARG a, ARG b){ return _details::NumericTraits_Equal<T>::equ(a, b); }
+	template<typename ARG>
+	static bool		  IsNotEqual(ARG a, ARG b){ return _details::NumericTraits_Equal<T>::not_equ(a, b); }
 };
 
 namespace _details
 {
 template<int len>
-struct Bits
+struct Bytes
 {	static bool IsZero(LPCBYTE p)
-	{	return 0 == *(size_t*)p && Bits<len - sizeof(size_t)>::IsZero(p + sizeof(size_t));
+	{	return 0 == *(size_t*)p && Bytes<len - sizeof(size_t)>::IsZero(p + sizeof(size_t));
 	}
 	static bool IsVoid(LPCBYTE p)
-	{	return ((size_t)-1) == *(size_t*)p && Bits<len - sizeof(size_t)>::IsVoid(p + sizeof(size_t));
+	{	return ((size_t)-1) == *(size_t*)p && Bytes<len - sizeof(size_t)>::IsVoid(p + sizeof(size_t));
 	}
 };
-	template<> struct Bits<1>
+	template<> struct Bytes<1>
 	{	static bool IsZero(LPCBYTE p){ return 0 == *p; }
 		static bool IsVoid(LPCBYTE p){ return 0xffU == *p; }
 	};
-	template<> struct Bits<2>
+	template<> struct Bytes<2>
 	{	static bool IsZero(LPCBYTE p){ return 0 == *(WORD*)p; }
 		static bool IsVoid(LPCBYTE p){ return 0 == *(WORD*)p; }
 	};
-	template<> struct Bits<3>
+	template<> struct Bytes<3>
 	{	static bool IsZero(LPCBYTE p){ return 0 == *(WORD*)p  && p[2] == 0; }
 		static bool IsVoid(LPCBYTE p){ return 0xffffU == *(WORD*)p && p[2] == 0xff; }
 	};
-	template<> struct Bits<4>
+	template<> struct Bytes<4>
 	{	static bool IsZero(LPCBYTE p){ return 0 == *(DWORD*)p; }
 		static bool IsVoid(LPCBYTE p){ return 0xffffffffU == *(DWORD*)p; }
 	};
-	template<> struct Bits<5>
-	{	static bool IsZero(LPCBYTE p){ return 0 == *(DWORD*)p && Bits<1>::IsZero(p+4); }
-		static bool IsVoid(LPCBYTE p){ return 0xffffffffU == *(DWORD*)p && Bits<1>::IsVoid(p+4); }
+	template<> struct Bytes<5>
+	{	static bool IsZero(LPCBYTE p){ return 0 == *(DWORD*)p && Bytes<1>::IsZero(p+4); }
+		static bool IsVoid(LPCBYTE p){ return 0xffffffffU == *(DWORD*)p && Bytes<1>::IsVoid(p+4); }
 	};
-	template<> struct Bits<6>
-	{	static bool IsZero(LPCBYTE p){ return 0 == *(DWORD*)p && Bits<2>::IsZero(p+4); }
-		static bool IsVoid(LPCBYTE p){ return 0xffffffffU == *(DWORD*)p && Bits<2>::IsVoid(p+4); }
+	template<> struct Bytes<6>
+	{	static bool IsZero(LPCBYTE p){ return 0 == *(DWORD*)p && Bytes<2>::IsZero(p+4); }
+		static bool IsVoid(LPCBYTE p){ return 0xffffffffU == *(DWORD*)p && Bytes<2>::IsVoid(p+4); }
 	};
-	template<> struct Bits<7>
-	{	static bool IsZero(LPCBYTE p){ return 0 == *(DWORD*)p && Bits<3>::IsZero(p+4); }
-		static bool IsVoid(LPCBYTE p){ return 0xffffffffU == *(DWORD*)p && Bits<3>::IsVoid(p+4); }
+	template<> struct Bytes<7>
+	{	static bool IsZero(LPCBYTE p){ return 0 == *(DWORD*)p && Bytes<3>::IsZero(p+4); }
+		static bool IsVoid(LPCBYTE p){ return 0xffffffffU == *(DWORD*)p && Bytes<3>::IsVoid(p+4); }
 	};
-	template<> struct Bits<8>
+	template<> struct Bytes<8>
 	{	static bool IsZero(LPCBYTE p){ return 0 == *(size_t*)p;	}
 		static bool IsVoid(LPCBYTE p){ return ((size_t)-1) == *(size_t*)p; }
 	};
 	
 	template<typename T, bool is_int = NumericTraits<T>::IsInteger, bool is_float = NumericTraits<T>::IsFloat>
 	struct _IsZero
-	{	static bool Is(const T& v){ return Bits<sizeof(T)>::IsZero((LPCBYTE)&v); }
+	{	static bool Is(const T& v){ return Bytes<sizeof(T)>::IsZero((LPCBYTE)&v); }
 	};
 		template<typename T> struct _IsZero<T, true, false>{ static bool Is(T v){ return v == 0; } };
 		template<typename T> struct _IsZero<T, false, true>{ static bool Is(T v){ return v<TypeTraits<T>::Epsilon() && v>-TypeTraits<T>::Epsilon(); } };
@@ -618,7 +618,7 @@ FORCEINL bool IsZero(T v)
 template<typename T>
 FORCEINL bool IsVoid(T v)
 {
-	return _details::Bits<sizeof(T)>::IsVoid((LPCBYTE)&v);
+	return _details::Bytes<sizeof(T)>::IsVoid((LPCBYTE)&v);
 }
 
 /**
@@ -783,7 +783,7 @@ struct ByteOrderSwapped
 #pragma pack(pop)
 
 template<typename T>
-INLFUNC LPVOID GetDataPtr(T& x)
+inline LPVOID GetDataPtr(T& x)
 {	_details::_GetDataPtr p(x);
 	auto r = p._Begin(rt::_CastToNonconst(&x));
 	_details::_PodAssert<decltype(r), T> _a;	_a = _a;
@@ -791,18 +791,12 @@ INLFUNC LPVOID GetDataPtr(T& x)
 }
 
 template<typename T>
-INLFUNC SIZE_T GetDataSize(T& x)
+inline SIZE_T GetDataSize(T& x)
 {	return _details::_GetDataSize<T>::_Size(x);
 }
 
-
-
 namespace _details
 {
-/**
- * @brief Function traits
- * 
- */
 template <typename _ReturnType, typename... _Args>
 struct FunctionTraitsDefs
 {

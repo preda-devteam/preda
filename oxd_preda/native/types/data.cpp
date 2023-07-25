@@ -29,6 +29,22 @@ bool Data::IsEmbeddable(const DataMutable& d)
 	return d.GetSize() <= 0xfffff;
 }
 
+ConstData Data::GetRuntimeData() const
+{
+	if(GetDataType() == TYPE_RUNTIME)
+	{
+		return { DataPacked, GetPackedSize() };
+	}
+	else
+		return { nullptr, 0 };
+}
+
+void DataMutable::Reset()
+{
+	_Flag = 0;
+	rt::BufferEx<BYTE>::ChangeSize(0);
+}
+
 void DataMutable::Set(const rt::String_Ref& x, UINT data_type)
 {
 	_Flag = data_type&Data::TYPE_BITMASK;
@@ -45,7 +61,9 @@ void DataMutable::Set(const rt::String_Ref& x, UINT data_type)
 	VERIFY(buf.SetSize(rt::min(x.GetLength(), (SIZE_T)1024*1024) + 3));
 
 	size_t outsize = buf.GetSize();
-	if(ext::lzma_encode(x.Begin(), x.GetLength(), buf.Begin() + 3, outsize, 9))
+	if(	Data::TYPE_RUNTIME!=data_type && 
+		ext::lzma_encode(x.Begin(), x.GetLength(), buf.Begin() + 3, outsize, 9)
+	)
 	{
 		_Flag |= Data::PACKED_7Z;
 		*(UINT*)buf.Begin()  = ((*(UINT*)buf.Begin())&0xff000000) | ((UINT)buf.GetSize() - 3);
@@ -57,6 +75,24 @@ void DataMutable::Set(const rt::String_Ref& x, UINT data_type)
 		SetSize(x.GetLength());
 		CopyFrom(x.Begin());
 	}
+}
+
+uint32_t DataMutable::Append(const rt::String_Ref& x)
+{
+	if(GetSize()){ ASSERT((_Flag&Data::TYPE_BITMASK) == Data::TYPE_RUNTIME); }
+	{
+		_Flag = Data::TYPE_RUNTIME;
+	}
+	
+	rt::BufferEx<BYTE>::push_back((BYTE*)x.Begin(), x.GetLength());
+	return (uint32_t)x.GetLength();
+}
+
+BYTE* DataMutable::GetDataBuffer(uint32_t offset)
+{
+	ASSERT((_Flag&Data::TYPE_BITMASK) == Data::TYPE_RUNTIME);
+	ASSERT(GetSize() > offset);
+	return Begin() + offset;
 }
 
 void Data::_RawJsonify(const rt::String_Ref& x, rt::String& append) const

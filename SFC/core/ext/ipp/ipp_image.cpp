@@ -14,11 +14,7 @@
 #include "libwebp/webp_header.h"
 #endif // PLATFORM_INTEL_IPP_WEBP_CODEC
 
-
-
 #include "ipp_image.h"
-
-
 
 namespace ipp
 {
@@ -803,8 +799,6 @@ bool ImageEncoder::Encode(LPCBYTE pData,int Channel,int Width,int Height,int Ste
 		// Use libjpg instead
 		if(Channel != 1 && Channel != 3)return false; // consider libjpeg-turbo to support RGBA
 
-		bool ret = false;
-
 		struct jpeg_compress_struct cinfo;
 		struct jpeg_error_mgr jerr;
 		
@@ -1011,6 +1005,14 @@ GIF_ENCODE_FAILED:
 } // namespace ipp
 
 #ifdef PLATFORM_INTEL_IPP_EXR_CODEC
+
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wimplicit-const-int-float-conversion"
+#pragma GCC diagnostic ignored "-Wnonportable-include-path"
+#pragma GCC diagnostic ignored "-Wparentheses"
+#pragma GCC diagnostic ignored "-Wunused-private-field"
+#endif
+
 #include "openexr/OpenEXR_inc.cpp"
 #endif 
 

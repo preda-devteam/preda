@@ -35,9 +35,12 @@ uint32_t PredaFunctionFlagsToRvmContractFlags(uint32_t flags)
 	return ret;
 }
 
-RvmContractDelegate::RvmContractDelegate(ContractCompileData* pContractCompiledData, ContractDeployData *pDeployData)
-	: m_pContractCompiledData(pContractCompiledData), m_pDeployData(pDeployData)
+RvmContractDelegate::RvmContractDelegate(const ContractCompileData* pContractCompiledData)
+	: m_pContractCompiledData(pContractCompiledData)
 {
+	if (pContractCompiledData == nullptr)
+		return;
+
 	// name
 	m_name = pContractCompiledData->name.c_str();
 
@@ -57,9 +60,12 @@ RvmContractDelegate::RvmContractDelegate(ContractCompileData* pContractCompiledD
 	// hash
 	m_hash = pContractCompiledData->intermediateHash;
 
+	// module id
+	m_moduleId = pContractCompiledData->moduleId;
+
 	// scopes
 	// first check which scopes have state variables
-	std::array<std::underlying_type_t<rvm::ScopeDefinitionFlag>, int(transpiler::ScopeType::Num)> scopeFlags;
+	std::array<std::underlying_type_t<rvm::ScopeFlag>, int(transpiler::ScopeType::Num)> scopeFlags;
 	scopeFlags.fill(0);
 
 	{
@@ -73,7 +79,7 @@ RvmContractDelegate::RvmContractDelegate(ContractCompileData* pContractCompiledD
 
 		for (int i = 0; i < int(transpiler::ScopeType::Num); i++)
 			if (NotEmptyStateSignature(pContractCompiledData->scopeStateVarMeta[i].signature))
-				scopeFlags[uint32_t(transpiler::ScopeType(i))] |= uint32_t(rvm::ScopeDefinitionFlag::HasState);
+				scopeFlags[uint32_t(transpiler::ScopeType(i))] |= uint32_t(rvm::ScopeFlag::HasState);
 	}
 
 	// and which scopes have function
@@ -92,7 +98,7 @@ RvmContractDelegate::RvmContractDelegate(ContractCompileData* pContractCompiledD
 		uint32_t scopeType = pContractCompiledData->functions[i].flags & uint32_t(transpiler::FunctionFlags::ScopeTypeMask);
 		rvm::Scope rvmScope = _details::PredaScopeToRvmScope(transpiler::ScopeType(scopeType));
 		m_functions.back().scope = rvmScope;
-		scopeFlags[scopeType] |= uint32_t(rvm::ScopeDefinitionFlag::HasFunction);
+		scopeFlags[scopeType] |= uint32_t(rvm::ScopeFlag::HasFunction);
 	}
 
 	// only count scopes that have state or function, do no report the others
@@ -101,13 +107,18 @@ RvmContractDelegate::RvmContractDelegate(ContractCompileData* pContractCompiledD
 		if (scopeFlags[i] != 0)
 		{
 			rvm::Scope rvmScope = _details::PredaScopeToRvmScope(transpiler::ScopeType(i));
-			m_scopes.push_back({ rvmScope, scopeFlags[i], scopeTypeNames[i], rvm::_details::CONTRACT_SET_SCOPE(m_pDeployData ? m_pDeployData->contractId : rvm::ContractId(-1), rvmScope) });
+			m_scopes.push_back({ rvmScope, scopeFlags[i], scopeTypeNames[i] });
 		}
 }
 
 rvm::ConstString RvmContractDelegate::GetName() const
 {
-	return *(rvm::ConstString*)&m_name;
+	return { m_name.GetString(), uint32_t(m_name.GetLength()) };
+}
+
+rvm::ConstString RvmContractDelegate::GetFullName() const
+{
+	return {m_fullname.GetString(), uint32_t(m_fullname.GetLength()) };
 }
 
 rvm::ContractFlag RvmContractDelegate::GetFlag() const
@@ -115,9 +126,9 @@ rvm::ContractFlag RvmContractDelegate::GetFlag() const
 	return rvm::ContractFlag(m_flag);
 }
 
-const rvm::HashValue* RvmContractDelegate::GetIntermediateRepresentationHash() const
+const rvm::ContractModuleID* RvmContractDelegate::GetModuleID() const
 {
-	return (rvm::HashValue*)&m_hash;
+	return &m_moduleId;
 }
 
 // Function Definitions

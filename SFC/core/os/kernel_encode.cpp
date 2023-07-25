@@ -388,11 +388,6 @@ bool Base64Decode(const rt::String_Ref&in, rt::String& out)
 	return ret;
 }
 
-SIZE_T Base64EncodeLength(SIZE_T len)
-{
-	return (len+2)/3*4;
-}
-
 void Base64Encode(LPSTR pBase64Out,LPCVOID pData, SIZE_T data_len)
 {
 	static const char table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -536,9 +531,6 @@ bool Base64Decode(LPVOID pDataOut, SIZE_T* pDataOutLen,LPCSTR pBase64, SIZE_T st
 
 	return false;
 }
-
-SIZE_T Base16EncodeLength(SIZE_T len){ return len*2; }
-SIZE_T Base16DecodeLength(SIZE_T len){ return len/2; }
 
 void Base16Encode(LPSTR pBase16Out,LPCVOID pData_in, SIZE_T data_len)
 {
@@ -811,11 +803,6 @@ SIZE_T Base32DecodeLength(SIZE_T len)
 		return len/8*5 + tail_len;
 	else
 		return 0;
-}
-
-SIZE_T Base32EncodeLength(SIZE_T len)
-{
-	return (len*8+4)/5;// + 1;
 }
 
 bool Base32CrockfordDecode(LPVOID pDataOut, SIZE_T data_len, LPCSTR pBase32, SIZE_T str_len)

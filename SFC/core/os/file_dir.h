@@ -263,14 +263,12 @@ extern ULONGLONG GetFreeDiskSpace(LPCSTR path, ULONGLONG* pTotal = nullptr); ///
 extern void		 GetAppSandbox(rt::String& out_path, LPCSTR app_name);	///< app_name not necessarily appears in the path
 extern void		 SetAppSandboxAsCurrentDirectory(LPCSTR app_name);
 
-class CurrentDirectoryStack
+class CurrentDirectoryScope
 {
-	rt::BufferEx<rt::String>	_DirStack;
+	rt::String	_PrevDir;
 public:
-	CurrentDirectoryStack(LPCSTR dir = nullptr){ if(dir)PushCurrentDirectory(dir); }
-	~CurrentDirectoryStack();
-	bool		PushCurrentDirectory(LPCSTR dir);
-	void		Pop();
+	CurrentDirectoryScope(LPCSTR dir);
+	~CurrentDirectoryScope();
 };
 
 

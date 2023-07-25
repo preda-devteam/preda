@@ -1,9 +1,15 @@
 #pragma once
+#include <map>
 #include "ContractData.h"
 #include "../../transpiler/transpiler.h"
 
 class CContractDatabase;
 struct ContractDatabaseEntry;
+
+struct IContractFullNameToModuleIdLookupTable
+{
+	virtual const rvm::ContractModuleID* GetContractModuleIdFromFullName(const std::string& fullName) = 0;
+};
 
 class CContractSymbolDatabaseForTranspiler : public transpiler::IContractSymbolDatabase
 {
@@ -262,6 +268,37 @@ class CContractSymbolDatabaseForTranspiler : public transpiler::IContractSymbolD
 
 	mutable std::vector<CContractSymbols*> m_temporaryContractSymbolObjects;
 
+	const ContractDatabaseEntry* GetContractEntryFromFullName(const std::string& fullName) const;
+
+	CContractDatabase *m_pDB = nullptr;
+	const std::vector<ContractCompileData> &m_temporaryCompileData;
+	rvm::BlockchainRuntime *m_pBcRuntime;
+	IContractFullNameToModuleIdLookupTable* m_lookup;
+
+	mutable std::map<std::string, const ContractDatabaseEntry*> m_contractEntryCache;
+
+public:
+	CContractSymbolDatabaseForTranspiler(CContractDatabase *pDB, const std::vector<ContractCompileData> &temporaryCompileData, rvm::BlockchainRuntime *pNativeRuntime, IContractFullNameToModuleIdLookupTable* lookup)
+		: m_pDB(pDB), m_temporaryCompileData(temporaryCompileData), m_pBcRuntime(pNativeRuntime), m_lookup(lookup)
+	{
+
+	}
+
+	~CContractSymbolDatabaseForTranspiler()
+	{
+		for (CContractSymbols *pContractSymbol : m_temporaryContractSymbolObjects)
+		{
+			delete pContractSymbol;
+		}
+	}
+
+	const std::map<std::string, const ContractDatabaseEntry*>& GetContractEntryCache()
+	{
+		return m_contractEntryCache;
+	}
+
+	const rvm::ContractModuleID* GetContractModuleId(const char *contractFullName) const;
+
 	virtual transpiler::IContractSymbols* GetContractSymbols(const char *contractFullName) const override;
 
 	virtual bool ContractExists(const char *dAppName, const char *contractName) const override
@@ -287,34 +324,5 @@ class CContractSymbolDatabaseForTranspiler : public transpiler::IContractSymbolD
 		}
 
 		return false;
-	}
-
-	const ContractDatabaseEntry* GetContractEntryFromFullName(const std::string& fullName) const;
-
-	CContractDatabase *m_pDB = nullptr;
-	const std::vector<ContractCompileData> &m_temporaryCompileData;
-	rvm::BlockchainRuntime *m_pBcRuntime;
-	const rvm::ChainState* m_pChainState;
-
-	mutable std::map<std::string, const ContractDatabaseEntry*> m_contractEntryCache;
-
-public:
-	CContractSymbolDatabaseForTranspiler(CContractDatabase *pDB, const std::vector<ContractCompileData> &temporaryCompileData, rvm::BlockchainRuntime *pNativeRuntime, const rvm::ChainState* pChainState)
-		: m_pDB(pDB), m_temporaryCompileData(temporaryCompileData), m_pBcRuntime(pNativeRuntime), m_pChainState(pChainState)
-	{
-
-	}
-
-	~CContractSymbolDatabaseForTranspiler()
-	{
-		for (CContractSymbols *pContractSymbol : m_temporaryContractSymbolObjects)
-		{
-			delete pContractSymbol;
-		}
-	}
-
-	const std::map<std::string, const ContractDatabaseEntry*>& GetContractEntryCache()
-	{
-		return m_contractEntryCache;
 	}
 };

@@ -27,6 +27,13 @@ private:
 	FunctionCallGraph *m_pFunctionCallGraph = nullptr;
 	const transpiler::PredaTranspilerOptions* m_pOptions = nullptr;
 
+	struct ImportedContractData {
+		std::vector<ConcreteTypePtr> constructorParamList;
+		uint32_t importSlotIndex;
+	};
+
+	std::map<ConcreteTypePtr, ImportedContractData> m_importedContractsData;
+
 private:
 	bool ParsePrimaryExpression(PredaParser::PrimaryExpressionContext *ctx, ExpressionResult &outResult, bool requireConst = false);
 	bool ParseExpression_Internal(PredaParser::ExpressionContext *ctx, ExpressionResult &outResult, bool requireConst = false);
@@ -56,6 +63,7 @@ public:
 		m_pOptions = pOptions;
 	}
 
+	bool AddImportedContract(ConcreteTypePtr contract, const std::vector<ConcreteTypePtr>& paramList, uint32_t id);
 
 	int FindMatchingOverloadedFunction(const ConcreteTypePtr &calledFunction, PredaParser::FunctionCallArgumentsContext *ctx, std::string &outSynthesizedArgumentsString);
 	bool ParseExpression(PredaParser::ExpressionContext *ctx, ExpressionResult &outResult, bool requireConst = false);

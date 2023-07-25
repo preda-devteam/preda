@@ -271,9 +271,9 @@ int main(int argc, const char **argv)
 			std::cout << "shard_scale_out_function: " << pTranspiler->GetShardScaleoutFunctionExportIndex() << std::endl;
 
  			std::cout << std::endl;
-			std::array<transpiler::ScopeType, 8> scopes = { transpiler::ScopeType::Global,transpiler::ScopeType::Shard,transpiler::ScopeType::Address, transpiler::ScopeType::Uint16,
-				transpiler::ScopeType::Uint32, transpiler::ScopeType::Uint64, transpiler::ScopeType::Uint256, transpiler::ScopeType::Uint512 };
-			std::array<std::string, 8> scopeNames = { "global", "shard", "address", "uint16", "uint32", "uint64", "uint256", "uint512" };
+			std::array<transpiler::ScopeType, 10> scopes = { transpiler::ScopeType::Global,transpiler::ScopeType::Shard,transpiler::ScopeType::Address, transpiler::ScopeType::Uint32,
+				transpiler::ScopeType::Uint64, transpiler::ScopeType::Uint96, transpiler::ScopeType::Uint128, transpiler::ScopeType::Uint160, transpiler::ScopeType::Uint256, transpiler::ScopeType::Uint512 };
+			std::array<std::string, 10> scopeNames = { "global", "shard", "address", "uint32", "uint64", "uint96", "uint128", "uint160", "uint256", "uint512" };
 			static_assert(scopeNames.size() == scopes.size());
 			for (int i = 0; i < (int)scopes.size(); i++)
 			{

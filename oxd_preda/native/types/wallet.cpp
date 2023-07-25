@@ -4,6 +4,12 @@
 namespace rvm
 {
 
+const BigNum& CoinsWallet::GetAmount(TokenId aid) const
+{
+	auto *n = Get(aid);
+	return n ? *n : BigNum::Zero();
+}
+
 bool CoinsWallet::Withdraw(TokenId aid, CoinsMutable& get, CoinsWalletMutable& residue, bool allow_overflow) const	// residue = this - get
 {
 	ASSERT(get.IsZero());
@@ -56,7 +62,13 @@ void CoinsWalletMutable::Deposit(const Coins& x)
 	}
 }
 
-bool NonFungibleVault::Withdraw(NonfungibleId aid, NonFungibleToken& get, NonFungibleVaultMutable& residue) const	// residue = this - get
+CoinsWalletMutable& CoinsWalletMutable::Assign(const CoinsWallet &x)
+{
+	_SC::Assign(x);
+	return *this;
+}
+
+bool NonFungibleVault::Withdraw(TokenId aid, NonFungibleToken& get, NonFungibleVaultMutable& residue) const	// residue = this - get
 {
 	ASSERT(get.IsZero());
 	residue.Empty();
@@ -120,7 +132,7 @@ void NonFungibleVaultMutable::Deposit(const NonFungibleTokenRanged& x)
 	}
 }
 
-void NonFungibleVaultMutable::Mint(NonfungibleId nf_base_id, uint32_t pn)
+void NonFungibleVaultMutable::Mint(TokenId nf_base_id, uint32_t pn)
 {
 	ASSERT(_details::NONFUNGIBLE_PIECEIDX(nf_base_id) == 0);
 	ASSERT(pn <= _details::NONFUNGIBLE_ID_PIECE_MAXCOUNT(nf_base_id));
@@ -351,7 +363,7 @@ void NonFungibleArtworkData::Jsonify(rt::Json& append) const
 {
 	append.Object((
 		J_IF(IsNamed(), J(name) = rt::JsonEscapeString(GetPrimaryName())),
-		J_IF(IsHashed(), J(hash) = oxd::b32str(GetPrimaryHash())),
+		J_IF(IsHashed(), J(hash) = b32s(GetPrimaryHash())),
 		J(timestamp) = GetTimeStamp()
 	));
 
@@ -359,7 +371,7 @@ void NonFungibleArtworkData::Jsonify(rt::Json& append) const
 	{
 		Address u;
 		GetArtistAddress(u);
-		append.AppendKeyWithString("signer", oxd::b32address(u));
+		append.AppendKeyWithString("signer", oxd::SecureAddress::String(u));
 	}
 
 	if(GetPieceCount())
@@ -372,7 +384,7 @@ void NonFungibleArtworkData::Jsonify(rt::Json& append) const
 			{
 				append.AppendElement((
 					J_IF(IsPieceNamed(), J(name) = rt::JsonEscapeString(GetPieceName(i))),
-					J_IF(IsPieceHashed(), J(hash) = oxd::b32str(GetPieceHash(i)))
+					J_IF(IsPieceHashed(), J(hash) = b32s(GetPieceHash(i)))
 					));
 			}
 		}

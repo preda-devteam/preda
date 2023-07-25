@@ -1,4 +1,5 @@
 #include "json.h"
+#include "../os/kernel.h"
 
 namespace rt
 {
@@ -61,15 +62,71 @@ SIZE_T JsonArray::GetSize() const
 	return c;
 }
 
+void JsonObject::_cook_raw_value(LPCSTR& p, LPCSTR& tail)
+{
+	if(*p == '"' || *p == '\''){ p++; tail--; } // string
+	else
+		if(*p == '<')
+		{	
+			p+=2;
+			while(*p != '/'){ p++; ASSERT(p<tail); }
+			p++;
+			tail--;
+		}  // binary
+}
+
+LPCSTR JsonObject::_seek_char_escape(LPCSTR p, LPCSTR end, char c)
+{
+	for(;p < end;p++)
+	{	if(*p==c)
+		{	LPCSTR s = p-1;
+			for(;*s == '\\';s--);
+			if(((int)(s-p))&1)return p;
+		}
+	}
+	return end;
+}
+
+rt::String_Ref JsonObject::GetFirstObject(const rt::String_Ref& str_in)
+{
+	rt::String_Ref str = str_in.TrimLeftSpace();
+	if(str.GetLength()<2)return nullptr;
+
+	auto end = _seek_json_object_closure(str.Begin(), str.End());
+	if(end)
+		return rt::String_Ref(str.Begin(), end);
+
+	return nullptr;
+}
+
+bool JsonObject::ValidateObject(const rt::String_Ref& str_in)
+{
+	rt::String_Ref str = str_in.TrimSpace();
+	return	str.GetLength()>=2 &&
+			_match_closure(str[0]) == str.Last() &&
+			_seek_json_object_closure(str.Begin(), str.End()) == str.End();
+}
+
+LPCSTR JsonObject::_scan_text(LPCSTR p, LPCSTR end)
+{
+	static const rt::CharacterSet sep("\x7\x9\xa\xb\xc\xd '\",:{}[]");
+	while(p < end && !sep.Has(*p))
+		p++;
+	
+	return p;
+}
+
 LPCSTR JsonObject::_seek_json_object_closure(LPCSTR p, LPCSTR end)
 {
 	if(*p == '"' || *p == '\'') // string
-	{	p = _seek_char_escape(p+1, end, *p);
+	{
+		p = _seek_char_escape(p+1, end, *p);
 		if(p != end)return p+1;
 		return nullptr;
 	}
 	else if(*p == '<') // binary
-	{	UINT len;
+	{
+		UINT len;
 		p++;
 		p += rt::String_Ref(p, end).ToNumber(len);
 		p += 1 + len;
@@ -77,7 +134,8 @@ LPCSTR JsonObject::_seek_json_object_closure(LPCSTR p, LPCSTR end)
 		return nullptr;
 	}
 	else
-	{	char c = _match_closure(*p);
+	{
+		char c = _match_closure(*p);
 		if(c)
 		{	char depth_inc = *p;
 			char depth_dec = c;
@@ -203,8 +261,9 @@ int JsonObject_CountSeps(const rt::String_Ref& doc)
 	}
 	return ret;
 }
+} // namespace _details
 
-void JsonObject_UnescapeStringValue(const rt::String_Ref& in, rt::String& val_out)
+void JsonObject::UnescapeStringValue(const rt::String_Ref& in, rt::String& val_out)
 {
 	if(in.IsEmpty()){ val_out.Empty(); return; }
 
@@ -248,7 +307,6 @@ void JsonObject_UnescapeStringValue(const rt::String_Ref& in, rt::String& val_ou
 	if(s<end){ *p++ = *s++; }
 	val_out._len = p - val_out._p;
 }
-} // namespace _details
 
 bool JsonObject::GetNextKeyValuePair(JsonKeyValuePair& kvp) const
 {	
@@ -386,6 +444,33 @@ SKIP_THE_KEY:
 		removed += rt::SS("\n}");
 }
 
+void JsonObject::RetainKeys(const rt::String_Ref& source, const rt::String_Ref& keys_to_retain, rt::String& out)
+{
+	rt::String_Ref keys[256];
+	UINT co = keys_to_retain.Split(keys, sizeofArray(keys), ",;|");
+	if (co == 0) { out = "{ }"; return; }
+
+	rt::JsonKeyValuePair kv;
+	rt::JsonObject doc(source);
+	while (doc.GetNextKeyValuePair(kv))
+	{
+		UINT i;
+		for (i = 0; i < co; i++)
+			if (kv.GetKey() == keys[i]) break;
+		if (i >= co) goto SKIP_THE_KEY;
+		if (out.IsEmpty()) { out = rt::SS("{ "); }
+		else { out += rt::SS(",  "); }
+		out += rt::SS("\n  \"") + kv.GetKey() + rt::SS("\": ") + kv.GetValueRaw();
+	SKIP_THE_KEY:
+		continue;
+	}
+
+	if (out.IsEmpty())
+		out = rt::SS("{ }");
+	else
+		out += rt::SS("\n}");
+}
+
 LPCSTR JsonObject::_LocateValue(const rt::String_Ref& xpath, bool bDoNotSplitDot /* = false */) const
 {
 	if(_Doc.IsEmpty())return nullptr;
@@ -487,6 +572,137 @@ rt::String_Ref JsonKeyValuePair::GetValueRaw() const
 	return _Value;
 }
 
+Json::_AppendingKeyedValue::_AppendingKeyedValue(Json& j, const rt::String_Ref& key)
+	:_Appending(j)
+{
+	ASSERT(j.IsEndsWith('}'));
+	j._String.Shorten(1);
+	if(!j.IsEndsWith('{'))j._String += ',';
+	j._String += '"'; JsonEscapeString::Concat(key, j._String); j._String+= '"'; j._String+=':';
+}
+
+Json::_MergingObject::_MergingObject(Json& j)
+	:_Appending(j)
+{
+	ASSERT(j.IsEndsWith('}'));
+	j._String.Shorten(1);
+	if(j.IsEndsWith('{')){ _StartPos = INFINITE; j._String.Shorten(1); }
+	else _StartPos = j._String.GetLength();
+}
+
+Json::_MergingObject::~_MergingObject()
+{
+	if(_pJson)
+	{	if(_StartPos != INFINITE)
+		{	ASSERT(_pJson->_String[_StartPos] == '{');
+			if(_pJson->_String.GetLength() > _StartPos + 2)
+			{
+				_pJson->_String[_StartPos] = ','; 
+			}
+			else // merged with an empty object
+			{	_pJson->_String[_StartPos] = '}';
+				_pJson->_String.SetLength(_StartPos + 1);
+			}
+		}
+		ASSERT(_pJson->IsEndsWith('}'));
+	}
+}
+
+Json::_AppendingElement::_AppendingElement(Json& j)
+	:_Appending(j)
+{
+	ASSERT(j.IsEndsWith(']'));
+	j._String.Shorten(1);
+	if(j._String.Last() != '[')j._String += ',';
+}
+
+Json::_AppendingArray::~_AppendingArray()
+{
+	if(_pJson)
+	{	if(_StartPos != INFINITE){ ASSERT(_pJson->_String[_StartPos] == '['); _pJson->_String[_StartPos] = ','; }
+		ASSERT(_pJson->IsEndsWith(']'));
+	}
+}
+
+Json::_AppendingArray::_AppendingArray(Json& j)
+	:_Appending(j)
+{
+	ASSERT(j.IsEndsWith(']'));
+	j._String.Shorten(1);
+	if(j.IsEndsWith('[')){ _StartPos = INFINITE; j._String.Shorten(1); }
+	else _StartPos = j._String.GetLength();
+}
+
+Json::_WritingStringEscaped::_WritingStringEscaped(Json& j)
+	:_Appending(j)
+{	
+	if(j.IsEndsWith('"')){ j._String.Shorten(1); }
+	else j._String += '"';
+}
+
+Json::_WritingStringAtKey::_WritingStringAtKey(Json& j, const rt::String_Ref& key)
+	:_Appending(j)
+{
+	ASSERT(j.IsEndsWith('}'));
+	j._String.Shorten(1);
+	if(!j.IsEndsWith('{'))j._String += ',';
+	j._String += '"'; JsonEscapeString::Concat(key, j._String); j._String+= '"'; j._String+=':'; j._String+='"';
+}
+
+Json& Json::MergeObject(const rt::String_Ref& json_str_in)
+{
+	rt::String_Ref json_str = json_str_in.TrimSpace();
+	if(json_str.GetLength() <= 2 || json_str.First() != '{' || json_str.Last() != '}')return *this;
+	if(json_str.SubStr(1, json_str.GetLength() - 2).TrimSpace().IsEmpty())return *this;
+
+	if(json_str.TrimSpace().IsEmpty())return *this;
+	ASSERT(json_str.First() == '{' && json_str.Last() == '}');
+	_MergingObject(*this)._pJson->_String += json_str;
+	return *this;
+}
+
+Json& Json::AppendKeyWithString(const rt::String_Ref& key, const rt::String_Ref& string) // value is a string, will be escaped
+{
+	ASSERT(IsEndsWith('}'));
+	_details::_AppendJsonValueToString(rt::JsonEscapeString(string), _AppendingKeyedValue(*this, key)._pJson->_String);
+	return *this;
+}
+
+Json& Json::AppendKeyWithBinary(const rt::String_Ref& key, const rt::String_Ref& data) // value is a binary data, will be base64 encoded
+{
+	ASSERT(IsEndsWith('}'));
+	_String.Last() = ',';
+	_String += rt::SS() + '"' + key + rt::SS("\":\"");
+
+	auto val_sz = os::Base64EncodeLength(data.GetLength());
+	os::Base64Encode(_String.Extend(val_sz), data.Begin(), data.GetLength());
+	_String += rt::SS("\"}");
+
+	return *this;
+}
+
+void Json::AppendString(const rt::String_Ref& s)
+{
+	JsonEscapeString::Concat(s, _String);
+}
+
+Json& Json::String(const rt::String_Ref& s)
+{
+	_String += '"';
+	JsonEscapeString::Concat(s, _String);
+	_String += '"';
+	return *this;
+}
+
+Json& Json::Binary(const void* data, uint32_t size)
+{
+	_String += '"';
+	auto bs = os::Base64EncodeLength(size);
+	os::Base64Encode(_String.Extend(bs), data, size);
+	_String += '"';
+	return *this;
+}
+
 JsonEscapeString::JsonEscapeString(const rt::String_Ref& c_string, bool add_quote)
 {	
 	int open = 0;
@@ -535,14 +751,6 @@ void JsonEscapeString::Concat(const rt::String_Ref& input, rt::String& out)
 		{	out += rt::SS("\x00");
 		}
 	}
-}
-
-void JsonBeautified::_AppendSpace(UINT count)
-{	
-	UINT org = (UINT)GetLength();
-	SetLength(org + count);
-	for(UINT i=0; i<count; i++)
-		_p[org + i] = ' ';
 }
 
 void JsonBeautified::_AppendAsSingleLine(const rt::String_Ref& doc)
@@ -675,7 +883,6 @@ bool _json_verify_escaped(LPCSTR p, SIZE_T len)
 	for(UINT i=1; i<len; i++)
 	{
 		if(p[i] == '"' && p[i-1] != '\\')return false;
-		if(p[i] < ' ' && p[i] >= 0)return false;
 	}
 
 	return true;

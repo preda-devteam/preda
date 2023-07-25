@@ -70,21 +70,21 @@ namespace prlrt {
 
 
 	template<typename retType, typename ...Args>
-	retType cross_call(uint64_t contractId, uint32_t opCode, Args&& ...args)
+	retType cross_call(uint64_t contractId, uint64_t templateContractImportSlot, uint32_t opCode, Args&& ...args)
 	{
 		retType ret;
 		const void *p[sizeof...(Args) + 1] = { &args..., &ret };
-		uint32_t crossCallRes = PREDA_CALL(CrossCall, contractId, opCode, p, sizeof...(Args) + 1);
+		uint32_t crossCallRes = PREDA_CALL(CrossCall, contractId, templateContractImportSlot, opCode, p, sizeof...(Args) + 1);
 		if (crossCallRes != 0)
 			throw preda_exception("cross call error", prlrt::ExceptionType(crossCallRes >> 8));
 		return ret;
 	}
 
 	template<typename ...Args>
-	void cross_call_no_ret(uint64_t contractId, uint32_t opCode, Args&& ...args)
+	void cross_call_no_ret(uint64_t contractId, uint64_t templateContractImportSlot, uint32_t opCode, Args&& ...args)
 	{
-		const void *p[sizeof...(Args) + 1] = { &args..., nullptr };		// here "+ 1" is necessary, otherwise when args... is empty, we are defining an empty array and get a compile error
-		uint32_t crossCallRes = PREDA_CALL(CrossCall, contractId, opCode, p, sizeof...(Args));
+		const void *p[sizeof...(Args) + 1] = { &args..., nullptr };		// here "+1" is necessary, otherwise when args... is empty, we are defining an empty array and get a compile error
+		uint32_t crossCallRes = PREDA_CALL(CrossCall, contractId, templateContractImportSlot, opCode, p, sizeof...(Args));
 		if (crossCallRes != 0)
 			throw preda_exception("cross call error", prlrt::ExceptionType(crossCallRes >> 8));
 	}
@@ -95,6 +95,17 @@ namespace prlrt {
 		std::vector<uint8_t> buffer(arg.get_serialize_size());
 		arg.serialize_out(&buffer[0], true);
 		PREDA_CALL(ReportReturnValue, typeExportName, &buffer[0], (uint32_t)buffer.size());
+	}
+
+	template<typename ...Args>
+	uint64_t deploy_call(uint64_t templateContractImportSlot, Args&& ...args)
+	{
+		const void* p[sizeof...(Args) + 1] = { &args..., nullptr };		// here "+1" is necessary, otherwise when args... is empty, we are defining an empty array and get a compile error
+		uint64_t new_contract_id = PREDA_CALL(DeployCall, templateContractImportSlot, p, sizeof...(Args));
+		if (new_contract_id == 0)		// 0 is invalid contract id
+			throw preda_exception("deploy call error", prlrt::ExceptionType::DeployFailed);
+
+		return new_contract_id;
 	}
 
 	void burn_gas_loop()

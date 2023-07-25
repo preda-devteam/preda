@@ -3,7 +3,7 @@
 
 namespace rvm
 {
-struct CompiledContracts;
+struct CompiledModules;
 
 #pragma pack(push, 1)
 
@@ -34,109 +34,106 @@ struct SystemFunctionOpCodes
 struct Interface
 {
 	virtual ConstString			GetName() const = 0;
+	virtual ConstString			GetFullName() const = 0;
 
 	// Function Definitions
 	virtual uint32_t			GetFunctionCount() const = 0;
 	virtual ConstString			GetFunctionName(uint32_t idx) const = 0;
 	virtual FunctionFlag		GetFunctionFlag(uint32_t idx) const = 0;
 	virtual Scope				GetFunctionScope(uint32_t idx) const = 0;
-	virtual bool				GetFunctionSignature(uint32_t idx, StringStream* signature_out) const = 0;
 	virtual OpCode				GetFunctionOpCode(uint32_t idx) const = 0;
+	virtual bool				GetFunctionSignature(uint32_t idx, StringStream* signature_out) const = 0;
 };
 
 struct Contract: public Interface // for both PREDA contract and native contract
 {
-	virtual ContractFlag		GetFlag() const = 0;
-	virtual const HashValue*	GetIntermediateRepresentationHash() const = 0;
+	virtual ContractFlag			GetFlag() const = 0;
+	virtual const ContractModuleID* GetModuleID() const = 0;
 
 	// Interface Implemented
-	virtual uint32_t			GetInterfaceImplemented(InterfaceId* pIID_out, uint32_t OutBufSize) const = 0;
-	virtual OpCode				GetInterfaceImplementedOpCode(InterfaceId i, OpCode code) const = 0;
+	virtual uint32_t				GetInterfaceImplementedCount() const = 0;
+	virtual const Interface*		GetInterfaceImplemented(uint32_t idx) const = 0;
+	virtual OpCode					GetInterfaceImplementedOpCode(uint32_t idx, OpCode code) const = 0;  // convert opcode in Interface to opcode in Contract
 
 	// Interface Definitions
-	virtual uint32_t			GetInterfaceCount() const = 0;
-	virtual const Interface*	GetInterface(uint32_t idx) const = 0;
-	virtual InterfaceSlot		GetInterfaceSlot(uint32_t idx) const = 0;  // the contract-level id of an interface definition
+	virtual uint32_t				GetInterfaceCount() const = 0;
+	virtual const Interface*		GetInterface(uint32_t idx) const = 0;
+	virtual InterfaceSlot			GetInterfaceSlot(uint32_t idx) const = 0;  // the contract-level id of an interface definition
 
 	// User-defined Scope Usage/Definition (including scattered maps)
-	virtual uint32_t			GetScopeCount() const = 0;
-	virtual Scope				GetScope(uint32_t idx) const = 0;
-	virtual ConstString			GetScopeName(uint32_t idx) const = 0;
-	virtual ScopeDefinitionFlag	GetScopeFlag(uint32_t idx) const = 0;
-	virtual ContractScopeId		GetScopeDefinition(uint32_t idx) const = 0; // will be another contract if GetScopeFlag()&ScopeDefinitionFlag::Foreign
+	virtual uint32_t				GetScopeCount() const = 0;
+	virtual Scope					GetScope(uint32_t idx) const = 0;
+	virtual ConstString				GetScopeName(uint32_t idx) const = 0;
+	virtual ScopeFlag				GetScopeFlag(uint32_t idx) const = 0;
 
 	// State Definitions (including scattered maps)
-	virtual bool				GetStateSignature(Scope scope, StringStream* signature_out) const = 0;
+	virtual bool					GetStateSignature(Scope scope, StringStream* signature_out) const = 0;
 
 	// Enum Definitions
-	virtual uint32_t			GetEnumCount() const = 0;
-	virtual ConstString			GetEnumName(uint32_t idx) const = 0;
-	virtual bool				GetEnumSignature(uint32_t idx, StringStream* signature_out) const = 0;
+	virtual uint32_t				GetEnumCount() const = 0;
+	virtual ConstString				GetEnumName(uint32_t idx) const = 0;
+	virtual bool					GetEnumSignature(uint32_t idx, StringStream* signature_out) const = 0;
 
 	// Struct Definitions
-	virtual uint32_t			GetStructCount() const = 0;
-	virtual ConstString			GetStructName(uint32_t idx) const = 0;
-	virtual bool				GetStructSignature(uint32_t idx, StringStream* signature_out) const = 0;
+	virtual uint32_t				GetStructCount() const = 0;
+	virtual ConstString				GetStructName(uint32_t idx) const = 0;
+	virtual bool					GetStructSignature(uint32_t idx, StringStream* signature_out) const = 0;
 
 	// Chain Specific
-	virtual void				GetSystemFunctionOpCodes(SystemFunctionOpCodes* out) const = 0;
+	virtual void					GetSystemFunctionOpCodes(SystemFunctionOpCodes* out) const = 0;
 };
 
 struct LogMessageOutput
 {
-	virtual void				Log(LogMessageType type, uint32_t code, uint32_t unitIndex, uint32_t line, uint32_t lineOffset, const ConstString *message) = 0;
+	virtual void					Log(LogMessageType type, uint32_t code, uint32_t unitIndex, uint32_t line, uint32_t lineOffset, const ConstString *message) = 0;
 };
 
-struct ChainState;
+struct GlobalStates;
 struct ContractRepository // expose all deployed contracts for both PREDA and bc's native built-in contracts
 {
-	virtual bool				StateJsonify(BuildNum version, ContractScopeId contract, const ConstData* contract_state, StringStream* json_out, const ChainState* ps) const = 0;
-	virtual bool				StateJsonParse(BuildNum version, ContractScopeId contract, const ConstString* json, DataBuffer* state_out, const ChainState* ps, LogMessageOutput* error_out = nullptr) const = 0;
+	virtual bool					StateJsonify(ContractInvokeId contract, const ConstData* contract_state, StringStream* json_out) const = 0;
+	virtual bool					StateJsonParse(ContractInvokeId contract, const ConstString* json, DataBuffer* state_out, LogMessageOutput* error_out = nullptr) const = 0;
 
-	virtual bool				ArgumentsJsonify(BuildNum build_num, ContractScopeId contract, OpCode opcode, const ConstData* args_serialized, StringStream* json_out, const ChainState* ps) const = 0;
-	virtual bool				ArgumentsJsonParse(BuildNum build_num, ContractScopeId contract, OpCode opcode, const ConstString* json, DataBuffer* args_serialized, const ChainState* ps, LogMessageOutput* error_out = nullptr) const = 0;
+	virtual bool					ArgumentsJsonify(ContractInvokeId contract, OpCode opcode, const ConstData* args_serialized, StringStream* json_out) const = 0;
+	virtual bool					ArgumentsJsonParse(ContractInvokeId contract, OpCode opcode, const ConstString* json, DataBuffer* args_serialized, LogMessageOutput* error_out = nullptr) const = 0;
 
-	virtual ContractScopeId		GetScopeDefinition(ContractScopeId cid) const = 0;
+	virtual ContractScopeId			GetScopeDefinition(ContractScopeId cid) const = 0;
+	virtual const Contract*			GetContract(const ContractModuleID* module_id) const = 0; // valid build_num starts from 1, specify 0 to get the contract of latest build
 
-	virtual const Contract*		GetContract(const ContractDID* deploy_id) const = 0; // valid build_num starts from 1, specify 0 to get the contract of latest build
-	virtual const Interface*	GetInterface(const InterfaceDID* deploy_id) const = 0; // valid build_num starts from 1, specify 0 to get the contract of latest build
-
-	virtual uint32_t			GetContractEnumSignatures(BuildNum build_num, ContractId contract, StringStream* signature_out, const ChainState* ps) const = 0;		// in format "enumtype1=enumerator11,enumerator12,...\nenumtype2=enumerator21,enumerator22,..."
-	virtual bool				GetContractFunctionArgumentsSignature(BuildNum build_num, ContractScopeId contract, OpCode opcode, StringStream* signature_out, const ChainState* ps) const = 0;	// in expanded format
-	virtual bool				GetContractStateSignature(BuildNum build_num, ContractScopeId contract, StringStream* signature_out, const ChainState* ps) const = 0;
-};
-
-struct AggregatedRepository: public ContractRepository	// expose all deployed contracts for both PREDA and bc's native built-in contracts
-{
-
+	virtual uint32_t				GetContractEnumSignatures(ContractVersionId contract, StringStream* signature_out) const = 0;		// in format "enumtype1=enumerator11,enumerator12,...\nenumtype2=enumerator21,enumerator22,..."
+	virtual bool					GetContractFunctionArgumentsSignature(ContractInvokeId contract, OpCode opcode, StringStream* signature_out) const = 0;	// in expanded format
+	virtual bool					GetContractStateSignature(ContractInvokeId contract, StringStream* signature_out) const = 0;
 };
 
 //////////////////////////////////////////////////////////
 // Interfaces implemented by BC and invoked by RVM engine
-struct ChainState
+struct DeployedContract
+{
+	ContractModuleID				Module;
+	BuildNum						Version;
+	uint16_t						StubSize;
+	uint8_t							Stub[1];	// deployment stub, size = StubSize
+};
+
+struct GlobalStates // only available in global scope
+{
+	virtual DAppId					GetDAppByName(const ConstString* dapp_name) const = 0; // return RVM_DAPP_ID_INVALID if not found
+	virtual ContractVersionId		GetContractByName(const ConstString* dapp_period_contract_name) const = 0; // return rvm::ContractScopeIdInvalid if not found
+	virtual BuildNum				GetContractEffectiveBuild(ContractId contract) const = 0;
+	virtual const DeployedContract*	GetContractDeployed(ContractVersionId contract) const = 0; // return on chain CMID of a contract of specific version
+};
+
+struct ChainStates: public GlobalStates
 {
 	// General state get
-	virtual ConstStateData			GetState(ContractScopeId contract) const = 0; // for state in global/shard scope, or address/user-defined scope of the target ExecutionInfo::GetScopeTarget()
+	virtual ConstStateData			GetState(ContractScopeId contract) const = 0; // for state in global/shard scope, or address/user-defined scope with the target available in ExecutionInfo::GetScopeTarget()
 	virtual ConstStateData			GetState(ContractScopeId contract, const ScopeKey* key) const = 0; // for values in scattered map in global/shard scope, or address/user-defined scope of the target ExecutionInfo::GetScopeTarget()
-
-	// DApp, Contract, Asset Registration
-	virtual DAppId					GetDAppByName(const ConstString* dapp_name) const = 0; // return RVM_DAPP_ID_INVALID if not found
-	virtual ConstAddress*			GetDAppOwner(DAppId dapp_id) const = 0;
-	virtual uint64_t				GetDAppCreationTime(DAppId dapp_id) const = 0;
-
-	virtual ContractId				GetContractByName(DAppId dapp_id, const ConstString* contract_name) const = 0; // return RVM_CONTRACT_ID_INVALID if not found
-	virtual BuildNum				GetContractEffectiveBuild(ContractId contract) const = 0;  // return build num on chain, same contract with different scope will having same build num always, return 0 for not found
-	virtual const ContractDID*		GetContractDeploymentIdentifier(ContractId contract, BuildNum version = BuildNumLatest) const = 0; // return on chain CDI of a contract of specific version
-	virtual const InterfaceDID*		GetInterfaceDeploymentIdentifier(InterfaceId interf) const = 0; // return on chain CDI of a contract of specific version
-
-	virtual TokenId					GetTokenBySymbol(const rvm::ConstString* token_name) const = 0;
-	virtual	ConstString				GetTokenSymbol(TokenId id) const = 0;
 
 	// block info
 	virtual uint64_t				GetBlockTime() const = 0;
 	virtual ConstAddress*			GetBlockCreator() const = 0;
 	virtual ScaleOutMode			GetScalingUpMode() const = 0;
-	virtual const HashValue*		GetBlockHash() const = 0;
+	virtual const HashValue*		GetPrevBlockHash() const = 0;
 	virtual uint32_t				GetShardIndex() const = 0;
 	virtual uint32_t				GetShardOrder() const = 0;
 	virtual uint64_t				GetBlockHeight() const = 0;
@@ -145,10 +142,11 @@ struct ChainState
 struct InvocationInfo
 {
 	// transaction info
+	virtual	const HashValue*		GetTxnHash(HashValue* hash_out = nullptr) const = 0; // hash_out can be nullptr is current utxn is the first one in a relay group, or in a non-grouped txn
+	virtual uint32_t				GetMicroTxnIndex() const = 0;
 	virtual ScopeKey				GetScopeTarget() const = 0;	// return nullptr if current scope is PERSHARD
 	virtual OpCode					GetOpCode() const = 0;
-	virtual ContractScopeId			GetContractId() const = 0;
-	virtual BuildNum				GetBuildNum() const = 0;
+	virtual ContractInvokeId		GetContractId() const = 0;
 	virtual uint64_t				GetTimestamp() const = 0;
 	virtual InvokeContextType		GetInvokeType() const = 0;
 	// transaction: normal txn
@@ -162,7 +160,7 @@ struct InvocationInfo
 	virtual ConstAddress*			GetInitiator() const = 0;	// return nullptr if current scope is PERSHARD
 };
 
-struct ExecutionState: public ChainState
+struct ExecutionState: public ChainStates
 					 , public InvocationInfo
 {
 };
@@ -174,15 +172,18 @@ struct ExecutionContext: public ExecutionState
 	// returns null if the state doesn't exist
 	virtual uint8_t*				AllocateStateMemory(uint32_t dataSize) = 0;
 	virtual void					DiscardStateMemory(uint8_t* state_memory) = 0;		// `state` must be allocated from AllocateState
-	virtual void					CommitNewState(BuildNum version, ContractScopeId contract, uint8_t* state_memory) = 0;  // `state_memory` must be allocated from AllocateStateMemory, or be nullptr to empty the state
-	virtual void					CommitNewState(BuildNum version, ContractScopeId contract, const ScopeKey* key, uint8_t* state_memory) = 0;
+	virtual void					CommitNewState(ContractInvokeId contract, uint8_t* state_memory) = 0;  // `state_memory` must be allocated from AllocateStateMemory, or be nullptr to empty the state
+	virtual void					CommitNewState(ContractInvokeId contract, const ScopeKey* key, uint8_t* state_memory) = 0;
 
-	virtual bool					EmitRelayToScope(BuildNum version, const uint8_t* scope_key, uint32_t scope_key_size, ContractScopeId cid, OpCode opcode, const ConstData* args_serialized, uint32_t gas_redistribution_weight) = 0;
-	virtual bool					EmitRelayToGlobal(BuildNum version, ContractScopeId cid, OpCode opcode, const ConstData* args_serialized, uint32_t gas_redistribution_weight) = 0;
-	virtual bool					EmitBroadcastToShards(BuildNum version, ContractScopeId cid, OpCode opcode, const ConstData* args_serialized, uint32_t gas_redistribution_weight) = 0; // global scope to all shards
+	virtual bool					EmitRelayToScope(ContractInvokeId cid, const ScopeKey* scope_key, OpCode opcode, const ConstData* args_serialized, uint32_t gas_redistribution_weight) = 0;
+	virtual bool					EmitRelayToGlobal(ContractInvokeId cid, OpCode opcode, const ConstData* args_serialized, uint32_t gas_redistribution_weight) = 0;
+	virtual bool					EmitBroadcastToShards(ContractInvokeId cid, OpCode opcode, const ConstData* args_serialized, uint32_t gas_redistribution_weight) = 0; // global scope to all shards
+
+	// Deploy an unnamed contract
+	virtual ContractVersionId		DeployUnnamedContract(DAppId dapp_id, EngineId engine_id, const ContractModuleID* module_id) = 0; // for global scope only
 
 	// invoke a contract function (may cross-engine)
-	virtual ExecuteResult			Invoke(uint32_t gas_limit, BuildNum version, ContractScopeId contract, OpCode opcode, const ConstData* args_serialized) = 0; // return pointer will be invalid after next call of `Invoke` or `SetReturnValue`						
+	virtual ExecuteResult			Invoke(uint32_t gas_limit, ContractInvokeId contract, OpCode opcode, const ConstData* args_serialized) = 0; // return pointer will be invalid after next call of `Invoke` or `SetReturnValue`						
 
 	// set return value of current function being invoking
 	virtual void					SetReturnValue(const ConstData* args_serialized) = 0;
@@ -190,44 +191,40 @@ struct ExecutionContext: public ExecutionState
 	virtual void					SetReturnValueFinalize(uint32_t size_finalized) = 0;
 };
 
-struct BlockchainRuntime
+struct BlockchainRuntime: public GlobalStates
 {
-	// Types and Contracts of Native DApp (Core)
-	virtual int32_t					JsonifyCoreType(NativeTypeId tid, const ConstData* serialized, StringStream* json_out) const = 0; // -1 for error, or #bytes eta
-	virtual bool					JsonParseCoreType(NativeTypeId tid, const ConstString* json, DataBuffer* serialized_out) const = 0;
-
 	virtual ConstString				GetCoreDAppName() const = 0;
-	virtual AggregatedRepository*	GetContractRepository() = 0;  // no need to release
+	virtual ContractRepository*		GetContractRepository() = 0;  // no need to release
 
 	virtual void					DebugPrint(DebugMessageType type, const ConstString* string, const ExecutionState* ctx_opt = nullptr, const Contract* contract_opt = nullptr, int32_t line = -1) = 0;
 };
 
-
 //////////////////////////////////////////////////////////
 // Interfaces implemented by RVM engine and invoked by BC
-struct CompiledContracts
+struct CompiledModules
 {
 	virtual EngineId				GetEngineId() const = 0;
 	virtual ConstString				GetDAppName() const = 0;
 	virtual uint32_t				GetCount() const = 0;
 	virtual const Contract*			GetContract(uint32_t idx) const = 0;  // may return nullptr if `idx` contract is failed in compilation
 	virtual ConstString				GetExternalDependencies() const = 0;   // list of contract names, "dapp_name.contract_name,dapp.contract..."
+	virtual bool					ValidateDependency(const GlobalStates* chain_state) const = 0; // validate in case the chainstate for deployment is not the same when it is compiled
+	virtual ConstData				GetDependencyData() const = 0;
 	virtual bool					IsLinked() const = 0;
 	virtual void					Release() = 0;
 };
 
-struct ExecuteUnit		// multi-instances are allowed, and may run in different threads
+struct ExecutionUnit		// multi-instances are allowed, and may run in different threads
 {
-	virtual InvokeResult			Invoke(ExecutionContext* exec, uint32_t gas_limit, const ContractDID *contract_deployment_id, OpCode opcode, const ConstData* args_serialized) = 0;
-	// Deploy the contracts into repository and ready for execution and cross-contract reference
-	virtual InvokeResult			Deploy(	ExecutionContext* exec, uint32_t gas_limit, 
-											CompiledContracts* linked, 
-											rvm::ContractDID* contract_deployment_ids,		// CDID[contracts_count]
-											rvm::InterfaceDID** interface_deployment_ids,	// IDID[contracts_count][#_of_interface_in_each_contract]
-											LogMessageOutput* log_msg_output
+	virtual InvokeResult			Invoke(ExecutionContext* exec, uint32_t gas_limit, ContractInvokeId contract, OpCode opcode, const ConstData* args_serialized) = 0;
+	virtual bool					DeployContracts(	ExecutionContext*	exec,
+														CompiledModules*	linked, 
+														DataBuffer**		deploy_stub,   // DataBuffer*[deploy_count]
+														LogMessageOutput*	log_msg_output
 									) = 0;
+	virtual InvokeResult			InitializeContracts(ExecutionContext* exec, uint32_t gas_limit, CompiledModules* linked, const ConstData* ctor_args) = 0;
 	virtual void					Release() = 0;
-	virtual void					GetExceptionMessage(uint16_t except, rvm::StringStream* str) const = 0;
+	virtual void					GetExceptionMessage(uint16_t except, StringStream* str) const = 0;
 };
 
 struct RvmEngine: public ContractRepository // singleton
@@ -241,23 +238,30 @@ struct RvmEngine: public ContractRepository // singleton
 
 	// Build a collection of contracts
 	// Compile source to intermediate representation (PREDA: source code to C++)
-	virtual bool			Compile(	const ChainState* chain_state,
-										const ConstString* dapp_name,
-										uint32_t contract_count, 
-										const ConstData* deploy_data_array,	// size = contract_count
-										CompilationFlag flag,
-										CompiledContracts** compiled_output,
-										DataBuffer* dependency,  // call SetSize(0) if no dependency data
-										LogMessageOutput* log_msg_output
+	virtual ConstString		GetContractName(const ConstData* source_code) = 0; // return the name of the contract without actual compilation
+	virtual bool			Compile(	const ConstString*	dapp_name,
+										uint32_t			contract_count, 
+										const ConstData*	deploy_data_array,	// size = contract_count
+										CompilationFlag		flag,
+										CompiledModules**	compiled_output,
+										LogMessageOutput*	log_msg_output
+							) = 0;
+	virtual bool			Recompile(	const ConstString*	dapp_name,
+										const ConstData*	dependency_data,
+										uint32_t			contract_count, 
+										const ConstData*	deploy_data_array,	// size = contract_count
+										CompilationFlag		flag,
+										CompiledModules**	compiled_output,
+										LogMessageOutput*	log_msg_output
 							) = 0;
 	// Build intermediate representation to platform specific runtime (PREDA: C++ to dll/so, involving extern gcc compiler) 
-	virtual bool			Link(		CompiledContracts* compiled,
-										LogMessageOutput* log_msg_output
+	virtual bool			Link(		CompiledModules*	compiled,
+										LogMessageOutput*	log_msg_output
 							) = 0;
-	// Verify a previously compiled contract is compatible with current chain state
-	virtual bool			ValidateDependency(const ChainState* chain_state, CompiledContracts* compiled, const ConstData* dependency) = 0;
+	// Deploy the contracts into repository and ready for execution and cross-contract reference
+	virtual void			CancelCurrentBuildingTask() = 0;  // abort in-progress Compile or Link task, async call
 
-	virtual ExecuteUnit*	CreateExecuteUnit() = 0;
+	virtual ExecutionUnit*	CreateExecuteUnit() = 0;
 };
 
 typedef rvm::RvmEngine* (*GetEngineFunctionType)(const char* config);

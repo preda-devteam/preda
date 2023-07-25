@@ -18,32 +18,28 @@ class CoinsWallet : protected OrderedMap<TokenId, BigNum>
 {
 	friend class CoinsWalletMutable;
 	typedef OrderedMap<TokenId, BigNum> _SC;
-	typedef typename _details::_TypeTraits<_SC>::Mutable _SC_MUTABLE;
+	typedef typename TypeTraits<_SC>::Mutable _SC_MUTABLE;
+
+public:
 	TYPETRAITS_DECLARE_NON_POD;
 	RVM_IMMUTABLE_TYPE(CoinsWallet);
 
-public:
-	UINT GetAssetCount() const { return _SC::GetCount(); }
-	auto GetAssetId(UINT i) const { return _SC::_GetByPos(i).key(); }
-	auto &GetAssetAmount(UINT i) const { return _SC::_GetByPos(i).val(); }
+	UINT		GetAssetCount() const { return _SC::GetCount(); }
+	auto		GetAssetId(UINT i) const { return _SC::_GetByPos(i).key(); }
+	auto&		GetAssetAmount(UINT i) const { return _SC::_GetByPos(i).val(); }
 
-	auto &GetAmount(TokenId aid) const
-	{
-		auto *n = Get(aid);
-		return n ? *n : BigNum::Zero();
-	}
-	bool IsEmpty() const { return _SC::IsEmpty(); }
-	void Jsonify(rt::Json &append) const { _SC::Jsonify(append); }
-	bool Withdraw(TokenId aid, CoinsMutable &get, CoinsWalletMutable &residue, bool allow_overflow = false) const; // residue = this - get
+	auto		GetAmount(TokenId aid) const -> const BigNum&;
+	bool		IsEmpty() const { return _SC::IsEmpty(); }
+	void		Jsonify(rt::Json &append) const { _SC::Jsonify(append); }
+	bool		Withdraw(TokenId aid, CoinsMutable &get, CoinsWalletMutable &residue, bool allow_overflow = false) const; // residue = this - get
 
-	UINT GetEmbeddedSize() const { return _SC::GetEmbeddedSize(); }
+	UINT		GetEmbeddedSize() const { return _SC::GetEmbeddedSize(); }
 	static UINT GetEmbeddedSize(const CoinsWallet &c) { return _SC::GetEmbeddedSize((_SC &)c); }
 	static UINT GetEmbeddedSize(const CoinsWalletMutable &c) { return _SC::GetEmbeddedSize((_SC_MUTABLE &)c); }
 	static bool	IsEmbeddable(const CoinsWallet &c){ return true; }
 	static bool	IsEmbeddable(const CoinsWalletMutable &c) { return _SC::IsEmbeddable((_SC_MUTABLE &)c); }
-	UINT Embed(const CoinsWallet &c) { return _SC::Embed((_SC &)c); }
-	UINT Embed(const CoinsWalletMutable &c) { return _SC::Embed((_SC_MUTABLE &)c); }
-	static auto &Zero() { return (const CoinsWallet &)_SC::Zero(); }
+	UINT		Embed(const CoinsWallet &c) { return _SC::Embed((_SC &)c); }
+	UINT		Embed(const CoinsWalletMutable &c) { return _SC::Embed((_SC_MUTABLE &)c); }
 	static void GetTypeSignature(rt::String &n) { n += rt::SS("wallet"); }
 };
 #pragma pack(pop)
@@ -57,13 +53,10 @@ class CoinsWalletMutable : protected OrderedMapMutable<TokenId, BigNum>
 public:
 	CoinsWalletMutable() = default;
 	CoinsWalletMutable(const CoinsWallet &x) : _SC(x) {}
-	auto &Assign(const CoinsWallet &x)
-	{
-		_SC::Assign(x);
-		return *this;
-	}
+	auto Assign(const CoinsWallet &x) -> CoinsWalletMutable&;
 	bool IsEmpty() const { return _SC::IsEmpty(); }
 	void Deposit(const Coins &x); // this += x
+	bool JsonParse(const rt::String_Ref& str){ return false; /*_SC::JsonParse(str);*/ }  // TBD
 };
 
 #pragma pack(push, 1)
@@ -71,26 +64,25 @@ class NonFungibleVault : protected ConsecutiveSet<uint64_t, LONGLONG>
 {
 	friend class NonFungibleVaultMutable;
 	typedef ConsecutiveSet<uint64_t, LONGLONG> _SC;
-	typedef typename _details::_TypeTraits<_SC>::Mutable _SC_MUTABLE;
+	typedef typename TypeTraits<_SC>::Mutable _SC_MUTABLE;
 	TYPETRAITS_DECLARE_NON_POD;
 	RVM_IMMUTABLE_TYPE(NonFungibleVault);
 
 public:
-	bool IsEmpty() const { return !(_SC::_Count()); }
-	void Jsonify(rt::Json& append) const { _SC::Jsonify(append, true); }
-	bool Withdraw(NonfungibleId aid, NonFungibleToken &get, NonFungibleVaultMutable &residue) const; // residue = this - get
-	bool WithdrawSet(const NonFungibleVault& id_set, NonFungibleVaultMutable &residue) const; // residue = this - get
-	bool WithdrawRange(const NonFungibleTokenRanged& id_range, NonFungibleVaultMutable &residue) const; // residue = this - get
+	bool			IsEmpty() const { return !(_SC::_Count()); }
+	void			Jsonify(rt::Json& append) const { _SC::Jsonify(append, true); }
+	bool			Withdraw(TokenId aid, NonFungibleToken &get, NonFungibleVaultMutable &residue) const; // residue = this - get
+	bool			WithdrawSet(const NonFungibleVault& id_set, NonFungibleVaultMutable &residue) const; // residue = this - get
+	bool			WithdrawRange(const NonFungibleTokenRanged& id_range, NonFungibleVaultMutable &residue) const; // residue = this - get
 
-	uint32_t GetEmbeddedSize() const { return _SC::GetEmbeddedSize(); }
+	uint32_t		GetEmbeddedSize() const { return _SC::GetEmbeddedSize(); }
 	static uint32_t GetEmbeddedSize(const NonFungibleVault &c) { return c.GetEmbeddedSize(); }
 	static uint32_t GetEmbeddedSize(const NonFungibleVaultMutable &c) { return _SC::GetEmbeddedSize((_SC_MUTABLE &)c); }
-	static bool	IsEmbeddable(const NonFungibleVault &c){ return true; }
-	static bool	IsEmbeddable(const NonFungibleVaultMutable &c){ return _SC::IsEmbeddable((_SC_MUTABLE &)c);; }
-	uint32_t Embed(const NonFungibleVault &c) { return _SC::Embed((_SC &)c); }
-	uint32_t Embed(const NonFungibleVaultMutable &c) { return _SC::Embed((_SC_MUTABLE &)c); }
-	static auto &Zero() { return (const CoinsWallet &)_SC::Zero()._OrderSet(); }
-	static void GetTypeSignature(rt::String &n) { n += rt::SS("vault"); }
+	static bool		IsEmbeddable(const NonFungibleVault &c){ return true; }
+	static bool		IsEmbeddable(const NonFungibleVaultMutable &c){ return _SC::IsEmbeddable((_SC_MUTABLE &)c);; }
+	uint32_t		Embed(const NonFungibleVault &c) { return _SC::Embed((_SC &)c); }
+	uint32_t		Embed(const NonFungibleVaultMutable &c) { return _SC::Embed((_SC_MUTABLE &)c); }
+	static void		GetTypeSignature(rt::String &n) { n += rt::SS("vault"); }
 };
 #pragma pack(pop)
 
@@ -113,7 +105,7 @@ public:
 	void Deposit(const NonFungibleToken &x);
 	void Deposit(const NonFungibleVault &x);
 	void Deposit(const NonFungibleTokenRanged& x);
-	void Mint(NonfungibleId nf_base_id, uint32_t count);
+	void Mint(TokenId nf_base_id, uint32_t count);
 	bool JsonParse(const rt::String_Ref& str){ return _SC::JsonParse(str); }
 	void Jsonify(rt::Json& append) const { _SC::Jsonify(append); }
 };
@@ -182,3 +174,6 @@ public:
 };
 
 } // namespace rvm
+
+RVM_TYPETRAITS_DEF(CoinsWallet, CoinsWalletMutable)
+RVM_TYPETRAITS_DEF(NonFungibleVault, NonFungibleVaultMutable)

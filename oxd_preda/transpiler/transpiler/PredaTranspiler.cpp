@@ -80,6 +80,8 @@ namespace transpiler{
 			// add member functions
 			{
 				FunctionSignature signature;
+				signature.returnType = QualifiedConcreteType(GetBuiltInIntegerType(16, false), false, false);
+				res = res && (m_builtInStringType->DefineMemberFunction("length", signature, false) != nullptr);
 				signature.returnType = QualifiedConcreteType(nullptr, true, false);
 				signature.parameters.push_back(Allocator::New<DefinedIdentifier>(GetBuiltInStringType(), true, true, "value", 0));
 				res = res && (m_builtInStringType->DefineMemberFunction("set", signature, false) != nullptr);
@@ -174,7 +176,6 @@ namespace transpiler{
 				res = res && (m_builtInAddressType->DefineMemberFunction("is_dapp", signature, false) != nullptr);
 				res = res && (m_builtInAddressType->DefineMemberFunction("is_asset", signature, false) != nullptr);
 				res = res && (m_builtInAddressType->DefineMemberFunction("is_name", signature, false) != nullptr);
-				res = res && (m_builtInAddressType->DefineMemberFunction("is_domain", signature, false) != nullptr);
 				res = res && (m_builtInAddressType->DefineMemberFunction("is_contract", signature, false) != nullptr);
 				res = res && (m_builtInAddressType->DefineMemberFunction("is_custom", signature, false) != nullptr);
 				assert(res);

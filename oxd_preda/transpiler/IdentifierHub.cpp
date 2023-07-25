@@ -100,12 +100,6 @@ ConcreteTypePtr IdentifierHub::GetTypeFromBuiltInContainerTypeNameContext(PredaP
 
 		if (templateParams[0] == nullptr || templateParams[1] == nullptr)
 			return nullptr;
-		if (templateParams[1]->typeCategory == transpiler::ConcreteType::ContractType)
-		{
-			m_pErrorPortal->SetAnchor(mapCtx->typeName()->start);
-			m_pErrorPortal->AddIllegalUseOfContractTypeError();
-			return nullptr;
-		}
 
 		std::shared_ptr<transpiler::TemplateType> templateType = m_pTranspilerCtx->GetBuiltInMapType();										//built-in map template type
 		ConcreteTypePtr instantiatedType = templateType->GetConcreteTypeFromTemplateParams(templateParams);			//instantiate the template with the given key type and value type
@@ -121,12 +115,6 @@ ConcreteTypePtr IdentifierHub::GetTypeFromBuiltInContainerTypeNameContext(PredaP
 		std::vector<ConcreteTypePtr> templateParams(1, GetTypeFromTypeNameContext(ctx->arrayTypeName()->typeName()));	// Grab value type
 		if (templateParams[0] == nullptr)
 			return nullptr;
-		if (templateParams[0]->typeCategory == transpiler::ConcreteType::ContractType)
-		{
-			m_pErrorPortal->SetAnchor(ctx->arrayTypeName()->typeName()->start);
-			m_pErrorPortal->AddIllegalUseOfContractTypeError();
-			return nullptr;
-		}
 
 		std::shared_ptr<transpiler::TemplateType> templateType = m_pTranspilerCtx->GetBuiltInArrayType();										//built-in array template type
 		ConcreteTypePtr instantiatedType = templateType->GetConcreteTypeFromTemplateParams(templateParams);	//instantiate the template with the given value type
@@ -158,6 +146,12 @@ ConcreteTypePtr IdentifierHub::GetTypeFromTypeNameContext(PredaParser::TypeNameC
 		ConcreteTypePtr ret = GetConcreteTypeFromContextText(identifierCtx[0]);
 		if (ret == nullptr)
 			return nullptr;
+		if (ret == m_pTranspilerCtx->thisPtrStack.stack[0].thisType)
+		{
+			m_pErrorPortal->SetAnchor(identifierCtx[0]->start);
+			m_pErrorPortal->AddUseCurrentContractTypeError();
+			return nullptr;
+		}
 		std::string text = identifierCtx[0]->getText();
 		for (size_t i = 1; i < identifierCtx.size(); i++)
 		{

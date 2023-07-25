@@ -52,8 +52,9 @@ bool ReadEntryFromJson(const rt::JsonObject &json, ContractDatabaseEntry &outEnt
 	rt::String_Ref data;
 	bool bExist;
 
-	if (!json.LoadValueAs("deploy_id", outEntry.deployIdentifier))
+	if (!json.LoadValue("module_id", data))
 		return false;
+	::rvm::RvmTypeJsonParse(outEntry.compileData.moduleId, data);
 
 	outEntry.compileData.dapp = rt::String(json.GetValue("dapp", bExist));
 	if (!bExist) return false;
@@ -67,10 +68,6 @@ bool ReadEntryFromJson(const rt::JsonObject &json, ContractDatabaseEntry &outEnt
 	outEntry.compileData.exportUniqueString = rt::String(json.GetValue("export_unique_str", bExist));
 	if (!bExist) return false;
 
-	data = json.GetValue("id", bExist);
-	if (!bExist) return false;
-	data.ToNumber(*(uint64_t*)&outEntry.deployData.contractId);
-
 	outEntry.linkData.binaryPathFileName = rt::String(json.GetValue("bin", bExist)).GetString();
 	if (!bExist) return false;
 
@@ -83,7 +80,7 @@ bool ReadEntryFromJson(const rt::JsonObject &json, ContractDatabaseEntry &outEnt
 	{
 		rt::String jsonStr(json.GetValue("inter_hash", bExist));
 		if (!bExist) return false;
-		::rvm::_details::_JsonParse(outEntry.compileData.intermediateHash, jsonStr);
+		::rvm::RvmTypeJsonParse(outEntry.compileData.intermediateHash, jsonStr);
 	}
 
 	// state variables
@@ -134,12 +131,6 @@ bool ReadEntryFromJson(const rt::JsonObject &json, ContractDatabaseEntry &outEnt
 			rt::String_Ref importData;
 
 			outEntry.compileData.importedContracts.push_back(rt::String(importJson.GetValue("name", bExist)).GetString());
-
-			importData = importJson.GetValue("id", bExist);
-			if (!bExist) return false;
-			uint64_t id;
-			importData.ToNumber(id);
-			outEntry.deployData.importedContractIds.push_back(rvm::ContractId(id));
 		}
 	}
 
@@ -325,6 +316,11 @@ bool ReadEntryFromJson(const rt::JsonObject &json, ContractDatabaseEntry &outEnt
 
 			cii.name = rt::String(interfaceJson.GetValue("name", bExist)).GetString();
 			if (!bExist) return false;
+			if (!interfaceJson.LoadValueAs("def_slot", cii.interfaceDefSlot))
+				return false;
+			if (!interfaceJson.LoadValue("def_module_id", data))
+				return false;
+			::rvm::RvmTypeJsonParse(cii.interfaceDefContractModuleId, data);
 
 			rt::String_Ref funcs = interfaceJson.GetValue("funcs", bExist);
 			if (!bExist) return false;
@@ -455,7 +451,7 @@ bool CContractDatabase::Initialize(const char* module_path, const char* db_path,
 			rt::JsonObject obj(itor.Value().ToString());
 			if (ReadEntryFromJson(obj, entry))
 			{
-				m_contracts.try_emplace(entry.deployIdentifier, entry);
+				m_contracts.try_emplace(entry.compileData.moduleId, entry);
 				entry.CreateDelegate();
 			}
 		}
@@ -630,15 +626,23 @@ void CContractDatabase::Release()
 	delete this;
 }
 
-const ContractDatabaseEntry* CContractDatabase::FindContractEntry(PredaContractDID deployId) const
+const ContractDatabaseEntry* CContractDatabase::FindContractEntry(const rvm::ContractModuleID &moduleId) const
 {
 	EnterCSBlock(m_barrier);
 
-	auto itor = m_contracts.find(deployId);
+	auto itor = m_contracts.find(moduleId);
 	if (itor == m_contracts.end())
 		return nullptr;
 
 	return &itor->second;
+}
+
+const ContractDatabaseEntry* CContractDatabase::FindContractEntry(const rvm::ContractModuleID * moduleId) const
+{
+	if (moduleId == nullptr)
+		return nullptr;
+
+	return FindContractEntry(*moduleId);
 }
 
 static bool endsWith(std::string_view str, std::string_view suffix)
@@ -647,7 +651,7 @@ static bool endsWith(std::string_view str, std::string_view suffix)
 }
 
 
-ContractModule* CContractDatabase::GetContractModule(PredaContractDID deployId)
+ContractModule* CContractDatabase::GetContractModule(const rvm::ContractModuleID &deployId)
 {
 	const ContractDatabaseEntry* pContractEntry = CContractDatabase::FindContractEntry(deployId);
 	if (!pContractEntry)
@@ -758,12 +762,29 @@ void DumpLogMessages(PredaLogMessages &logMsgs, uint32_t contractIdx, rvm::LogMe
 	}
 }
 
-bool CContractDatabase::Compile(const rvm::ChainState* chain_state, const rvm::ConstString* dapp_name, uint32_t contract_count, const rvm::ConstData* deploy_data_array, rvm::CompilationFlag flag, rvm::CompiledContracts** compiled_output, rvm::DataBuffer* dependency, rvm::LogMessageOutput* log_msg_output)
+rvm::ConstString CContractDatabase::GetContractName(const rvm::ConstData* source_code)
+{
+	if (CreateTranspilerInstance == nullptr)
+		return rvm::ConstString{ nullptr, 0 };
+	AutoRelease<transpiler::ITranspiler> ptr(CreateTranspilerInstance(nullptr));
+	transpiler::ITranspiler* pTranspiler = ptr.GetPtr();
+	std::string srcCode((char*)source_code->DataPtr, source_code->DataSize);
+	if (!pTranspiler->BuildParseTree(srcCode.c_str()) || ! pTranspiler->PreCompile("dummy"))		// dapp name is irrelevant when extracting contract name
+		return rvm::ConstString{ nullptr, 0 };
+	std::string contractName = pTranspiler->GetContractName();
+	size_t nameOffset = srcCode.find(contractName);
+	if (nameOffset == std::string::npos)
+		return rvm::ConstString{ nullptr, 0 };
+	uint32_t nameLength = uint32_t(contractName.size());
+	return rvm::ConstString { (const char*)source_code->DataPtr + nameOffset, nameLength };
+}
+
+bool CContractDatabase::_Compile(IContractFullNameToModuleIdLookupTable* lookup, const rvm::ConstString* dapp_name, uint32_t contract_count, const rvm::ConstData* deploy_data_array, rvm::CompilationFlag flag, rvm::CompiledModules** compiled_output, rvm::LogMessageOutput* log_msg_output)
 {
 	EnterCSBlock(m_barrier);
 
-	std::vector<ContractCompileData> compile_data(contract_count);
-	CContractSymbolDatabaseForTranspiler symbolDatabase(this, compile_data, m_pRuntimeAPI, chain_state);
+	std::vector<ContractCompileData> allCompileDdata;
+	CContractSymbolDatabaseForTranspiler symbolDatabase(this, allCompileDdata, m_pRuntimeAPI, lookup);
 	PredaCompiledContracts* compiled_contracts = new PredaCompiledContracts(dapp_name->StrPtr, m_runtime_mode == RuntimeMode::NATIVE ? rvm::EngineId::PREDA_NATIVE : rvm::EngineId::PREDA_WASM, contract_count);
 
 	// first create the transpilers
@@ -808,7 +829,7 @@ bool CContractDatabase::Compile(const rvm::ChainState* chain_state, const rvm::C
 	std::vector<std::vector<uint32_t>> crossDependencies(contract_count);
 	std::vector<std::string> srcCode(contract_count);
 	for (uint32_t contractIdx = 0; contractIdx < contract_count; contractIdx++)
-		srcCode[contractIdx] = rt::String(rt::String_Ref((char*)deploy_data_array[contractIdx].DataPtr, deploy_data_array[contractIdx].DataSize)).GetString();
+		srcCode[contractIdx] = std::move(std::string((char*)deploy_data_array[contractIdx].DataPtr, deploy_data_array[contractIdx].DataSize));
 
 	for (uint32_t contractIdx = 0; contractIdx < contract_count; contractIdx++)
 	{
@@ -925,16 +946,112 @@ bool CContractDatabase::Compile(const rvm::ChainState* chain_state, const rvm::C
 
 		PredaLogMessages logMsgs;
 		std::string intermediateCode;
-		if (CompileContract(dapp_name, &symbolDatabase, intermediateCode, compile_data[contractIdx], logMsgs, currentTranspiler))
+		ContractCompileData curContractCompiledData;
+		if (CompileContract(dapp_name, &symbolDatabase, intermediateCode, curContractCompiledData, logMsgs, currentTranspiler))
 		{
-			oxd::SecuritySuite::Hash(intermediateCode.c_str(), (uint32_t)intermediateCode.size(), &compile_data[contractIdx].intermediateHash);
-			compiled_contracts->AddContract(compile_data[contractIdx], srcCode[contractIdx].c_str(), intermediateCode);
+			// calculate intermediate hash
+			oxd::SecuritySuite::Hash(intermediateCode.c_str(), (uint32_t)intermediateCode.size(), &curContractCompiledData.intermediateHash);
+
+			// calculate module id, i.e. moduleId = Hash(intermediateHash + importedContract0.moduleId  + importedContract1.moduleId + ...)
+			struct HashSrcBuffer {
+				rvm::HashValue intermediateHash;
+				rvm::ContractModuleID importedModuleIds[1];
+			};
+			std::vector<uint8_t> buffer(sizeof(curContractCompiledData.intermediateHash) + curContractCompiledData.importedContracts.size() * sizeof(curContractCompiledData.moduleId));
+			HashSrcBuffer *srcBuffer = reinterpret_cast<HashSrcBuffer*>(&buffer[0]);
+			srcBuffer->intermediateHash = curContractCompiledData.intermediateHash;
+
+			// iterate through all imported contracts
+			for (uint32_t importIdx = 0; uint32_t(importIdx < curContractCompiledData.importedContracts.size()); importIdx++)
+			{
+				const std::string& importedContractName = curContractCompiledData.importedContracts[importIdx];
+
+				const rvm::ContractModuleID* moduleId = symbolDatabase.GetContractModuleId(importedContractName.c_str());
+				if (moduleId == nullptr)
+				{
+					bSuccess = false;
+					continue;
+				}
+
+				srcBuffer->importedModuleIds[importIdx] = *moduleId;
+			}
+			oxd::SecuritySuite::Hash(&buffer[0], (uint32_t)buffer.size(), &curContractCompiledData.moduleId);
+
+			// fill the interface module ids
+			for (ContractImplementedInterface& implInterface : curContractCompiledData.implementedInterfaces)
+			{
+				std::string::size_type lastDotPos = implInterface.name.find_last_of('.');
+				if (lastDotPos == std::string::npos)
+				{
+					bSuccess = false;
+					continue;
+				}
+
+				std::string interfaceDefContractFullName = implInterface.name.substr(0, lastDotPos);
+				std::string interfaceName = implInterface.name.substr(lastDotPos + 1);
+				const rvm::ContractModuleID *moduleId = nullptr;
+				transpiler::IContractSymbols* symbols = nullptr;
+				if (interfaceDefContractFullName == contractFullName[contractIdx])
+				{
+					moduleId = &curContractCompiledData.moduleId;
+					symbols = currentTranspiler;
+				}
+				else
+				{
+					moduleId = symbolDatabase.GetContractModuleId(interfaceDefContractFullName.c_str());
+					symbols = symbolDatabase.GetContractSymbols(interfaceDefContractFullName.c_str());
+				}
+
+				if (moduleId == nullptr || symbols == nullptr)
+				{
+					bSuccess = false;
+					continue;
+				}
+
+				implInterface.interfaceDefContractModuleId = *moduleId;
+				{
+					bool bFound = false;
+					for (uint32_t interfaceIdx = 0; interfaceIdx < symbols->GetNumExportedInterfaces(); interfaceIdx++)
+					{
+						if (interfaceName == symbols->GetExportedInterfaceName(interfaceIdx))
+						{
+							implInterface.interfaceDefSlot = interfaceIdx;
+							bFound = true;
+							break;
+						}
+					}
+					if (!bFound)
+						bSuccess = false;
+				}
+			}
+
+			compiled_contracts->AddContract(curContractCompiledData, srcCode[contractIdx].c_str(), intermediateCode, contractIdx);
+			allCompileDdata.push_back(curContractCompiledData);
 		}
 		else
 			bSuccess = false;
 
 		DumpLogMessages(logMsgs, contractIdx, log_msg_output);		// only dump log messages for those failed pre-compile, the rest will be further processed.
 	}
+
+	// generate dependency data by collecting all dependent external contracts and their module id
+	{
+		const std::map<std::string, const ContractDatabaseEntry*>& externalDependencies = symbolDatabase.GetContractEntryCache();
+		if (externalDependencies.size())
+		{
+			std::string externalDependentContracts;
+			for (const auto& itor : externalDependencies)
+				externalDependentContracts += itor.first + ';';
+
+			std::vector<uint8_t> data(uint32_t(externalDependentContracts.size() + externalDependencies.size() * sizeof(rvm::ContractModuleID)));
+			memcpy(&data[0], externalDependentContracts.c_str(), externalDependentContracts.size());
+			uint32_t idx = 0;
+			for (const auto& itor : externalDependencies)
+				((rvm::ContractModuleID*)(&data[externalDependentContracts.size()]))[idx++] = itor.second->compileData.moduleId;
+			compiled_contracts->SetDependencyData(std::move(data));
+		}
+	}
+
 
 	if (compiled_output)
 		*compiled_output = compiled_contracts;
@@ -944,23 +1061,75 @@ bool CContractDatabase::Compile(const rvm::ChainState* chain_state, const rvm::C
 		compiled_contracts = nullptr;
 	}
 
-	if (dependency && bSuccess)
+	return bSuccess;
+}
+
+bool CContractDatabase::Compile(const rvm::ConstString* dapp_name, uint32_t contract_count, const rvm::ConstData* deploy_data_array, rvm::CompilationFlag flag, rvm::CompiledModules** compiled_output, rvm::LogMessageOutput* log_msg_output)
+{
+	struct ModuleIdLookupFromChainState : public IContractFullNameToModuleIdLookupTable
 	{
-		const std::map<std::string, const ContractDatabaseEntry*>& externalDependencies = symbolDatabase.GetContractEntryCache();
-		std::string externalDependentContracts;
-		for (const auto& itor : externalDependencies)
-			externalDependentContracts += itor.first + ';';
-		uint8_t* pBuffer = dependency->SetSize(uint32_t(externalDependentContracts.size() + externalDependencies.size() * sizeof(PredaContractDID)));
-		if (externalDependencies.size())
+		const rvm::GlobalStates* m_chainState;
+		ModuleIdLookupFromChainState(const rvm::GlobalStates* chainState)
+			: m_chainState(chainState)
 		{
-			memcpy(pBuffer, externalDependentContracts.c_str(), externalDependentContracts.size());
-			uint32_t idx = 0;
-			for (const auto& itor : externalDependencies)
-				((PredaContractDID*)(pBuffer + externalDependentContracts.size()))[idx++] = itor.second->deployIdentifier;
 		}
+		virtual const rvm::ContractModuleID* GetContractModuleIdFromFullName(const std::string& fullName) override
+		{
+			return _details::GetOnChainContractModuleIdFromFullName(m_chainState, fullName);
+		}
+	};
+
+	ModuleIdLookupFromChainState lookup(m_pRuntimeAPI);
+
+	return _Compile(&lookup, dapp_name, contract_count, deploy_data_array, flag, compiled_output, log_msg_output);
+}
+
+bool CContractDatabase::Recompile(const rvm::ConstString* dapp_name, const rvm::ConstData* dependency_data, uint32_t contract_count, const rvm::ConstData* deploy_data_array, rvm::CompilationFlag flag, rvm::CompiledModules** compiled_output, rvm::LogMessageOutput* log_msg_output)
+{
+	struct ModuleIdLookupFromDependencyData : public IContractFullNameToModuleIdLookupTable
+	{
+		std::map<std::string, rvm::ContractModuleID> table;
+		bool SetDependencyData(const rvm::ConstData* dependency_data)
+		{
+			if (dependency_data == nullptr || dependency_data->DataPtr == nullptr || dependency_data->DataSize == 0)
+				return true;
+
+			const rt::String_Ref depStr((char*)dependency_data->DataPtr, uint32_t(dependency_data->DataSize));
+			int32_t nameLen = int32_t(depStr.FindCharacterReverse(';'));
+			if (nameLen == -1)
+				return true;
+			uint32_t depCount = uint32_t(depStr.GetLength() - nameLen) / uint32_t(sizeof(rvm::ContractModuleID));
+			std::vector<rt::String_Ref> names(depCount);
+			if (rt::String_Ref(depStr.GetString(), nameLen).Split(&names[0], depCount, ';') != depCount)
+				return false;
+
+			// all imported contracts must have the same deploy id as at the time of compile
+			for (uint32_t i = 0; i < depCount; i++)
+				table.emplace(std::string(names[i].GetString(), names[i].GetLength()), ((const rvm::ContractModuleID*)depStr.GetString())[i]);
+			return true;
+		}
+		virtual const rvm::ContractModuleID* GetContractModuleIdFromFullName(const std::string& fullName) override
+		{
+			auto itor = table.find(fullName);
+			if (itor == table.end())
+				return nullptr;
+			return &itor->second;
+		}
+	};
+
+	ModuleIdLookupFromDependencyData lookup;
+	if (!lookup.SetDependencyData(dependency_data))
+	{
+		if (log_msg_output)
+		{
+			rt::String_Ref msg = "invalid dependency data format.";
+			log_msg_output->Log(rvm::LogMessageType::Error, 0, 0, 0, 0, (rvm::ConstString*)&msg);
+		}
+
+		return false;
 	}
 
-	return bSuccess;
+	return _Compile(&lookup, dapp_name, contract_count, deploy_data_array, flag, compiled_output, log_msg_output);
 }
 
 bool CContractDatabase::CompileContract(const rvm::ConstString* dapp_name, CContractSymbolDatabaseForTranspiler *symbol_db, std::string &out_intermediate_code, ContractCompileData &out_compile_data, PredaLogMessages &out_log, transpiler::ITranspiler* pTranspiler)
@@ -1099,7 +1268,7 @@ bool CContractDatabase::CompileContract(const rvm::ConstString* dapp_name, CCont
 	return true;
 }
 
-bool CContractDatabase::Link(rvm::CompiledContracts* compiled, rvm::LogMessageOutput* log_msg_output)
+bool CContractDatabase::Link(rvm::CompiledModules* compiled, rvm::LogMessageOutput* log_msg_output)
 {
 	EnterCSBlock(m_barrier);
 
@@ -1214,8 +1383,8 @@ bool CContractDatabase::LinkContract(const std::string &source_code, const std::
 			std::string cmdLine = m_modulePath + "../emscripten/3.1.24/emsdk activate 3.1.24 2>&1 && " +
 				"source " + m_modulePath + "../emscripten/3.1.24/emsdk_env.sh 2>&1 && "
 				"emcc -Oz --profiling-funcs --no-entry -DNDEBUG -sRELOCATABLE -sALLOW_MEMORY_GROWTH -sMALLOC=none -fPIC -fvisibility=hidden -sERROR_ON_UNDEFINED_SYMBOLS=0 -I" +
-				m_modulePath + "../compile_env/ -std=c++17 -o" +
-				out_wasm + " " + m_dbPath + "/transpiledCode.cpp 2>&1";
+				m_modulePath + "../compile_env/ -std=c++17 -o\"" +
+				out_wasm + "\" \"" + m_dbPath + "transpiledCode.cpp\" 2>&1";
 #else
 			std::string cmdLine = std::string("bash -c \"") +  m_modulePath + "../emscripten/3.1.24/emsdk activate 3.1.24 && " +
 				"source " + m_modulePath + "../emscripten/3.1.24/emsdk_env.sh && "
@@ -1391,37 +1560,29 @@ bool CContractDatabase::LinkContract(const std::string &source_code, const std::
 	return true;
 }
 
-
-bool CContractDatabase::ValidateDependency(const rvm::ChainState* chain_state, rvm::CompiledContracts* compiled, const rvm::ConstData* dependency)
+void CContractDatabase::CancelCurrentBuildingTask()
 {
-	const rt::String_Ref depStr((char*)dependency->DataPtr, dependency->DataSize);
-	int32_t nameLen = int32_t(depStr.FindCharacterReverse(';'));
-	if (nameLen == -1)
-		return true;
-	uint32_t depCount = (dependency->DataSize - nameLen) / sizeof(PredaContractDID);
-	std::vector<rt::String_Ref> names(depCount);
-	if (rt::String_Ref((char*)dependency->DataPtr, nameLen).Split(&names[0], depCount, ';') != depCount)
-		return false;
-
-	// all imported contracts must have the same deploy id as at the time of compile
-	for (uint32_t i = 0; i < depCount; i++)
-	{
-		PredaContractDID deployId = _details::GetOnChainPredaContractDIdFromFullName(chain_state, std::string(names[i].GetString(), names[i].GetLength()));
-		if (deployId != ((const PredaContractDID*)dependency->DataPtr)[i])
-			return false;
-	}
-	return true;
+	// TODO
 }
 
-bool CContractDatabase::Deploy(const rvm::ChainState* chain_state, const rvm::ContractId* contractIds, rvm::CompiledContracts* linked, rvm::ContractDID* deployment_identifiers_out, rvm::InterfaceDID** interface_deployment_ids_out, rvm::LogMessageOutput* log_msg_output)
+bool CContractDatabase::Deploy(const rvm::GlobalStates* chain_state, rvm::CompiledModules* linked, rvm::DataBuffer** out_stub, rvm::LogMessageOutput* log_msg_output)
 {
+	PredaCompiledContracts* pCompiledContracts = (PredaCompiledContracts*)linked;
+	assert(pCompiledContracts->IsLinked());
+
+	uint32_t numContracts = linked->GetCount();
+	std::vector<rvm::ContractVersionId> contractIds(numContracts);
+	for (uint32_t i = 0; i < numContracts; i++)
+	{
+		const ContractCompileData* pCompiledData = pCompiledContracts->GetCompiledData(i);
+		contractIds[i] = _details::GetOnChainContractIdFromContractFullName(chain_state, pCompiledData->dapp + "." + pCompiledData->name);
+		if (contractIds[i] == rvm::ContractVersionIdInvalid)
+			return false;
+	}
+
 	EnterCSBlock(m_barrier);
 
 	bool bSuccess = true;
-
-	PredaCompiledContracts *pCompiledContracts = (PredaCompiledContracts *)linked;
-
-	assert(pCompiledContracts->IsLinked());
 
 	uint32_t contracts_count = pCompiledContracts->GetCount();
 	std::vector<ContractDatabaseEntry> entries(contracts_count);
@@ -1430,33 +1591,37 @@ bool CContractDatabase::Deploy(const rvm::ChainState* chain_state, const rvm::Co
 	{
 		entries[contractIdx].compileData = *pCompiledContracts->GetCompiledData(contractIdx);
 
-		rvm::ContractId contractId = contractIds[contractIdx];
-
-		// move corresponding files from linked stage to final location
-		std::vector<char> s(entries[contractIdx].compileData.name.size() + 100);
-#ifdef _WIN32
-		sprintf_s(&s[0], s.size(), "%lld_%016llx_%s", m_nextDeployId + contractIdx, uint64_t(contractId), entries[contractIdx].compileData.name.c_str());
-#else
-		sprintf(&s[0], "%ld_%016lx_%s", contractId, m_nextDeployId + contractIdx, entries[contractIdx].compileData.name.c_str());
-#endif
-		std::string contractIdString = &s[0];
-		entries[contractIdx].linkData.intermediatePathFileName = "intermediate/" + contractIdString + ".cpp";
-		entries[contractIdx].linkData.binaryPathFileName = "bin/" + contractIdString + (
-			m_runtime_mode == RuntimeMode::NATIVE ? EXECUTABLE_EXTENSION :
-			m_runtime_mode == RuntimeMode::WASM ? ".wasm" : ".cwasm");
-		entries[contractIdx].linkData.srcPathFileName = "src/" + contractIdString + ".prd";
-		if (!os::File::Rename((m_dbPath + pCompiledContracts->GetLinkData(contractIdx)->intermediatePathFileName).c_str(), (m_dbPath + entries[contractIdx].linkData.intermediatePathFileName).c_str())
-			|| !os::File::Rename((m_dbPath + pCompiledContracts->GetLinkData(contractIdx)->binaryPathFileName).c_str(), (m_dbPath + entries[contractIdx].linkData.binaryPathFileName).c_str())
-			|| !os::File::Rename((m_dbPath + pCompiledContracts->GetLinkData(contractIdx)->srcPathFileName).c_str(), (m_dbPath + entries[contractIdx].linkData.srcPathFileName).c_str()))
+		// it could happen that the module id is already used, in which case there's no need to rename the files
+		if (m_contracts.find(entries[contractIdx].compileData.moduleId) == m_contracts.end())
 		{
-			if (log_msg_output)
+			rvm::ContractVersionId contractId = contractIds[contractIdx];
+
+			// move corresponding files from linked stage to final location
+			std::vector<char> s(entries[contractIdx].compileData.name.size() + 100);
+#ifdef _WIN32
+			sprintf_s(&s[0], s.size(), "%lld_%016llx_%s", m_nextDeployId + contractIdx, uint64_t(contractId), entries[contractIdx].compileData.name.c_str());
+#else
+			sprintf(&s[0], "%ld_%016lx_%s", contractId, m_nextDeployId + contractIdx, entries[contractIdx].compileData.name.c_str());
+#endif
+			std::string contractIdString = &s[0];
+			entries[contractIdx].linkData.intermediatePathFileName = "intermediate/" + contractIdString + ".cpp";
+			entries[contractIdx].linkData.binaryPathFileName = "bin/" + contractIdString + (
+				m_runtime_mode == RuntimeMode::NATIVE ? EXECUTABLE_EXTENSION :
+				m_runtime_mode == RuntimeMode::WASM ? ".wasm" : ".cwasm");
+			entries[contractIdx].linkData.srcPathFileName = "src/" + contractIdString + ".prd";
+			if (!os::File::Rename((m_dbPath + pCompiledContracts->GetLinkData(contractIdx)->intermediatePathFileName).c_str(), (m_dbPath + entries[contractIdx].linkData.intermediatePathFileName).c_str())
+				|| !os::File::Rename((m_dbPath + pCompiledContracts->GetLinkData(contractIdx)->binaryPathFileName).c_str(), (m_dbPath + entries[contractIdx].linkData.binaryPathFileName).c_str())
+				|| !os::File::Rename((m_dbPath + pCompiledContracts->GetLinkData(contractIdx)->srcPathFileName).c_str(), (m_dbPath + entries[contractIdx].linkData.srcPathFileName).c_str()))
 			{
-				std::string tmp = "contract " + entries[contractIdx].compileData.name + " deploy to disk failed";
-				rt::String_Ref tmp1(tmp.c_str());
-				log_msg_output->Log(rvm::LogMessageType::Error, 0, contractIdx, 0, 0, (rvm::ConstString *)&tmp1);
+				if (log_msg_output)
+				{
+					std::string tmp = "contract " + entries[contractIdx].compileData.name + " deploy to disk failed";
+					rt::String_Ref tmp1(tmp.c_str());
+					log_msg_output->Log(rvm::LogMessageType::Error, 0, contractIdx, 0, 0, (rvm::ConstString*)&tmp1);
+				}
+				bSuccess = false;
+				continue;
 			}
-			bSuccess = false;
-			continue;
 		}
 
 		if(os::File::IsExist((m_modulePath + "../compile_env/config.txt").c_str())){
@@ -1488,15 +1653,12 @@ bool CContractDatabase::Deploy(const rvm::ChainState* chain_state, const rvm::Co
 			}
 		}
 
-		// fill contract id in deploy data
-		entries[contractIdx].deployData.contractId = contractId;
-
-		// fill the imported contract id array
+		std::vector<rvm::ContractVersionId> importedContractIds(entries[contractIdx].compileData.importedContracts.size());
 		for (uint32_t importedContractIdx = 0; importedContractIdx < entries[contractIdx].compileData.importedContracts.size(); importedContractIdx++)
 		{
-			const std::string &importedContractName = entries[contractIdx].compileData.importedContracts[importedContractIdx];
+			const std::string& importedContractName = entries[contractIdx].compileData.importedContracts[importedContractIdx];
 
-			rvm::ContractId importedContractId = rvm::ContractIdInvalid;
+			rvm::ContractVersionId importedContractId = rvm::ContractVersionIdInvalid;
 
 			// first look in the contracts that are being deployed
 			for (uint32_t i = 0; i < contractIdx; i++)
@@ -1508,23 +1670,29 @@ bool CContractDatabase::Deploy(const rvm::ChainState* chain_state, const rvm::Co
 				}
 			}
 
-			// then look in the existing contract db
-			if (importedContractId == rvm::ContractIdInvalid)
+			// then look in the chain state
+			if (importedContractId == rvm::ContractVersionIdInvalid)
 				importedContractId = _details::GetOnChainContractIdFromContractFullName(chain_state, importedContractName);
 
-			if (importedContractId == rvm::ContractIdInvalid)
+			if (importedContractId == rvm::ContractVersionIdInvalid)
 			{
 				if (log_msg_output)
 				{
 					std::string tmp = "imported contract " + importedContractName + " not found";
 					rt::String_Ref tmp1(tmp.c_str());
-					log_msg_output->Log(rvm::LogMessageType::Error, 0, contractIdx, 0, 0, (rvm::ConstString *)&tmp1);
+					log_msg_output->Log(rvm::LogMessageType::Error, 0, contractIdx, 0, 0, (rvm::ConstString*)&tmp1);
 				}
 				bSuccess = false;
 				continue;
 			}
 
-			entries[contractIdx].deployData.importedContractIds.push_back(importedContractId);
+			importedContractIds[importedContractIdx] = importedContractId;
+		}
+
+		if (bSuccess && out_stub && importedContractIds.size())
+		{
+			uint8_t *buffer = out_stub[contractIdx]->SetSize(uint32_t(importedContractIds.size() * sizeof(importedContractIds[0])));
+			memcpy(buffer, &importedContractIds[0], out_stub[contractIdx]->GetSize());
 		}
 	}
 
@@ -1532,25 +1700,16 @@ bool CContractDatabase::Deploy(const rvm::ChainState* chain_state, const rvm::Co
 	{
 		for (uint32_t idx = 0; idx < contracts_count; idx++)
 		{
-			entries[idx].deployIdentifier = os::AtomicIncrement(&m_nextDeployId) - 1;		// AtomicIncrement returns the incremented value, need to decrement
-			_details::PredaCDIDToRvmCDID(entries[idx].deployIdentifier, &deployment_identifiers_out[idx]);
-			if (interface_deployment_ids_out && interface_deployment_ids_out[idx])
+			const rvm::ContractModuleID& moduleId = entries[idx].compileData.moduleId;
+
+			// it's possible that there's already this module id in DB
+			auto itor = m_contracts.find(moduleId);
+			if (itor == m_contracts.end())
 			{
-				for (uint32_t interfaceIdx = 0; interfaceIdx < uint32_t(entries[idx].compileData.interfaces.size()); interfaceIdx++)
-				{
-					rt::Zero(interface_deployment_ids_out[idx][interfaceIdx]);
-					*(PredaContractDID*)&interface_deployment_ids_out[idx][interfaceIdx] = entries[idx].deployIdentifier;
-					((uint32_t*)&interface_deployment_ids_out[idx][interfaceIdx])[7] = interfaceIdx;
-				}
+				m_contracts.try_emplace(moduleId, entries[idx]);
+				std::string json = ConvertEntryToJson(&entries[idx]);
+				m_contractDB.Set(moduleId, json.c_str());
 			}
-
-			// TODO: in the future, when deploy id is properly calculated, need to check for conflict here and return the one already in database
-			// Now just emplace it and assumes it doesn't already exist
-			assert(m_contracts.find(entries[idx].deployIdentifier) == m_contracts.end());
-			m_contracts.try_emplace(entries[idx].deployIdentifier, entries[idx]);
-
-			std::string json = ConvertEntryToJson(&m_contracts[entries[idx].deployIdentifier]);
-			m_contractDB.Set(entries[idx].deployIdentifier, json.c_str());
 		}
 	}
 
@@ -1590,20 +1749,23 @@ std::string CContractDatabase::ConvertEntryToJson(const ContractDatabaseEntry *p
 {
 	std::string json;
 	json = "\t{\n";
-	json += "\t\"deploy_id\": " + std::to_string(pEntry->deployIdentifier) + ",\n";
+	{
+		rt::Json res;
+		::rvm::RvmTypeJsonify(pEntry->compileData.moduleId, res);
+		json += "\t\"module_id\": " + std::string(res.GetInternalString()) + ",\n";
+	}
 	json += "\t\"dapp\": \"" + pEntry->compileData.dapp + "\",\n";
 	json += "\t\"name\": \"" + pEntry->compileData.name + "\",\n";
 	json += "\t\"comment\": \"" + pEntry->compileData.contractDoxygenComment + "\",\n";
 
 	json += "\t\"export_unique_str\": \"" + pEntry->compileData.exportUniqueString + "\",\n";
-	json += "\t\"id\": " + std::to_string(uint64_t(pEntry->deployData.contractId)) + ",\n";
 	json += "\t\"bin\": \"" + pEntry->linkData.binaryPathFileName + "\",\n";
 	json += "\t\"src\": \"" + pEntry->linkData.srcPathFileName + "\",\n";
 	json += "\t\"inter\": \"" + pEntry->linkData.intermediatePathFileName + "\",\n";
 	{
-		rt::String res;
-		::rvm::_details::_Jsonify(pEntry->compileData.intermediateHash, res);
-		json += "\t\"inter_hash\": " + std::string(res.GetString()) + ",\n";
+		rt::Json res;
+		::rvm::RvmTypeJsonify(pEntry->compileData.intermediateHash, res);
+		json += "\t\"inter_hash\": " + std::string(res.GetInternalString()) + ",\n";
 	}
 
 	// state vars
@@ -1629,8 +1791,7 @@ std::string CContractDatabase::ConvertEntryToJson(const ContractDatabaseEntry *p
 	for (size_t i = 0; i < pEntry->compileData.importedContracts.size(); i++)
 	{
 		json += "\t\t{\n";
-		json += "\t\t\t\"name\": \"" + pEntry->compileData.importedContracts[i] + "\",\n";
-		json += "\t\t\t\"id\": \"" + std::to_string(uint64_t(pEntry->deployData.importedContractIds[i])) + "\",\n";
+		json += "\t\t\t\"name\": \"" + pEntry->compileData.importedContracts[i] + "\"\n";
 		json += i < pEntry->compileData.importedContracts.size() - 1 ? "\t\t},\n" : "\t\t}\n";
 	}
 	json += "\t],\n";
@@ -1731,6 +1892,12 @@ std::string CContractDatabase::ConvertEntryToJson(const ContractDatabaseEntry *p
 	{
 		json += "\t\t{";
 		json += "\t\t\t\"name\": \"" + pEntry->compileData.implementedInterfaces[i].name + "\",\n";
+		{
+			rt::Json res;
+			::rvm::RvmTypeJsonify(pEntry->compileData.implementedInterfaces[i].interfaceDefContractModuleId, res);
+			json += "\t\t\t\"def_module_id\": " + std::string(res.GetInternalString()) + ",\n";
+		}
+		json += "\t\t\t\"def_slot\": \"" + std::to_string(pEntry->compileData.implementedInterfaces[i].interfaceDefSlot) + "\",\n";
 		json += "\t\t\t\"funcs\": [";
 		for (size_t j = 0; j < pEntry->compileData.implementedInterfaces[i].functionIds.size(); j++)
 		{
@@ -1751,16 +1918,11 @@ std::string CContractDatabase::ConvertEntryToJson(const ContractDatabaseEntry *p
 	return json;
 }
 
-const rvm::Contract* CContractDatabase::GetContract(const rvm::ContractDID *deployId) const
-{
-	return GetContract(_details::RvmCDIDToPredaCDID(deployId));
-}
-
-const rvm::Contract* CContractDatabase::GetContract(PredaContractDID deploy_id) const
+const rvm::Contract* CContractDatabase::GetContract(const rvm::ContractModuleID *module_id) const
 {
 	EnterCSBlock(m_barrier);
 
-	const ContractDatabaseEntry* pContractEntry = CContractDatabase::FindContractEntry(deploy_id);
+	const ContractDatabaseEntry* pContractEntry = CContractDatabase::FindContractEntry(*module_id);
 
 	if (!pContractEntry)
 		return nullptr;
@@ -1768,7 +1930,7 @@ const rvm::Contract* CContractDatabase::GetContract(PredaContractDID deploy_id) 
 	return const_cast<ContractDatabaseEntry*>(pContractEntry)->GetDelegate();
 }
 
-rvm::ExecuteUnit* CContractDatabase::CreateExecuteUnit()
+rvm::ExecutionUnit* CContractDatabase::CreateExecuteUnit()
 {
 	return new CExecutionEngine(this);
 }
@@ -1777,7 +1939,7 @@ class CSymbolDatabaseForJsonifier : public rvm::ISymbolDatabaseForJsonifier {
 private:
 	static std::vector<ContractEnum> s_builtInEnums;
 	const CContractDatabase* m_pDB = nullptr;
-	const rvm::ChainState* m_pChainState = nullptr;
+	const rvm::GlobalStates* m_pChainGlobalState = nullptr;
 
 	std::map<std::string, const ContractDatabaseEntry*> m_contractEntryCache;
 
@@ -1787,15 +1949,18 @@ private:
 		if (itor != m_contractEntryCache.end())
 			return itor->second;
 
-		const ContractDatabaseEntry* pEntry = m_pDB->FindContractEntry(_details::GetOnChainPredaContractDIdFromFullName(m_pChainState, fullName));
+		const rvm::ContractModuleID* moduleId = _details::GetOnChainContractModuleIdFromFullName(m_pChainGlobalState, fullName);
+		if (moduleId == nullptr)
+			return nullptr;
+		const ContractDatabaseEntry* pEntry = m_pDB->FindContractEntry(*moduleId);
 		m_contractEntryCache.emplace(fullName, pEntry);
 
 		return pEntry;
 	}
 public:
-	CSymbolDatabaseForJsonifier(const CContractDatabase* pDB, const rvm::ChainState* pChainState)
+	CSymbolDatabaseForJsonifier(const CContractDatabase* pDB, const rvm::GlobalStates* pChainGlobalState)
 		: m_pDB(pDB)
-		, m_pChainState(pChainState)
+		, m_pChainGlobalState(pChainGlobalState)
 	{
 	}
 
@@ -1869,10 +2034,10 @@ public:
 
 		return nullptr;
 	}
-	bool ExpandStructAndEnumType(const std::string &inType, std::string &outType)
+	bool ExpandUserDefinedTypes(const std::string &inType, std::string &outType)
 	{
-		size_t scopePos = inType.rfind(".");
-		if (scopePos == std::string::npos)
+		size_t firstScopePos = inType.find_first_of('.');
+		if (firstScopePos == std::string::npos)
 		{
 			for (auto &itor : s_builtInEnums)
 			{
@@ -1886,9 +2051,23 @@ public:
 			outType = inType;
 			return true;
 		}
-		std::string nonScopedType = inType.substr(scopePos + 1);
+		
+		size_t secondScopePos = inType.find_first_of('.', firstScopePos + 1);
+		// type is contract
+		if (secondScopePos == std::string::npos)
+		{
+			const ContractDatabaseEntry* pEntry = GetContractEntryFromFullName(inType);
+			if (pEntry == nullptr)
+				return false;
 
-		std::string contractFullName = inType.substr(0, scopePos);
+			outType = "contract";
+			return true;
+		}
+
+		// type is whatever type defined in a contract
+		std::string nonScopedType = inType.substr(secondScopePos + 1);
+
+		std::string contractFullName = inType.substr(0, secondScopePos);
 		const ContractDatabaseEntry* pEntry = GetContractEntryFromFullName(contractFullName);
 		if (pEntry == nullptr)
 			return false;
@@ -1910,7 +2089,7 @@ public:
 				for (size_t i = 0; i < itor.members.size(); i++)
 				{
 					std::string expandedMemberType;
-					if (!ExpandStructAndEnumTypesInTypeString(itor.members[i].first, expandedMemberType))
+					if (!ExpandUserDefinedTypesInTypeString(itor.members[i].first, expandedMemberType))
 						return false;
 					outType += " " + expandedMemberType + " " + itor.members[i].second;
 				}
@@ -1918,9 +2097,18 @@ public:
 			}
 		}
 
+		for (auto& itor : pEntry->compileData.interfaces)
+		{
+			if (itor.name == nonScopedType)
+			{
+				outType = "interface";
+				return true;
+			}
+		}
+
 		return false;
 	}
-	bool ExpandStructAndEnumTypesInTypeString(const std::string &inTypeStr, std::string &outTypeStr)
+	bool ExpandUserDefinedTypesInTypeString(const std::string &inTypeStr, std::string &outTypeStr)
 	{
 		std::stringstream inTypeStrStream(inTypeStr);
 		outTypeStr = "";
@@ -1928,7 +2116,7 @@ public:
 		while (inTypeStrStream >> curType)
 		{
 			std::string expandedType;
-			if (!ExpandStructAndEnumType(curType, expandedType))
+			if (!ExpandUserDefinedTypes(curType, expandedType))
 				return false;
 			if (outTypeStr.length() != 0)
 				outTypeStr += " ";
@@ -1966,45 +2154,45 @@ std::vector<ContractEnum> CSymbolDatabaseForJsonifier::s_builtInEnums = {
 		}
 };
 
-bool CContractDatabase::StateJsonify(rvm::BuildNum build_num, rvm::ContractScopeId contract, const rvm::ConstData* pState, rvm::StringStream* json_out, const rvm::ChainState* ps) const
+bool CContractDatabase::StateJsonify(rvm::ContractInvokeId contract, const rvm::ConstData* pState, rvm::StringStream* json_out) const
 {
-	rvm::_details::ExecutionStateScope _(ps);
-
 	EnterCSBlock(m_barrier);
 
-	const ContractDatabaseEntry *pContractEntry = FindContractEntry(_details::RvmCDIDToPredaCDID(ps->GetContractDeploymentIdentifier(rvm::_details::CONTRACT_UNSET_SCOPE(contract), build_num)));
+	const rvm::DeployedContract *deployedContract = m_pRuntimeAPI->GetContractDeployed(rvm::CONTRACT_UNSET_SCOPE(contract));
+	if (!deployedContract)
+		return false;
+	const ContractDatabaseEntry *pContractEntry = FindContractEntry(deployedContract->Module);
 	if (pContractEntry == nullptr)
 		return false;
 	const std::string *pSig = nullptr;
-	rvm::Scope scope = rvm::_details::CONTRACT_SCOPE(contract);
+	rvm::Scope scope = rvm::CONTRACT_SCOPE(contract);
 	transpiler::ScopeType predaScope = _details::RvmScopeToPredaScope(scope);
 	if (predaScope == transpiler::ScopeType::None)
 		return false;
 
 	pSig = &pContractEntry->compileData.scopeStateVarMeta[int(predaScope)].signature;
 
-	CSymbolDatabaseForJsonifier symbolDb(this, ps);
+	CSymbolDatabaseForJsonifier symbolDb(this, m_pRuntimeAPI);
 	std::string expandedSig;
-	if (!symbolDb.ExpandStructAndEnumTypesInTypeString(*pSig, expandedSig))
+	if (!symbolDb.ExpandUserDefinedTypesInTypeString(*pSig, expandedSig))
 		return false;
-	rvm::CDataJsonifier jsonifier(expandedSig.c_str(), &symbolDb, pState->DataPtr, (uint32_t)pState->DataSize, true);
+	rvm::RvmDataJsonifier jsonifier(expandedSig.c_str(), &symbolDb);
 	std::string jsonStr;
-	if (!jsonifier.Jsonify(jsonStr))
-		return false;
-	if (jsonifier.GetRemainingDataSize() != 0)
+	if (jsonifier.Jsonify(jsonStr, pState->DataPtr, (uint32_t)pState->DataSize, true) != int32_t(pState->DataSize))
 		return false;
 
 	json_out->Append(jsonStr.c_str(), uint32_t(jsonStr.length()));
 	return true;
 }
 
-bool CContractDatabase::StateJsonParse(rvm::BuildNum build_num, rvm::ContractScopeId contract, const rvm::ConstString* json, rvm::DataBuffer* state_out, const rvm::ChainState* ps, rvm::LogMessageOutput *log) const
+bool CContractDatabase::StateJsonParse(rvm::ContractInvokeId contract, const rvm::ConstString* json, rvm::DataBuffer* state_out, rvm::LogMessageOutput *log) const
 {
-	rvm::_details::ExecutionStateScope _(ps);
-
 	EnterCSBlock(m_barrier);
 
-	const ContractDatabaseEntry *pContractEntry = FindContractEntry(_details::RvmCDIDToPredaCDID(ps->GetContractDeploymentIdentifier(rvm::_details::CONTRACT_UNSET_SCOPE(contract), build_num)));
+	const rvm::DeployedContract* deployedContract = m_pRuntimeAPI->GetContractDeployed(rvm::CONTRACT_UNSET_SCOPE(contract));
+	if (!deployedContract)
+		return false;
+	const ContractDatabaseEntry* pContractEntry = FindContractEntry(deployedContract->Module);
 	if (pContractEntry == nullptr)
 	{
 		if (log)
@@ -2015,7 +2203,7 @@ bool CContractDatabase::StateJsonParse(rvm::BuildNum build_num, rvm::ContractSco
 		return false;
 	}
 	const std::string *pSig = nullptr;
-	rvm::Scope scope = rvm::_details::CONTRACT_SCOPE(contract);
+	rvm::Scope scope = rvm::CONTRACT_SCOPE(contract);
 	transpiler::ScopeType predaScope = _details::RvmScopeToPredaScope(scope);
 	if (predaScope == transpiler::ScopeType::None)
 	{
@@ -2031,9 +2219,9 @@ bool CContractDatabase::StateJsonParse(rvm::BuildNum build_num, rvm::ContractSco
 
 	std::vector<uint8_t> ret;
 
-	CSymbolDatabaseForJsonifier symbolDb(this, ps);
+	CSymbolDatabaseForJsonifier symbolDb(this, m_pRuntimeAPI);
 	std::string expandedSig;
-	if (!symbolDb.ExpandStructAndEnumTypesInTypeString(*pSig, expandedSig))
+	if (!symbolDb.ExpandUserDefinedTypesInTypeString(*pSig, expandedSig))
 	{
 		if (log)
 		{
@@ -2043,7 +2231,7 @@ bool CContractDatabase::StateJsonParse(rvm::BuildNum build_num, rvm::ContractSco
 		return false;
 	}
 
-	rvm::CDataJsonParser dejsonifier(expandedSig.c_str(), &symbolDb);
+	rvm::RvmDataJsonParser dejsonifier(expandedSig.c_str(), &symbolDb);
 	if (!dejsonifier.JsonParse(*(rt::String_Ref*)json, ret))
 	{
 		if (log)
@@ -2061,13 +2249,14 @@ bool CContractDatabase::StateJsonParse(rvm::BuildNum build_num, rvm::ContractSco
 	return true;
 }
 
-bool CContractDatabase::ArgumentsJsonify(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::OpCode opCode, const rvm::ConstData* args_serialized, rvm::StringStream* json_out, const rvm::ChainState* ps) const
+bool CContractDatabase::ArgumentsJsonify(rvm::ContractInvokeId contract, rvm::OpCode opCode, const rvm::ConstData* args_serialized, rvm::StringStream* json_out) const
 {
-	rvm::_details::ExecutionStateScope _(ps);
-
 	EnterCSBlock(m_barrier);
 
-	const ContractDatabaseEntry* pContractEntry = FindContractEntry(_details::RvmCDIDToPredaCDID(ps->GetContractDeploymentIdentifier(rvm::_details::CONTRACT_UNSET_SCOPE(contract), build_num)));
+	const rvm::DeployedContract* deployedContract = m_pRuntimeAPI->GetContractDeployed(rvm::CONTRACT_UNSET_SCOPE(contract));
+	if (!deployedContract)
+		return false;
+	const ContractDatabaseEntry* pContractEntry = FindContractEntry(deployedContract->Module);
 	if (pContractEntry == nullptr)
 		return false;
 
@@ -2078,27 +2267,28 @@ bool CContractDatabase::ArgumentsJsonify(rvm::BuildNum build_num, rvm::ContractS
 
 	std::string jsonStr;
 	jsonStr = "{";
-	CSymbolDatabaseForJsonifier symbolDb(this, ps);
+	CSymbolDatabaseForJsonifier symbolDb(this, m_pRuntimeAPI);
 	const uint8_t *args_ptr = args_serialized->DataPtr;
 	uint32_t args_size = (uint32_t)args_serialized->DataSize;
 
 	for (int i = 0; i < (int)func.parameters.size(); i++)
 	{
 		std::string paramType;
-		if (!symbolDb.ExpandStructAndEnumTypesInTypeString(func.parameters[i].first, paramType))
+		if (!symbolDb.ExpandUserDefinedTypesInTypeString(func.parameters[i].first, paramType))
 			return false;
 		const char *pTypeString = paramType.c_str();
 		// skip the const modifier
 		if (paramType.length() >= 2 && paramType[0] == 'c' && paramType[1] == ' ')
 			pTypeString += 2;
 
-		rvm::CDataJsonifier jsonifier(pTypeString, &symbolDb, args_ptr, args_size, true);
+		rvm::RvmDataJsonifier jsonifier(pTypeString, &symbolDb);
 		std::string paramJson;
-		if (!jsonifier.Jsonify(paramJson))
+		int32_t numConsumedBytes = jsonifier.Jsonify(paramJson, args_ptr, args_size, true);
+		if (numConsumedBytes == -1)
 			return false;
 
-		args_ptr += args_size - jsonifier.GetRemainingDataSize();
-		args_size = jsonifier.GetRemainingDataSize();
+		args_ptr += numConsumedBytes;
+		args_size -= numConsumedBytes;
 
 		if (i > 0)
 			jsonStr += ", ";
@@ -2114,7 +2304,7 @@ bool CContractDatabase::ArgumentsJsonify(rvm::BuildNum build_num, rvm::ContractS
 	return true;
 }
 
-bool CContractDatabase::VariableJsonify(PredaContractDID deployId, const char *type_string, const uint8_t *args_serialized, uint32_t args_size, std::string &outJson, const rvm::ChainState* ps) const
+bool CContractDatabase::VariableJsonify(rvm::ContractModuleID deployId, const char *type_string, const uint8_t *args_serialized, uint32_t args_size, std::string &outJson, const rvm::ChainStates* ps) const
 {
 	EnterCSBlock(m_barrier);
 
@@ -2125,7 +2315,7 @@ bool CContractDatabase::VariableJsonify(PredaContractDID deployId, const char *t
 	CSymbolDatabaseForJsonifier symbolDb(this, ps);
 
 	std::string varType;
-	if (!symbolDb.ExpandStructAndEnumTypesInTypeString(type_string, varType))
+	if (!symbolDb.ExpandUserDefinedTypesInTypeString(type_string, varType))
 		return false;
 	const char *pTypeString = varType.c_str();
 
@@ -2139,23 +2329,21 @@ bool CContractDatabase::VariableJsonify(PredaContractDID deployId, const char *t
 	if ((iss >> first_type) && first_type == "string")
 		needQuotation = false;
 
-	rvm::CDataJsonifier jsonifier(pTypeString, &symbolDb, args_serialized, args_size, needQuotation);
-	if (!jsonifier.Jsonify(outJson))
-		return false;
-
-	if (jsonifier.GetRemainingDataSize() != 0)
+	rvm::RvmDataJsonifier jsonifier(pTypeString, &symbolDb);
+	if (jsonifier.Jsonify(outJson, args_serialized, args_size, needQuotation) != int32_t(args_size))
 		return false;
 
 	return true;
 }
 
-bool CContractDatabase::ArgumentsJsonParse(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::OpCode opCode, const rvm::ConstString* json, rvm::DataBuffer* args_out, const rvm::ChainState* ps, rvm::LogMessageOutput *log) const
+bool CContractDatabase::ArgumentsJsonParse(rvm::ContractInvokeId contract, rvm::OpCode opCode, const rvm::ConstString* json, rvm::DataBuffer* args_out, rvm::LogMessageOutput *log) const
 {
-	rvm::_details::ExecutionStateScope _(ps);
-
 	EnterCSBlock(m_barrier);
 
-	const ContractDatabaseEntry* pContractEntry = FindContractEntry(_details::RvmCDIDToPredaCDID(ps->GetContractDeploymentIdentifier(rvm::_details::CONTRACT_UNSET_SCOPE(contract), build_num)));
+	const rvm::DeployedContract* deployedContract = m_pRuntimeAPI->GetContractDeployed(rvm::CONTRACT_UNSET_SCOPE(contract));
+	if (!deployedContract)
+		return false;
+	const ContractDatabaseEntry* pContractEntry = FindContractEntry(deployedContract->Module);
 	if (pContractEntry == nullptr)
 		return false;
 
@@ -2185,7 +2373,7 @@ bool CContractDatabase::ArgumentsJsonParse(rvm::BuildNum build_num, rvm::Contrac
 
 	std::vector<uint8_t> ret;
 
-	CSymbolDatabaseForJsonifier symbolDb(this, ps);
+	CSymbolDatabaseForJsonifier symbolDb(this, m_pRuntimeAPI);
 	for (int i = 0; i < (int)func.parameters.size(); i++)
 	{
 		rt::String_Ref data;
@@ -2204,7 +2392,7 @@ bool CContractDatabase::ArgumentsJsonParse(rvm::BuildNum build_num, rvm::Contrac
 		}
 
 		std::string paramType;
-		if (!symbolDb.ExpandStructAndEnumTypesInTypeString(func.parameters[i].first, paramType))
+		if (!symbolDb.ExpandUserDefinedTypesInTypeString(func.parameters[i].first, paramType))
 		{
 			if (log)
 			{
@@ -2220,7 +2408,7 @@ bool CContractDatabase::ArgumentsJsonParse(rvm::BuildNum build_num, rvm::Contrac
 			pTypeString += 2;
 
 		std::vector<uint8_t> buffer;
-		rvm::CDataJsonParser dejsonifier(pTypeString, &symbolDb);
+		rvm::RvmDataJsonParser dejsonifier(pTypeString, &symbolDb);
 		if (!dejsonifier.JsonParse(data, buffer))
 		{
 			if (log)
@@ -2241,11 +2429,14 @@ bool CContractDatabase::ArgumentsJsonParse(rvm::BuildNum build_num, rvm::Contrac
 	return true;
 }
 
-bool CContractDatabase::GetContractFunctionArgumentsSignature(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::OpCode opcode, rvm::StringStream* signature_out, const rvm::ChainState* ps) const
+bool CContractDatabase::GetContractFunctionArgumentsSignature(rvm::ContractInvokeId contract, rvm::OpCode opcode, rvm::StringStream* signature_out) const
 {
 	EnterCSBlock(m_barrier);
 
-	const ContractDatabaseEntry* pContractEntry = FindContractEntry(_details::RvmCDIDToPredaCDID(ps->GetContractDeploymentIdentifier(rvm::_details::CONTRACT_UNSET_SCOPE(contract), build_num)));
+	const rvm::DeployedContract* deployedContract = m_pRuntimeAPI->GetContractDeployed(rvm::CONTRACT_UNSET_SCOPE(contract));
+	if (!deployedContract)
+		return false;
+	const ContractDatabaseEntry* pContractEntry = FindContractEntry(deployedContract->Module);
 	if (pContractEntry == nullptr)
 		return false;
 
@@ -2256,11 +2447,11 @@ bool CContractDatabase::GetContractFunctionArgumentsSignature(rvm::BuildNum buil
 
 	std::string ret;
 
-	CSymbolDatabaseForJsonifier symbolDb(this, ps);
+	CSymbolDatabaseForJsonifier symbolDb(this, m_pRuntimeAPI);
 	for (int i = 0; i < (int)func.parameters.size(); i++)
 	{
 		std::string paramType;
-		if (!symbolDb.ExpandStructAndEnumTypesInTypeString(func.parameters[i].first, paramType))
+		if (!symbolDb.ExpandUserDefinedTypesInTypeString(func.parameters[i].first, paramType))
 			return false;
 
 		const char *pTypeString = paramType.c_str();
@@ -2278,24 +2469,27 @@ bool CContractDatabase::GetContractFunctionArgumentsSignature(rvm::BuildNum buil
 	return true;
 }
 
-bool CContractDatabase::GetContractStateSignature(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::StringStream* signature_out, const rvm::ChainState* ps) const
+bool CContractDatabase::GetContractStateSignature(rvm::ContractInvokeId contract, rvm::StringStream* signature_out) const
 {
 	EnterCSBlock(m_barrier);
 
-	const ContractDatabaseEntry* pContractEntry = FindContractEntry(_details::RvmCDIDToPredaCDID(ps->GetContractDeploymentIdentifier(rvm::_details::CONTRACT_UNSET_SCOPE(contract), build_num)));
+	const rvm::DeployedContract* deployedContract = m_pRuntimeAPI->GetContractDeployed(rvm::CONTRACT_UNSET_SCOPE(contract));
+	if (!deployedContract)
+		return false;
+	const ContractDatabaseEntry* pContractEntry = FindContractEntry(deployedContract->Module);
 	if (pContractEntry == nullptr)
 		return false;
 	const std::string *pSig = nullptr;
-	rvm::Scope scope = rvm::_details::CONTRACT_SCOPE(contract);
+	rvm::Scope scope = rvm::CONTRACT_SCOPE(contract);
 	transpiler::ScopeType predaScope = _details::RvmScopeToPredaScope(scope);
 	if (predaScope == transpiler::ScopeType::None)
 		return false;
 
 	pSig = &pContractEntry->compileData.scopeStateVarMeta[int(predaScope)].signature;
 
-	CSymbolDatabaseForJsonifier symbolDb(this, ps);
+	CSymbolDatabaseForJsonifier symbolDb(this, m_pRuntimeAPI);
 	std::string expandedSig;
-	if (!symbolDb.ExpandStructAndEnumTypesInTypeString(*pSig, expandedSig))
+	if (!symbolDb.ExpandUserDefinedTypesInTypeString(*pSig, expandedSig))
 		return false;
 
 	signature_out->Append(expandedSig.c_str(), uint32_t(expandedSig.size()));
@@ -2303,11 +2497,14 @@ bool CContractDatabase::GetContractStateSignature(rvm::BuildNum build_num, rvm::
 	return true;
 }
 
-uint32_t CContractDatabase::GetContractEnumSignatures(rvm::BuildNum build_num, rvm::ContractId contract, rvm::StringStream* signature_out, const rvm::ChainState* ps) const
+uint32_t CContractDatabase::GetContractEnumSignatures(rvm::ContractVersionId contract, rvm::StringStream* signature_out) const
 {
 	EnterCSBlock(m_barrier);
 
-	const ContractDatabaseEntry* pContractEntry = FindContractEntry(_details::RvmCDIDToPredaCDID(ps->GetContractDeploymentIdentifier(contract, build_num)));
+	const rvm::DeployedContract* deployedContract = m_pRuntimeAPI->GetContractDeployed(contract);
+	if (!deployedContract)
+		return false;
+	const ContractDatabaseEntry* pContractEntry = FindContractEntry(deployedContract->Module);
 	if (pContractEntry == nullptr)
 		return 0;
 

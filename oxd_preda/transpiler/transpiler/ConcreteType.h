@@ -102,7 +102,7 @@ namespace transpiler {
 		UnaryMinus,
 		LogicalNot,
 		BitwiseNot,
-		New,
+		Deploy,
 		Delete,
 
 		Power,
@@ -165,7 +165,7 @@ namespace transpiler {
 		UnaryMinusBit = 1ull << (unsigned char)(OperatorType::UnaryMinus),
 		LogicalNotBit = 1ull << (unsigned char)(OperatorType::LogicalNot),
 		BitwiseNotBit = 1ull << (unsigned char)(OperatorType::BitwiseNot),
-		NewBit = 1ull << (unsigned char)(OperatorType::New),
+		DeployBit = 1ull << (unsigned char)(OperatorType::Deploy),
 		DeleteBit = 1ull << (unsigned char)(OperatorType::Delete),
 
 		PowerBit = 1ull << (unsigned char)(OperatorType::Power),
@@ -286,7 +286,7 @@ namespace transpiler {
 
 		bool IsConstTransitive()
 		{
-			return typeCategory == ReferenceType || typeCategory == ContractType;
+			return typeCategory == ReferenceType;
 		}
 	};
 

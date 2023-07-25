@@ -7,6 +7,12 @@ namespace oxd
 {
 
 static const rt::SS sz_NullAddress("<address:null>");
+static const rt::SS sz_InvalidAddress("<address:invalid>");
+static const rt::SS sz_NullAddressShort("<:null>");
+static const rt::SS sz_InvalidAddressShort("<:invalid>");
+static const rt::CharacterSet_AlphabetDigits	DelegatedNameCharset("_-!#$@&^*()[]{}\\/<>|,;?~");
+static const rt::CharacterSet_AlphabetDigits	DAppNameCharset("_-#@");
+static const rt::CharacterSet_UpperCase			TokenNameCharset("-#");
 
 void SecureAddress::UnseededRandom(SecSuiteId ssid)
 {
@@ -18,13 +24,44 @@ void SecureAddress::Random(SecSuiteId ssid, UINT s)
 	Random(SecuritySuite(ssid), s);
 }
 
+bool SecureAddress::VerifyDelegatedString(const rt::CharacterSet& charset, uint32_t leng_min, uint32_t leng_max) const
+{
+	auto e = rt::String_Ref((char*)Bytes, 32).FindCharacterExcluded(charset);
+	if(e)
+	{
+		if(e > leng_max)return false;
+		if(e >= 0 && e < leng_min)return false;
+		for(; e < 32; e++)
+			if(Bytes[e])return false;
+	}
+
+	return true;
+}
+
 bool SecureAddress::IsValid(const SecuritySuite& ss) const
 {
-	ASSERT(ss.Id() == GetSecuritySuiteId());
+	auto ssid = ss.Id();
+	ASSERT(ssid == GetSecuritySuiteId());
 
 	ASSERT((ss.AddressEffectiveSize()%4) == 0);
 	for(UINT i = ss.AddressEffectiveSize()/4; i<32/4; i++)
 		if(DWords[i])return false;
+
+	switch(ssid)
+	{
+	case SEC_SUITE_DELEGATED_DAPP:
+		if(!VerifyDelegatedString(DAppNameCharset, SEC_SUITE_DELEGATED_DAPP_SIZEMIN, SEC_SUITE_DELEGATED_DAPP_SIZEMAX))
+			return false;
+		break;
+	case SEC_SUITE_DELEGATED_TOKEN:
+		if(!VerifyDelegatedString(TokenNameCharset, SEC_SUITE_DELEGATED_TOKEN_SIZEMIN, SEC_SUITE_DELEGATED_TOKEN_SIZEMAX))
+			return false;
+		break;
+	case SEC_SUITE_DELEGATED_NAME:
+		if(!VerifyDelegatedString(DelegatedNameCharset, SEC_SUITE_DELEGATED_NAME_SIZEMIN, SEC_SUITE_DELEGATED_NAME_SIZEMAX))
+			return false;
+		break;
+	}
 
 	return !(0xfffffff0 & (DWords[8] ^ ipp::crc32c(Bytes, 32, ss.Id())));
 }
@@ -32,8 +69,8 @@ bool SecureAddress::IsValid(const SecuritySuite& ss) const
 void SecureAddress::SetupChecksum(const SecuritySuite& ss)
 {
 	ASSERT(ss.IsValid());
-
 	ASSERT((ss.AddressEffectiveSize()%4) == 0);
+
 	for(UINT i = ss.AddressEffectiveSize()/4; i<32/4; i++)
 		DWords[i] = 0;
 
@@ -66,15 +103,38 @@ void SecureAddress::UnseededRandom(const SecuritySuite& ss)
 
 bool SecureAddress::FromString(const rt::String_Ref& str)
 {
-	if(str != sz_NullAddress)
+	if(str != sz_NullAddress && str != sz_InvalidAddress)
 	{
-		auto end = str.FindCharacterReverse(':');
-		
-		return	(	(end > 0 && SecDataBlock<36>::FromString(str.SubStr(0, end)))
-					|| SecDataBlock<36>::FromString(str)
-				) &&
-				IsValid() &&
-				(end < 0 || SecuritySuite::IdFromString(str.SubStr(end+1)) == GetSecuritySuiteId());
+		rt::String_Ref seg[2];
+		str.Split(seg, 2, ':');
+
+		SecSuiteId ssid = SEC_SUITE_UNKNOWN;
+		if(!seg[1].IsEmpty())
+		{
+			ssid = SecuritySuite::IdFromString(seg[1]);
+			if(ssid == SEC_SUITE_UNKNOWN)
+				return false;
+		}
+
+		switch(ssid)
+		{
+		case SEC_SUITE_DELEGATED_NAME:
+			return SetDelegatedAsName(seg[0]);
+		case SEC_SUITE_DELEGATED_DAPP:
+			return SetDelegatedAsDApp(seg[0]);
+		case SEC_SUITE_DELEGATED_TOKEN:
+			return SetDelegatedAsToken(seg[0]);
+		}
+
+		if(SecDataBlock<36>::FromString(seg[0]) && IsValid())
+		{
+			if(!seg[1].IsEmpty() && ssid != GetSecuritySuiteId())
+				return false;
+
+			return true;
+		}
+
+		return false;
 	}
 	else
 	{
@@ -88,18 +148,12 @@ void SecureAddress::ToString(rt::String& append) const
 	auto ss = GetSecuritySuiteId();
 	if(ss == SEC_SUITE_UNKNOWN && IsZero())
 		append += sz_NullAddress;
+	else if(!IsValid())
+		append += sz_InvalidAddress;
 	else
 	{
-		auto& name = SecuritySuite::IdToString(ss);
-
-		UINT org_len = (UINT)append.GetLength();
-		UINT b32_len = os::Base32EncodeLength(sizeof(SecureAddress));
-		VERIFY(append.SetLength(org_len + b32_len + 1 + name.GetLength()));
-
-		os::Base32CrockfordEncodeLowercase(&append[org_len], this, sizeof(SecureAddress));
-		org_len += b32_len;
-		append[org_len++] = ':';
-		name.CopyTo(&append[org_len]);
+		uint32_t addr_len = SecureAddress::String::GetStringifyLength(*this);
+		SecureAddress::String::Stringify(*this, append.Extend(addr_len), addr_len);
 	}
 }
 
@@ -111,244 +165,198 @@ void SecureAddress::Jsonify(rt::Json& json) const
 	append += '"';
 }
 
-bool SecureAddress::SetAsDelegated(const rt::String_Ref& full_qualified_name, SecSuiteId ss)
+void SecureAddress::SetDelegatedAsHash(const uint8_t hash[32])
 {
-	if(ss == SEC_SUITE_UNKNOWN)
+	rt::Copy<32>(this, hash);
+	SetupChecksum(SEC_SUITE_DELEGATED_HASH);
+}
+
+bool SecureAddress::SetDelegatedAsDApp(const rt::String_Ref& name_in)
+{
+	return SetDelegatedAsString(name_in, SEC_SUITE_DELEGATED_DAPP, DAppNameCharset, SEC_SUITE_DELEGATED_DAPP_SIZEMIN, SEC_SUITE_DELEGATED_DAPP_SIZEMAX);
+}
+
+rt::String_Ref SecureAddress::GetDelegatedString() const
+{
+	return rt::String_Ref((char*)this, 32).GetLengthRecalculated();
+};
+
+bool SecureAddress::SetDelegatedAsName(const rt::String_Ref& name_in)
+{
+	return SetDelegatedAsString(name_in, SEC_SUITE_DELEGATED_NAME, DelegatedNameCharset, SEC_SUITE_DELEGATED_NAME_SIZEMIN, SEC_SUITE_DELEGATED_NAME_SIZEMAX);
+}
+
+bool SecureAddress::SetDelegatedAsToken(const rt::String_Ref& name_in)
+{
+	return SetDelegatedAsString(name_in, SEC_SUITE_DELEGATED_TOKEN, TokenNameCharset, SEC_SUITE_DELEGATED_TOKEN_SIZEMIN, SEC_SUITE_DELEGATED_TOKEN_SIZEMAX);
+}
+
+bool SecureAddress::SetDelegatedAs(SecSuiteId ssid, const rt::String_Ref& name)
+{
+	switch(ssid)
 	{
-		ss = SecuritySuite::IdFromString(full_qualified_name.GetExtName().TrimLeft(1));
+	case SEC_SUITE_DELEGATED_HASH:
+		if(name.GetLength() != 32)return false;
+		SetDelegatedAsHash((uint8_t*)name.Begin());
+		return true;
+	case SEC_SUITE_DELEGATED_NAME:
+		return SetDelegatedAsName(name);
+	case SEC_SUITE_DELEGATED_DAPP:
+		return SetDelegatedAsDApp(name);
+	case SEC_SUITE_DELEGATED_TOKEN:
+		return SetDelegatedAsToken(name);
+	default:
+		return false;
+	}
+}
+
+bool SecureAddress::ValidateDelegatedName(const SecSuiteId ssid, const rt::String_Ref& name)
+{
+	uint32_t sizemin, sizemax;
+	const rt::CharacterSet* charset;
+
+	switch(ssid)
+	{
+	case SEC_SUITE_DELEGATED_HASH:
+		return name.GetLength() == SEC_SUITE_DELEGATED_HASH_SIZE;
+	case SEC_SUITE_DELEGATED_NAME:
+		sizemin = SEC_SUITE_DELEGATED_NAME_SIZEMIN;
+		sizemax = SEC_SUITE_DELEGATED_NAME_SIZEMAX;
+		charset = &DelegatedNameCharset;
+		break;
+	case SEC_SUITE_DELEGATED_DAPP:
+		sizemin = SEC_SUITE_DELEGATED_DAPP_SIZEMIN;
+		sizemax = SEC_SUITE_DELEGATED_DAPP_SIZEMAX;
+		charset = &DAppNameCharset;
+		break;
+	case SEC_SUITE_DELEGATED_TOKEN:
+		sizemin = SEC_SUITE_DELEGATED_TOKEN_SIZEMIN;
+		sizemax = SEC_SUITE_DELEGATED_TOKEN_SIZEMAX;
+		charset = &TokenNameCharset;
+		break;
+	default:
+		return false;
 	}
 
-	if(ss == SEC_SUITE_UNKNOWN)return false;
+	return name.GetLength() >= sizemin && name.GetLength() <= sizemax && name.FindCharacterExcluded(*charset) < 0;
+}
 
-	sec::Hash<sec::HASH_SHA256>().Calculate(full_qualified_name.Begin(), full_qualified_name.GetLength(), this);
-	SetupChecksum(ss);
+bool SecureAddress::SetDelegatedAsString(const rt::String_Ref& name_in, SecSuiteId ssid, const rt::CharacterSet& name_charset, uint32_t name_lengmin, uint32_t name_lengmax)
+{
+	rt::String_Ref name = name_in.GetLengthRecalculated();
+	auto name_len = name.GetLength();
+	if(name_len > name_lengmax || name_len < name_lengmin || name.FindCharacterExcluded(name_charset) >= 0)
+		return false;
+
+	memcpy(this, name.Begin(), name.GetLength());
+	rt::Zero(Bytes + name.GetLength(), 32 - name.GetLength());
+
+	SetupChecksum(ssid);
 	return true;
-}
-
-void SecureAddress::SetAsDApp(const rt::String_Ref& name)
-{
-	rt::String t = name + '.' + SecuritySuite::IdToString(SEC_SUITE_REGISTERED_DAPP);
-	t.MakeLower();
-
-	SetAsDelegated(t, SEC_SUITE_REGISTERED_DAPP);
-}
-
-void SecureAddress::SetAsToken(const rt::String_Ref& name)
-{
-	rt::String t = name + '.' + SecuritySuite::IdToString(SEC_SUITE_REGISTERED_TOKEN);
-	t.MakeLower();
-
-	SetAsDelegated(t, SEC_SUITE_REGISTERED_TOKEN);
-}
-
-void SecureAddress::SetAsNonFungible(const rt::String_Ref& namespec)
-{
-	SetAsDelegated(namespec, SEC_SUITE_REGISTERED_NONFUNGIBLE);
 }
 
 void SecureAddress::SetAsContract(uint64_t contractId)
 {
-	*(uint64_t*)GetBytes() = contractId;
+	*(uint64_t*)Bytes = contractId;
+	rt::Zero(Bytes + sizeof(uint64_t), 32 - sizeof(uint64_t));
 	SetupChecksum(SEC_SUITE_CONTRACT);
 }
 
-void SecureAddress::SetAsCustom(const uint8_t* data)
-{
-	memcpy(GetBytes(), data, SecSuite<SEC_SUITE_CUSTOM>::_GetEntry()->AddressSize);
-	SetupChecksum(SEC_SUITE_CUSTOM);
-}
-
-// [dapp_name].dapp registered by native contract
-// [asset_name].asset registered by native contract
-// [subname].[dapp_name].dapp registered by rvm contract
-// [subname].<LTD> registered by native contract
-// root_name can be ISO3166-1 area code, or common-root (com dev org info net org app edu gov bit coin token lead me), or [common-root].[ISO3166-1 area code]
-namespace _details
-{
-
-static const rt::SS DomainTLDs[] = 
-{
-	"",
-	"com",
-	"net",
-	"org",
-	"edu",
-	"gov",
-	"app",
-	"usr",
-	"bot",
-	"bit",
-	"dev",
-	"coin",
-	"wire",
-	"team",
-	"token",
-	"swarm",
-	"group",
-	"feed",
-	"news",
-	"fans",
-};
-
-static const BYTE	DomainGeoCode[26][26] = 
-{
-	{ 2,7,3,0,0,0,0,7,1,7,7,0,0,5,0,4,0,0,0,0,0,7,0,0,7,0 },
-	{ 0,0,7,0,0,0,0,0,0,0,7,0,0,0,0,7,1,0,0,0,5,0,0,4,0,0 },
-	{ 0,7,0,0,7,0,0,0,0,7,0,0,0,0,0,3,7,0,5,6,0,0,0,0,0,0 },
-	{ 7,7,7,6,0,7,3,7,7,0,0,7,0,7,0,7,7,7,7,7,7,7,7,7,4,0 },
-	{ 3,7,0,7,0,4,0,0,7,7,7,7,4,7,7,4,7,0,0,0,3,4,4,7,7,3 },
-	{ 7,7,7,7,7,7,7,7,0,0,0,4,0,7,0,7,6,0,7,7,7,7,7,3,7,7 },
-	{ 0,0,4,0,1,0,0,0,0,7,7,0,0,0,7,0,0,0,0,0,0,7,0,7,0,7 },
-	{ 7,7,7,7,7,7,7,7,7,7,0,7,0,0,7,7,7,0,7,0,0,6,7,7,7,7 },
-	{ 7,4,3,0,0,7,7,7,7,7,7,0,0,0,0,7,0,0,0,0,7,7,7,7,7,7 },
-	{ 4,7,7,7,0,7,7,7,7,7,7,7,0,7,0,0,7,7,7,6,7,7,7,7,7,7 },
-	{ 7,7,7,7,0,7,0,0,0,7,7,7,0,0,7,0,7,0,7,7,7,7,0,7,0,0 },
-	{ 0,0,0,7,7,4,7,7,0,7,0,7,7,7,7,7,7,0,0,1,0,0,7,7,0,7 },
-	{ 0,7,0,0,1,0,0,0,6,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },
-	{ 0,7,0,7,0,0,0,6,0,7,7,0,7,7,0,0,6,0,7,5,0,7,7,7,7,0 },
-	{ 4,7,7,7,7,7,7,7,7,7,7,7,0,7,2,7,7,7,7,7,7,7,7,7,7,7 },
-	{ 0,7,6,7,0,0,0,0,4,7,0,0,0,0,7,7,7,0,0,0,6,7,0,7,0,6 },
-	{ 0,7,7,7,7,7,7,7,7,7,7,7,2,2,2,2,2,2,2,2,2,2,2,2,2,2 },
-	{ 4,4,4,7,0,7,7,4,4,7,7,4,4,4,0,4,7,7,0,7,1,7,0,7,7,7 },
-	{ 0,0,0,0,0,4,0,0,0,0,1,0,0,0,0,7,7,0,0,0,3,0,7,0,0,0 },
-	{ 3,7,0,0,7,0,0,0,7,0,0,0,0,0,0,5,7,0,7,0,7,0,0,7,7,0 },
-	{ 0,7,7,7,7,7,0,7,7,7,3,7,0,3,7,7,7,7,0,7,7,7,7,7,0,0 },
-	{ 0,7,0,6,0,7,0,7,0,7,7,7,7,0,7,7,7,7,7,7,0,7,7,7,7,7 },
-	{ 7,7,7,7,7,0,4,7,7,7,6,4,7,7,4,7,7,7,0,7,7,4,7,7,7,7 },
-	{ 2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2 },
-	{ 7,7,7,6,0,7,7,7,7,7,7,7,7,7,7,7,7,7,7,0,5,4,7,7,7,7 },
-	{ 0,7,7,7,7,7,7,7,7,7,7,7,0,7,7,7,7,5,7,7,7,7,0,7,7,2 }
-};
-
-bool IsDomainSuffixValid(UINT ds_code)
-{
-	int TLD = ds_code&0xffff;
-	if(TLD)
-	{
-		if(TLD >= sizeofArray(DomainTLDs))return false;
-	}
-
-	int Geo = ds_code>>16;
-	if(Geo)
-	{
-		int x = Geo%26;
-		int y = Geo/26;
-
-		int flag = DomainGeoCode[y][x];
-		if(flag <= 1 || flag == 3)
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
-
-bool AppendDomainSuffix(UINT ds_code, rt::String& append)
-{
-	int TLD = ds_code&0xffff;
-	if(TLD)
-	{
-		if(TLD >= sizeofArray(DomainTLDs))return false;
-
-		append += '.';
-		append += DomainTLDs[TLD];
-	}
-
-	int Geo = ds_code>>16;
-	if(Geo)
-	{
-		int x = Geo%26;
-		int y = Geo/26;
-
-		int flag = DomainGeoCode[y][x];
-		if(flag <= 1 || flag == 3)
-		{
-			append += '.';
-			append += (char)('a' + x);
-			append += (char)('a' + y);
-
-			return true;
-		}
-	}
-
-	return false;
-}
-
-UINT DomainSuffixToCode(const rt::String_Ref& suffix)
-{
-	if(suffix.GetLength() < 3 || suffix.First() != '.')return 0;
-
-	int TLD = 0, Geo = 0;
-	rt::String_Ref s;
-	if(suffix[suffix.GetLength()-3] == '.')
-	{
-		int x = suffix[suffix.GetLength()-2] - 'a';
-		int y = suffix[suffix.GetLength()-1] - 'a';
-
-		if(x<0 || x>=26 || y<0 || y>=26)return false;
-
-		int flag = DomainGeoCode[y][x];
-		if(flag <= 1 || flag == 3)
-		{
-			Geo = y*26 + x;
-		}
-
-		s = suffix.SubStr(0, suffix.GetLength() - 3);
-	}
-	else
-		s = suffix;
-
-	if(s.GetLength() > 3)
-	{
-		for(TLD = 1; TLD < sizeofArray(DomainTLDs); TLD++)
-		{
-			if(DomainTLDs[TLD] == s.SubStr(1))
-				return TLD | (Geo<<16);
-		}
-	}
-
-	return 0;
-}
-
-} // namespace _details
-
-
-bool SecureAddress::SetAsDomain(const rt::String_Ref& domain_in)
-{
-	rt::String domain = domain_in;
-	rt::String_Ref seg[4];
-	UINT co = domain.Split(seg, 4, '.');
-	if(co == 2)
-	{
-		UINT dscode = _details::DomainSuffixToCode(rt::String_Ref(seg[1].Begin()-1, seg[1].End()));
-		if(!dscode)return false;
-	}
-	else if(co == 3)
-	{
-		UINT dscode = _details::DomainSuffixToCode(rt::String_Ref(seg[1].Begin()-1, seg[2].End()));
-		if(!dscode)return false;
-	}
-	else return false;
-
-	SetAsDelegated(domain, SEC_SUITE_REGISTERED_DOMAIN);
-	return true;
-}
-
-b32address::b32address(const SecureAddress& addr)
-	: rt::tos::Base32CrockfordLowercaseOnStack<>(addr)
+uint32_t SecureAddress::String::GetStringifyLength(const SecureAddress& addr, bool shorten)
 {
 	auto ss = addr.GetSecuritySuiteId();
+
 	if(ss == SEC_SUITE_UNKNOWN && addr.IsZero())
-		_len = sz_NullAddress.CopyTo(_p);
+		return (shorten?sz_NullAddressShort:sz_NullAddress).GetLength();
+	else if(!addr.IsValid())
+		return (shorten?sz_InvalidAddressShort:sz_InvalidAddress).GetLength();
 	else
 	{
-		auto& name = SecuritySuite::IdToString(addr.GetSecuritySuiteId());
-		LPSTR p = &_p[GetLength()];
-		p[0] = ':';
-		p++;
-		_len += name.CopyTo(p) + 1;
+		if(shorten)
+		{
+			auto ssid = addr.GetSecuritySuiteId();
+			if(ssid > SEC_SUITE_DELEGATED_HASH && ssid < SEC_SUITE_DELEGATED_MAX)
+				return addr.GetDelegatedString().GetLength() + 2;
+			else
+				return 10; //"<xxx..xxx>"
+		}
+		else
+			return	SecuritySuite::IdToString(ss).GetLength() + 1 + 
+					(
+						(ss > SEC_SUITE_DELEGATED_HASH && ss < SEC_SUITE_DELEGATED_MAX)?
+							addr.GetDelegatedString().GetLength():
+							os::Base32EncodeLength(sizeof(SecureAddress))
+					);
 	}
+}
+
+uint32_t SecureAddress::String::Stringify(const SecureAddress& addr, char* buf, uint32_t buf_size, bool shorten)
+{
+	auto ss = addr.GetSecuritySuiteId();
+
+	if(ss == SEC_SUITE_UNKNOWN && addr.IsZero())
+	{
+		auto& str = shorten?sz_NullAddressShort:sz_NullAddress;
+		ASSERT(buf_size >= str.GetLength());
+		return str.CopyTo(buf);
+	}
+	else if(!addr.IsValid())
+	{
+		auto& str = shorten?sz_InvalidAddressShort:sz_InvalidAddress;
+		ASSERT(buf_size >= str.GetLength());
+		return str.CopyTo(buf);
+	}
+	else
+	{
+		if(shorten)
+		{
+			if(ss > SEC_SUITE_DELEGATED_HASH && ss < SEC_SUITE_DELEGATED_MAX)
+			{
+				auto str = addr.GetDelegatedString();
+				ASSERT(str.GetLength() + 2 <= buf_size);
+
+				return (rt::SS() + '<' + str + '>').CopyTo(buf);
+			}
+			else
+			{
+				ASSERT(9 <= buf_size);
+				uint32_t b32_len = os::Base32EncodeLength(sizeof(SecureAddress));
+				char* b32_buf = (char*)alloca(b32_len);
+
+				os::Base32CrockfordEncodeLowercase(b32_buf, &addr, sizeof(SecureAddress));
+				(rt::SS() + '<' + rt::String_Ref(b32_buf, 3) + '.' + '.' + rt::String_Ref(b32_buf + b32_len - 3, 3) + '>').CopyTo(buf);
+
+				return 10;
+			}
+		}
+		else
+		{
+			auto& name = SecuritySuite::IdToString(ss);
+
+			if(ss > SEC_SUITE_DELEGATED_HASH && ss < SEC_SUITE_DELEGATED_MAX)
+			{
+				auto str = addr.GetDelegatedString();
+				ASSERT(name.GetLength() + 1 + str.GetLength() <= buf_size);
+				return (str + ':' + name).CopyTo(buf);
+			}
+			else
+			{
+				uint32_t b32_len = os::Base32EncodeLength(sizeof(SecureAddress));
+				ASSERT(name.GetLength() + 1 + b32_len <= buf_size);
+
+				os::Base32CrockfordEncodeLowercase(buf, &addr, sizeof(SecureAddress));
+				buf[b32_len] = ':';
+				return name.CopyTo(buf + b32_len + 1) + 1 + b32_len;
+			}
+		}
+	}
+}
+
+SecureAddress::String::String(const SecureAddress& addr, bool shorten)
+{
+	_len = Stringify(addr, _StrBuf, sizeof(_StrBuf)-1, shorten);
+	_p = _StrBuf;
+	_StrBuf[_len] = 0;
 }
 
 SecuritySuite::SecuritySuite(SecSuiteId ss)
@@ -361,15 +369,14 @@ SecuritySuite::SecuritySuite()
 	_pEntry = nullptr;
 }
 
-#define SEC_SUITE_ITERATE	ITERATE(SEC_SUITE_ETHEREUM)			\
-                            ITERATE(SEC_SUITE_SM2)              \
-							ITERATE(SEC_SUITE_ED25519)			\
-							ITERATE(SEC_SUITE_REGISTERED_DAPP)	\
-							ITERATE(SEC_SUITE_REGISTERED_TOKEN)	\
-							ITERATE(SEC_SUITE_REGISTERED_NAME)	\
-							ITERATE(SEC_SUITE_REGISTERED_NONFUNGIBLE)	\
+#define SEC_SUITE_ITERATE	ITERATE(SEC_SUITE_ETHEREUM)				\
+                            ITERATE(SEC_SUITE_SM2)					\
+							ITERATE(SEC_SUITE_ED25519)				\
+							ITERATE(SEC_SUITE_DELEGATED_HASH)		\
+							ITERATE(SEC_SUITE_DELEGATED_NAME)		\
+							ITERATE(SEC_SUITE_DELEGATED_DAPP)		\
+							ITERATE(SEC_SUITE_DELEGATED_TOKEN)		\
 							ITERATE(SEC_SUITE_CONTRACT)	\
-							ITERATE(SEC_SUITE_CUSTOM)	\
 
 bool SecuritySuite::SetId(SecSuiteId ss)
 {

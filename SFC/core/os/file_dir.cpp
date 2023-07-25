@@ -386,7 +386,7 @@ bool os::File::Lock(bool no_wait)
 	OVERLAPPED lap;
 	rt::Zero(lap);
 
-	ULONGLONG size = GetFileSize();
+	//ULONGLONG size = GetFileSize();
 	if (::LockFileEx(_hFile, LOCKFILE_EXCLUSIVE_LOCK | (no_wait ? LOCKFILE_FAIL_IMMEDIATELY : 0)
 		, 0, MAXDWORD, MAXDWORD, &lap))
 	{
@@ -1113,31 +1113,16 @@ bool os::File::SetCurrentDirectory(LPCSTR path)
 #endif
 }
 
-os::CurrentDirectoryStack::~CurrentDirectoryStack()
+os::CurrentDirectoryScope::~CurrentDirectoryScope()
 {
-	if(_DirStack.GetSize())
-	{
-		os::File::SetCurrentDirectory(_DirStack[0]);
-		_DirStack.ShrinkSize(0);
-	}
+	os::File::SetCurrentDirectory(_PrevDir);
 }
 
-bool os::CurrentDirectoryStack::PushCurrentDirectory(LPCSTR dir)
+os::CurrentDirectoryScope::CurrentDirectoryScope(LPCSTR dir)
 {
-	os::File::ResolveRelativePath("./", _DirStack.push_back());
-	if(os::File::SetCurrentDirectory(dir))
-		return true;
-
-	_DirStack.pop_back();
-	return false;
-}
-
-void os::CurrentDirectoryStack::Pop()
-{
-	ASSERT(_DirStack.GetSize());
-	VERIFY(os::File::SetCurrentDirectory(_DirStack.last()));
-
-	_DirStack.pop_back();
+	os::File::ResolveRelativePath("./", _PrevDir);
+	os::File::CreateDirectories(dir, false);
+	os::File::SetCurrentDirectory(dir);
 }
 
 bool os::File::ProbeAvailableFilename(LPCSTR fn, rt::String& fn_out)
@@ -1235,7 +1220,7 @@ bool os::File::CopyPath(const rt::String_Ref& dest_, const rt::String_Ref& src_,
 				if(file_size == os::File::GetFileSize(dst))
 				{
 					os::File::GetPathTime(dst, nullptr, nullptr, &d_tm);
-					if(s_tm == d_tm) // file is same, skip
+					if(s_tm == d_tm) // skip if file is the same
 						return true;
 				}
 			}
@@ -1245,7 +1230,7 @@ bool os::File::CopyPath(const rt::String_Ref& dest_, const rt::String_Ref& src_,
 		if(!out.Open(dst, os::File::Normal_Write))return false;
 
 		// copy file
-		buf.SetSize(rt::min(file_size, ULONGLONG(64ULL*1024*1024))); // ULONGLONG defined in "predefines.h"; in non-windows x64 env, "uint64_t" is "unsigned long“, not "unsigned long long"
+		buf.SetSize(rt::min(file_size, ULONGLONG(64ULL*1024*1024)));
 
 		while(file_size)
 		{

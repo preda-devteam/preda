@@ -5,9 +5,10 @@
 
 #include <evmone/evmone.h>
 #include "EVMContractDataBase.h"
-#include "../../../SFC/core/ext/bignum/ttmath/ttmath.h"
 
 #include "../../../oxd_libsec/oxd_libsec.h"
+
+#ifdef ENABLE_EVM
 
 namespace preda_evm {
     struct CodeAndHash {
@@ -15,9 +16,7 @@ namespace preda_evm {
         evmc::bytes32 hash;
     };
 
-    using TTMathUint256 = ttmath::UInt<TTMATH_BITS(256)>;
-    
-    TTMathUint256 EVMCUintToTTMathUint(const evmc::uint256be &num)
+    TTMathUint256 EVMCUintToTTMathUint(const evmc::uint256be& num)
     {
         TTMathUint256 ret;
         uint8_t* b = (uint8_t*)ret.table;
@@ -38,7 +37,6 @@ namespace preda_evm {
         }
         return ret;
     }
-
 
     struct EVMCallStack
     {
@@ -746,7 +744,8 @@ namespace preda_evm {
         /// Get the block header hash (EVMC host method).
         evmc::bytes32 get_block_hash(int64_t block_number) const noexcept override
         {
-            auto* hash = m_ctx.GetBlockHash();
+			ASSERT(0);  // not supportted in dioxide 
+            auto* hash = m_ctx.GetPrevBlockHash();
             return RVMHashToEVMHash(*hash);
         }
 
@@ -830,7 +829,7 @@ namespace preda_evm {
             m_stack.back().accessed_storage_slots[addr].insert(key);
             return EVMC_ACCESS_COLD;
         }
-	};
+	}; // end of EVMHost
 
     evmc::Result EVMExecutionEngine::RunCreate(EVMHost& host, const evmc_message& msg)
     {
@@ -997,18 +996,28 @@ namespace preda_evm {
             return rvm::InvokeErrorCode::Unspecified;
         }
     }
-
-	rvm::InvokeResult EVMExecutionEngine::Invoke(rvm::ExecutionContext* executionContext, uint32_t gas_limit, const rvm::ContractDID *contract_deployment_id, rvm::OpCode opCode, const rvm::ConstData* args_serialized)
+    bool EVMExecutionEngine::ParseSolArgument(const rt::JsonObject& args_json, const ContractCompileData& compileData, uint64_t& value, std::string& data, rvm::OpCode opCode) const
+    {
+        if (opCode == rvm::OpCode(0))
+        {
+            value = args_json.GetValueAs<uint64_t>("value", 0);
+            return true;
+        }
+        else
+        {
+            return compileData.ComposeInputData(args_json, value, data);
+        }
+    }
+    rvm::InvokeResult EVMExecutionEngine::Invoke(rvm::ExecutionContext* executionContext, uint32_t gas_limit, const rvm::ContractModuleID *contract_deployment_id, rvm::OpCode opCode, const rvm::ConstData* args_serialized)
 	{
         const rt::String_Ref args_json_str((const char*)args_serialized->DataPtr, args_serialized->DataSize);
         const rt::JsonObject args_json = args_json_str;
-
         rvm::InvokeResult ret;
         ret.SubCodeHigh = 0;
         ret.SubCodeLow = 0;
         ret.GasBurnt = 1;
 
-        ContractDID deployId = _details::RvmCDIDToEVMCDID(contract_deployment_id);
+        ContractModuleID deployId = _details::RvmCDIDToEVMCDID(contract_deployment_id);
         const ContractDatabaseEntry* entry = m_pDB->FindContractEntry(deployId);
 
         if (!entry)
@@ -1020,19 +1029,26 @@ namespace preda_evm {
         EVMHost host(*this, *executionContext);
 
         evmc::address origin = host.get_tx_context().tx_origin;
+        uint64_t value = 0;
+        rt::String_Ref dataTmp = args_json.GetValue("data");
+        std::string data(dataTmp.Begin(), dataTmp.GetLength());
+        if(data.empty() && !ParseSolArgument(args_json, entry->compileData, value, data, opCode))
+		{
+            ret.Code = rvm::InvokeErrorCode::InvalidFunctionArgments;
+			return ret;
+		}
 
-        if(opCode == rvm::OpCode(1))
+        if(opCode == rvm::OpCode(0))
         {
             // mint ETH
             evmc::uint256be current_balance = host.get_stack_back().balances[origin];
             evmc::uint256be current_contract_balance = host.get_stack_back().balances[entry->address];
-			uint64_t value = args_json.GetValueAs<uint64_t>("value", 0);
             host.get_stack_back().balances[origin] = TTMathUintToEVMCUint(EVMCUintToTTMathUint(current_balance) + ttmath::uint(value));
             host.get_stack_back().balances[entry->address] = TTMathUintToEVMCUint(EVMCUintToTTMathUint(current_contract_balance) + ttmath::uint(value));
             ret.Code = rvm::InvokeErrorCode::Success;
             return ret;
         }
-        else if (opCode == rvm::OpCode(0))
+        else if (opCode == rvm::OpCode(1))
         {
             evmc::uint256be current_balance = host.get_balance(origin);
             if (EVMCUintToTTMathUint(current_balance) < TTMathUint256(gas_limit) * TTMathUint256(GAS_PRICE)) {
@@ -1040,10 +1056,8 @@ namespace preda_evm {
                 return ret;
             }
 
-
             host.get_stack_back().nonces[origin] = TTMathUintToEVMCUint(EVMCUintToTTMathUint(host.get_nonce(origin)).AddOne());
 
-            rt::String_Ref data = args_json.GetValue("data");
             rt::String data_binary;
 			if (!os::Base16Decode(data, data_binary))
 			{
@@ -1059,7 +1073,7 @@ namespace preda_evm {
             msg.sender = origin;
             msg.input_data = (uint8_t*)data_binary.Begin();
             msg.input_size = data_binary.GetLength();
-            msg.value = evmc::uint256be(args_json.GetValueAs<uint64_t>("value", 0));
+            msg.value = evmc::uint256be(value);
             msg.recipient = entry->address;
             msg.code_address = entry->address;
             evmc::Result result = Run(host, msg);
@@ -1078,9 +1092,9 @@ namespace preda_evm {
             return ret;
         }
 	}
-	rvm::InvokeResult EVMExecutionEngine::Deploy(rvm::ExecutionContext* exec, uint32_t gas_limit, rvm::CompiledContracts* linked, rvm::ContractDID* contract_deployment_ids, rvm::InterfaceDID** interface_deployment_ids, rvm::LogMessageOutput* log_msg_output)
+	rvm::InvokeResult EVMExecutionEngine::Deploy(rvm::ExecutionContext* exec, uint32_t gas_limit, rvm::CompiledModules* linked, const rvm::ConstData* deploy_args, rvm::ContractModuleID* contract_deployment_ids, rvm::InterfaceModuleID** interface_deployment_ids, rvm::LogMessageOutput* log_msg_output)
 	{
-		CompiledContracts* pCompiledContracts = (CompiledContracts*)linked;
+		CompiledModules* pCompiledContracts = (CompiledModules*)linked;
 		assert(pCompiledContracts->IsLinked());
 
 		uint32_t numContracts = linked->GetCount();
@@ -1180,3 +1194,5 @@ namespace preda_evm {
 	{
 	}
 }
+
+#endif

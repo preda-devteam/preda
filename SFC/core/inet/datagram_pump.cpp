@@ -137,7 +137,7 @@ bool AsyncDatagramCoreBase::_AddObject(SOCKET obj, LPVOID cookie)
 	ASSERT(IsRunning());
 #if defined(PLATFORM_WIN)
 	HANDLE h = CreateIoCompletionPort((HANDLE)obj, _Core, (ULONG_PTR)cookie, 0);
-	DWORD e = ::GetLastError();
+	//DWORD e = ::GetLastError();
 	return _Core == h;
 #elif defined(PLATFORM_IOS) || defined(PLATFORM_MAC)
 	os::WriteLock wmutex(&fdslock);
@@ -245,7 +245,7 @@ bool AsyncDatagramCoreBase::_PickUpEvent(Event& e)
     if(!IsRunning())return false;
 
 #if defined(PLATFORM_WIN)
-	OVERLAPPED*	pOverlapped = NULL;
+	//OVERLAPPED*	pOverlapped = NULL;
 	::GetQueuedCompletionStatus(_Core, 
 								&e.bytes_transferred, 
 								(PULONG_PTR)&e.cookie,

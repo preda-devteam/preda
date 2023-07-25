@@ -1,6 +1,7 @@
 #pragma once
-
+#ifdef ENABLE_EVM
 #include "../../native/abi/vm_interfaces.h"
+#include "EVMContractData.h"
 #ifdef _WIN32
 	#pragma warning(push)
 	#pragma warning(disable:4068 4819)
@@ -53,13 +54,13 @@ namespace preda_evm {
 		EVMExecutionEngine(ContractDatabase* pDB);
 		virtual ~EVMExecutionEngine() {}
 
-		virtual rvm::InvokeResult Invoke(rvm::ExecutionContext* executionContext, uint32_t gas_limit, const rvm::ContractDID *contract_deployment_id, rvm::OpCode opCode, const rvm::ConstData* args_serialized) override;
-		virtual rvm::InvokeResult Deploy(rvm::ExecutionContext* exec, uint32_t gas_limit, rvm::CompiledContracts* linked, rvm::ContractDID* contract_deployment_ids, rvm::InterfaceDID** interface_deployment_ids, rvm::LogMessageOutput* log_msg_output) override;
+		virtual rvm::InvokeResult Invoke(rvm::ExecutionContext* executionContext, uint32_t gas_limit, const rvm::ContractModuleID *contract_deployment_id, rvm::OpCode opCode, const rvm::ConstData* args_serialized) override;
+		virtual rvm::InvokeResult Deploy(rvm::ExecutionContext* exec, uint32_t gas_limit, rvm::CompiledModules* linked, const rvm::ConstData* deploy_args, rvm::ContractModuleID* contract_deployment_ids, rvm::InterfaceModuleID** interface_deployment_ids, rvm::LogMessageOutput* log_msg_output) override;
 
 		virtual void Release() override;
 		virtual void GetExceptionMessage(uint16_t except, rvm::StringStream* str) const override;
+	private:
+			bool ParseSolArgument(const rt::JsonObject& args_json, const ContractCompileData& compileData, uint64_t& value, std::string& data, rvm::OpCode opCode) const;
 	};
 }
-
-
-
+#endif

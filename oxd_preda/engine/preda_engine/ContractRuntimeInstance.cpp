@@ -4,7 +4,7 @@
 
 class ContractModuleDLL : public ContractModule {
 public:
-	typedef void* (*FNCreateContractInstance)(prlrt::IRuntimeInterface* ____pInterface);
+	typedef void* (*FNCreateContractInstance)(prlrt::IRuntimeInterface* ____pInterface, uint64_t contractId, const uint64_t *importedContractIds, uint32_t numImportedContracts);
 	typedef void* (*FNDestroyContractInstance)(void* pContractInstancce);
 	typedef bool(*FNMapContractContextToInstance)(void* pInstance, prlrt::ContractContextType type, const uint8_t* buffer, uint32_t bufferSize);
 	typedef uint32_t(*FNTransactionCall)(void* pContractInstance, uint32_t functionId, const uint8_t* args, uint32_t args_size);
@@ -29,7 +29,7 @@ private:
 	ContractModuleDLL& m_dll;
 public:
 	ContractModuleDLLLoaded(ContractModuleDLL& dll) : m_dll(dll) {}
-	std::unique_ptr<ContractRuntimeInstance> NewInstance(CExecutionEngine& engine) override;
+	std::unique_ptr<ContractRuntimeInstance> NewInstance(CExecutionEngine& engine, rvm::ContractVersionId contractId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts) override;
 };
 
 std::unique_ptr<ContractModuleLoaded> ContractModuleDLL::LoadToEngine(CExecutionEngine&) {
@@ -37,16 +37,13 @@ std::unique_ptr<ContractModuleLoaded> ContractModuleDLL::LoadToEngine(CExecution
 }
 
 std::unique_ptr<ContractModule> ContractModule::FromLibrary(const ContractDatabaseEntry& entry, HANDLE mod) {
-	typedef void (*FNInitTables)(uint64_t curContractId, const uint64_t* importedContractIds);
+	typedef void (*FNInitTables)();
 	std::string exportUniqueStr = entry.compileData.exportUniqueString;
 	FNInitTables InitTables = (FNInitTables)os::GetDynamicLibrarySymbol(mod, ("Contract_" + exportUniqueStr + "_InitTables").c_str());
 	if (InitTables == nullptr)
 		return nullptr;
 	{
-		const uint64_t curContractId = uint64_t(entry.deployData.contractId);
-		static_assert(std::is_same_v<std::underlying_type_t<decltype(entry.deployData.contractId)>, std::remove_const_t<std::remove_reference_t<decltype(curContractId)>>>);
-		const uint64_t* pImportedContractIds = entry.deployData.importedContractIds.size() > 0 ? (const uint64_t*)(&entry.deployData.importedContractIds[0]) : nullptr;
-		InitTables(curContractId, pImportedContractIds);
+		InitTables();
 	}
 
 	std::unique_ptr<ContractModuleDLL> dllModule = std::make_unique<ContractModuleDLL>();
@@ -103,8 +100,10 @@ public:
 };
 
 
-std::unique_ptr<ContractRuntimeInstance> ContractModuleDLLLoaded::NewInstance(CExecutionEngine& engine)  {
-	void* pInstance = m_dll.fnCreateInstance(&engine.runtimeInterface());
+std::unique_ptr<ContractRuntimeInstance> ContractModuleDLLLoaded::NewInstance(CExecutionEngine& engine, rvm::ContractVersionId contractId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts)
+{
+	static_assert(sizeof(uint64_t) == sizeof(rvm::ContractVersionId), "rvm::ContractVersionId is no longer a 64-bit integer, need to change contract CreateInstance() argument type");
+	void* pInstance = m_dll.fnCreateInstance(&engine.runtimeInterface(), uint64_t(contractId), (const uint64_t*)importedContractIds, numImportedContracts);
 	if (!pInstance) {
 		return nullptr;
 	}
@@ -116,7 +115,7 @@ struct WASMEntryPoints {
 
 	wasmtime::Instance wasmInstance;
 
-	wasmtime::TypedFunc<WasmPtrT, WasmPtrT> fnCreateContract;
+	wasmtime::TypedFunc<std::tuple<WasmPtrT, uint64_t, WasmPtrT, uint32_t>, WasmPtrT> fnCreateContract;
 	wasmtime::TypedFunc<WasmPtrT, std::monostate> fnDestroyContract;
 	wasmtime::TypedFunc<std::tuple<WasmPtrT, uint32_t, WasmPtrT, uint32_t>, uint32_t> fnMapContractContextToInstance;
 	wasmtime::TypedFunc<std::tuple<WasmPtrT, uint32_t, WasmPtrT, uint32_t>, uint32_t> fnTransactionCall;
@@ -124,7 +123,7 @@ struct WASMEntryPoints {
 	wasmtime::TypedFunc<std::tuple<WasmPtrT, uint32_t>, uint32_t> fnGetContractSerializeSize;
 	wasmtime::TypedFunc<std::tuple<WasmPtrT, uint32_t, WasmPtrT>, uint32_t> fnSerializeOutContract;
 
-	using FnInitTables = wasmtime::TypedFunc<std::tuple<uint64_t, WasmPtrT>, std::monostate>;
+	using FnInitTables = wasmtime::TypedFunc<std::monostate, std::monostate>;
 };
 
 class ContractModuleWASM : public ContractModule {
@@ -141,7 +140,7 @@ private:
 	WASMEntryPoints m_entry_points;
 public:
 	ContractModuleWASMLoaded(WASMEntryPoints entry_points) : m_entry_points(std::move(entry_points)) {}
-	std::unique_ptr<ContractRuntimeInstance> NewInstance(CExecutionEngine&) override;
+	std::unique_ptr<ContractRuntimeInstance> NewInstance(CExecutionEngine&, rvm::ContractVersionId contractId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts) override;
 };
 
 class WASMMemory {
@@ -241,15 +240,7 @@ std::unique_ptr<ContractModuleLoaded> ContractModuleWASM::LoadToEngine(CExecutio
 		return nullptr;
 
 	{
-		WasmPtrT importedContractIds_offset = 0;
-		if (m_entry.deployData.importedContractIds.size() > 0) {
-			auto& ids = m_entry.deployData.importedContractIds;
-			WASMMemory mem(*rt, uint32_t(sizeof(ids[0]) * ids.size()));
-			std::copy(ids.begin(), ids.end(), (rvm::ContractId*)mem.HostPtr());
-			importedContractIds_offset = mem.Ptr();
-			mem.forget();
-		}
-		if (!fnInitTables->call(rt->wasm_store(), { (uint64_t)m_entry.deployData.contractId, importedContractIds_offset })) {
+		if (!fnInitTables->call(rt->wasm_store(), {})) {
 			return nullptr;
 		}
 	}
@@ -429,14 +420,24 @@ inline T WasmPtrToPtr(wasmtime::Span<uint8_t> mem, WasmPtrT offset) {
 	return offset == 0 ? nullptr : (T)(mem.begin() + offset);
 }
 
-std::unique_ptr<ContractRuntimeInstance> ContractModuleWASMLoaded::NewInstance(CExecutionEngine& engine)
+std::unique_ptr<ContractRuntimeInstance> ContractModuleWASMLoaded::NewInstance(CExecutionEngine& engine, rvm::ContractVersionId contractId, const rvm::ContractVersionId *importedContractIds, uint32_t numImportedContracts)
 {
 	WASMRuntime *rt = engine.wasm_runtime();
 	if (!rt) {
 		return nullptr;
 	}
 
-	auto maybe_contractInstance = m_entry_points.fnCreateContract.call(m_entry_points.store, { 0 });
+	static_assert(sizeof(uint64_t) == sizeof(rvm::ContractVersionId), "rvm::ContractVersionId is no longer a 64-bit integer, need to change contract CreateInstance() argument type");
+
+	WasmPtrT importedContractIds_offset = 0;
+	if (numImportedContracts > 0) {
+		WASMMemory mem(*rt, uint32_t(sizeof(importedContractIds[0]) * numImportedContracts));
+		std::copy(importedContractIds, importedContractIds + numImportedContracts, (rvm::ContractVersionId*)mem.HostPtr());
+		importedContractIds_offset = mem.Ptr();
+		mem.forget();
+	}
+
+	auto maybe_contractInstance = m_entry_points.fnCreateContract.call(m_entry_points.store, { 0, uint64_t(contractId), importedContractIds_offset, numImportedContracts });
 	if (!maybe_contractInstance) {
 		std::string msg = maybe_contractInstance.err().message();
 		return nullptr;

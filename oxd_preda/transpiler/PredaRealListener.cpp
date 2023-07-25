@@ -65,7 +65,7 @@ transpiler::DefinedIdentifierPtr PredaRealListener::DefineFunctionLocalVariable(
 	return ret;
 }
 
-static void GenerateCodeForInterfaceFunction(CodeSerializer& codeSerializer, const std::string &interfaceName, const std::string& name, const transpiler::FunctionSignature& functionSignature, uint32_t interfaceFunctionIdx)
+static void GenerateCodeForInterfaceFunction(CodeSerializer& codeSerializer, int64_t contractImportSlot, uint32_t interfaceSlot, const std::string& name, const transpiler::FunctionSignature& functionSignature, uint32_t interfaceFunctionIdx)
 {
 	{
 		std::string line;
@@ -105,7 +105,7 @@ static void GenerateCodeForInterfaceFunction(CodeSerializer& codeSerializer, con
 			line = "return prlrt::interface_call<" + functionSignature.returnType.baseConcreteType->outputFullName + ">(";
 		else
 			line = "prlrt::interface_call_no_ret(";
-		line += "contract_id, \"" + interfaceName + "\", " + std::to_string(interfaceFunctionIdx);
+		line += "contract_id, " + std::to_string(contractImportSlot) + ", " + std::to_string(interfaceSlot) + ", " + std::to_string(interfaceFunctionIdx);
 		for (size_t j = 0; j < functionSignature.parameters.size(); j++)
 			line += ", " + functionSignature.parameters[j]->outputName;
 		line += ");";
@@ -143,8 +143,9 @@ ConcreteTypePtr PredaRealListener::ImportContractSymbols(transpiler::IContractSy
 	m_transpilerCtx.thisPtrStack.Push(contractType, false);
 	AUTO_POP_THIS_PTR_STACK;
 
-	codeSerializer.AddLine("struct " + contractType->outputFullName + " {");
+	codeSerializer.AddLine("struct " + contractType->outputFullName + " : public prlrt::interface_struct {");
 	codeSerializer.PushIndent();
+	codeSerializer.AddLine("using interface_struct::interface_struct;");		// inherit the constructors from base class
 
 	// enums
 	{
@@ -285,11 +286,18 @@ ConcreteTypePtr PredaRealListener::ImportContractSymbols(transpiler::IContractSy
 				signature.parameters.push_back(transpiler::Allocator::New<transpiler::DefinedIdentifier>(m_transpilerCtx.GetBuiltInIntegerType(64, false), true, true, "contract_id", 0));
 				bool res = interfaceType->DefineMemberFunction("@constructor", signature, false) != nullptr;
 				assert(res);
+
+				// __id()
+				res = res & interfaceType->DefineMemberFunction("__id", transpiler::FunctionSignature(
+					transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInIntegerType(64, false), true, false),
+					std::vector<transpiler::DefinedIdentifierPtr>(),
+					uint32_t(transpiler::FunctionFlags::IsConst)
+				), true) != nullptr;
 			}
 
 			codeSerializer.AddLine("struct " + interfaceType->outputFullName.substr(interfaceType->outputFullName.rfind("::") + 2) + " : public prlrt::interface_struct {");
 			codeSerializer.PushIndent();
-			codeSerializer.AddLine("INTERFACE_INHERIT");
+			codeSerializer.AddLine("using interface_struct::interface_struct;");		// inherit the constructors from base class
 
 			uint32_t numFunctions = pContractSymbols->GetNumExportedInterfaceFunctions(interfaceIdx);
 			for (uint32_t functionIdx = 0; functionIdx < numFunctions; functionIdx++)
@@ -347,7 +355,7 @@ ConcreteTypePtr PredaRealListener::ImportContractSymbols(transpiler::IContractSy
 				if (pDefinedFunction == nullptr)
 					return nullptr;
 
-				GenerateCodeForInterfaceFunction(codeSerializer, interfaceType->exportName, pDefinedFunction->outputName, functionSignature, functionIdx);
+				GenerateCodeForInterfaceFunction(codeSerializer, int64_t(contractImportSlot), interfaceIdx, pDefinedFunction->outputName, functionSignature, functionIdx);
 			}
 
 			codeSerializer.PopIndent();
@@ -425,12 +433,12 @@ ConcreteTypePtr PredaRealListener::ImportContractSymbols(transpiler::IContractSy
 			}
 
 			
-			transpiler::DefinedIdentifierPtr pDefinedFunction = contractType->DefineMemberFunction(functionName, functionSignature, true);
+			transpiler::DefinedIdentifierPtr pDefinedFunction = contractType->DefineMemberFunction(functionName, functionSignature, false);
 			if (pDefinedFunction == nullptr)
 				return nullptr;
 
 			{
-				std::string line = "static ";		// functions in imported contracts are all static
+				std::string line;
 				if (functionSignature.returnType.baseConcreteType == nullptr)
 				{
 					line += "void";
@@ -464,7 +472,7 @@ ConcreteTypePtr PredaRealListener::ImportContractSymbols(transpiler::IContractSy
 					line = "return prlrt::cross_call<" + functionSignature.returnType.baseConcreteType->outputFullName + ">(";
 				else
 					line = "prlrt::cross_call_no_ret(";
-				line += "imported_contract_ids[" + std::to_string(contractImportSlot) + "], " + std::to_string(functionIdx);
+				line += "contract_id, " + std::to_string(contractImportSlot) + ", " + std::to_string(functionIdx);
 				for (size_t i = 0; i < functionSignature.parameters.size(); i++)
 					line += ", " + functionSignature.parameters[i]->outputName;
 				line += ");";
@@ -479,16 +487,31 @@ ConcreteTypePtr PredaRealListener::ImportContractSymbols(transpiler::IContractSy
 		}
 	}
 
+	// contract type constructor, takes a single uint64 contract id
+	{
+		transpiler::FunctionSignature signature;
+
+		//function return type
+		signature.returnType = transpiler::QualifiedConcreteType(contractType, true, false);		// struct constructor returns a non-lvalue const instance
+
+		signature.flags = uint32_t(transpiler::FunctionFlags::IsConst);
+
+		// constructor with uint64 contract id
+		signature.parameters.push_back(transpiler::Allocator::New<transpiler::DefinedIdentifier>(m_transpilerCtx.GetBuiltInIntegerType(64, false), true, true, "contract_id", 0));
+		bool res = contractType->DefineMemberFunction("@constructor", signature, false) != nullptr;
+		assert(res);
+	}
+
 	// __id()
 	{
 		transpiler::DefinedIdentifierPtr pDefinedFunction = contractType->DefineMemberFunction("__id", transpiler::FunctionSignature(
 			transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInIntegerType(64, false), true, false),
 			std::vector<transpiler::DefinedIdentifierPtr>(),
 			uint32_t(transpiler::FunctionFlags::IsConst)
-			), true);
+			), false);
 		if (pDefinedFunction == nullptr)
 			return nullptr;
-		codeSerializer.AddLine("static " + m_transpilerCtx.GetBuiltInIntegerType(64, false)->outputFullName + " __prli___id() { return imported_contract_ids[" + std::to_string(contractImportSlot) + "]; }");
+		codeSerializer.AddLine(m_transpilerCtx.GetBuiltInIntegerType(64, false)->outputFullName + " __prli___id() { return contract_id; }");
 	}
 
 	// __address()
@@ -497,31 +520,41 @@ ConcreteTypePtr PredaRealListener::ImportContractSymbols(transpiler::IContractSy
 			transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInAddressType(), true, false),
 			std::vector<transpiler::DefinedIdentifierPtr>(),
 			uint32_t(transpiler::FunctionFlags::IsConst)
-			), true);
+			), false);
 		if (pDefinedFunction == nullptr)
 			return nullptr;
-		codeSerializer.AddLine("static " + m_transpilerCtx.GetBuiltInAddressType()->outputFullName + " __prli___address() { " + m_transpilerCtx.GetBuiltInAddressType()->outputFullName + " ret; ret.SetAsContract(imported_contract_ids[" + std::to_string(contractImportSlot) + "]); return ret; }");
+		codeSerializer.AddLine(m_transpilerCtx.GetBuiltInAddressType()->outputFullName + " __prli___address() { " + m_transpilerCtx.GetBuiltInAddressType()->outputFullName + " ret; ret.SetAsContract(contract_id); return ret; }");
 	}
-
-	// constructor and ::__self() is no longer needed as now imported contracts are not instantiated any more, their function are accessed as static functions
-	//// constructor
-	//codeSerializer.AddLine(contractType->outputFullName + "() {}");
-
-	//// __self()
-	//transpiler::DefinedIdentifierPtr pDefinedFunction = contractType->DefineMemberFunction("__self", transpiler::FunctionSignature(
-	//		transpiler::QualifiedConcreteType(contractType, true, false),
-	//		std::vector<transpiler::DefinedIdentifierPtr>(),
-	//		uint32_t(transpiler::PredaFunctionFlags::IsConst)
-	//	), true);
-	//if (pDefinedFunction == nullptr)
-	//	return nullptr;
-	//// TODO: currently we don't support getting contract instances from other addresses. Hence __self could not the default constructor.
-	////       in the future, this needs to be initialized with _transactions.get_self_address() to differentiate from other instances.
-	//codeSerializer.AddLine("static " + contractType->outputFullName + " __prli___self() { return " + contractType->outputFullName + "(); }");
 
 	codeSerializer.PopIndent();
 	codeSerializer.AddLine("};");
-	codeSerializer.AddLine("");
+
+	// import contract constructor, this is the contract's constructor, not the contract type constructor
+	// constructor import doesn't generate any code and only grabs its parameter list, hence comes last
+	{
+		std::vector<ConcreteTypePtr> paramTypes;
+		int32_t onDeployFuncIdx = pContractSymbols->GetGlobalDeployFunctionExportIndex();
+		if (onDeployFuncIdx != -1)
+		{
+			if (onDeployFuncIdx >= (int32_t)pContractSymbols->GetNumExportedFunctions())
+				return nullptr;
+			uint32_t numParams = pContractSymbols->GetExportedFunctionNumParameters(onDeployFuncIdx);
+			paramTypes.resize(numParams);
+			for (uint32_t paramIdx = 0; paramIdx < numParams; paramIdx++)
+			{
+				std::string paramTypeStr = pContractSymbols->GetExportedFunctionParameterType(onDeployFuncIdx, paramIdx);
+				if (paramTypeStr.length() >= 2 && paramTypeStr[0] == 'c' && paramTypeStr[1] == ' ')
+					paramTypes[paramIdx] = GetTypeFromExportedTypeName(paramTypeStr.c_str() + 2);
+				else
+					paramTypes[paramIdx] = GetTypeFromExportedTypeName(paramTypeStr.c_str());
+				if (paramTypes[paramIdx] == nullptr)
+					return nullptr;
+			}
+		}
+		if (!m_expressionParser.AddImportedContract(contractType, paramTypes, uint32_t(contractImportSlot)))
+			return nullptr;
+	}
+
 	return contractType;
 }
 
@@ -594,9 +627,6 @@ void PredaRealListener::ProcessImportDirective(const PredaParser::ImportDirectiv
 
 void PredaRealListener::ProcessDirectives(const std::vector<PredaParser::DirectiveContext *> &vDirectiveCtx)
 {
-	codeSerializer.AddLine("static uint64_t cur_contract_id = 0;");
-	codeSerializer.AddLine("static uint64_t *imported_contract_ids = nullptr;");
-
 	for (auto it : vDirectiveCtx)
 	{
 		if (it->importDirective())
@@ -728,10 +758,10 @@ bool PredaRealListener::ProcessLocalVariableDeclaration(PredaParser::LocalVariab
 		}
 	}
 
-	if (varType->typeCategory == transpiler::ConcreteType::ContractType)
+	if (varType == m_transpilerCtx.thisPtrStack.stack[0].thisType)
 	{
 		m_errorPortal.SetAnchor(ctx->typeNameOrAuto()->start);
-		m_errorPortal.AddIllegalUseOfContractTypeError();
+		m_errorPortal.AddUseCurrentContractTypeError();
 	}
 
 	transpiler::DefinedIdentifierPtr pDefinedVariable = DefineFunctionLocalVariable(varType, ctx->identifier(), bIsConst, 0);
@@ -1291,17 +1321,26 @@ void PredaRealListener::exitStatement(PredaParser::StatementContext *ctx)
 	}
 }
 
-bool PredaRealListener::ReservedFunctions_OnDeclare(std::string &name, transpiler::FunctionSignature &signature)
+bool PredaRealListener::ReservedFunctions_OnDeclare(PredaParser::FunctionDeclarationContext* ctx, std::string &name, transpiler::FunctionSignature &signature)
 {
 	bool bMustBeShard = false;
 	bool bMustBeGlobal = false;
-	bool bMayNotHaveParam = false;
 	bool bMustHaveSingleBoolParam = false;
 
 	if (name == "on_deploy")
 	{
 		bMustBeGlobal = true;
-		bMayNotHaveParam = true;
+
+		for (uint32_t i = 0; i < signature.parameters.size(); i++)
+		{
+			if ((signature.parameters[i]->qualifiedType.baseConcreteType->nestingPropagatableFlags & uint32_t(transpiler::PredaTypeNestingPropagatableFlags::MoveOnly)) != 0)
+			{
+				m_errorPortal.SetAnchor(ctx->functionParameterList()->functionParameter()[i]->typeName()->start);
+				m_errorPortal.AddMoveOnlyParamOfTxnFunctionOrConstructorError();
+				return false;
+			}
+		}
+
 	}
 	else if (name == "on_scaleout")
 	{
@@ -1313,6 +1352,7 @@ bool PredaRealListener::ReservedFunctions_OnDeclare(std::string &name, transpile
 
 	signature.flags |= uint32_t(transpiler::FunctionFlags::CallableFromSystem);
 
+	m_errorPortal.SetAnchor(ctx->identifier()->start);
 	if (bMustBeShard && transpiler::ScopeType(signature.flags & uint32_t(transpiler::ScopeType::Mask)) != transpiler::ScopeType::Shard)
 	{
 		m_errorPortal.AddReservedFunctionMustBeShardError(name);
@@ -1331,11 +1371,6 @@ bool PredaRealListener::ReservedFunctions_OnDeclare(std::string &name, transpile
 		return false;
 	}
 
-	if (bMayNotHaveParam && signature.parameters.size() != 0)
-	{
-		m_errorPortal.AddReservedFunctionMayNotHaveParametersError(name);
-		return false;
-	}
 	if (bMustHaveSingleBoolParam && (signature.parameters.size() != 1 || signature.parameters[0]->qualifiedType.baseConcreteType != m_transpilerCtx.GetBuiltInBoolType()))
 	{
 		m_errorPortal.AddReservedFunctionMustHaveSingleBooleanParameterError(name);
@@ -1355,7 +1390,14 @@ void PredaRealListener::ReservedFunctions_PostExport(const std::string &name, co
 {
 	int32_t *pTarget = nullptr;
 	if (name == "on_deploy")
+	{
 		pTarget = &m_globalDeployFunctionExportIdx;
+		if (*pTarget != -1)
+		{
+			m_errorPortal.AddMultipleConstructorError();
+			return;
+		}
+	}
 	else if (name == "on_scaleout")
 		pTarget = &m_shardScaleOutFunctionExportIdx;
 
@@ -1363,7 +1405,7 @@ void PredaRealListener::ReservedFunctions_PostExport(const std::string &name, co
 	{
 		if (*pTarget != -1)
 		{
-			m_errorPortal.AddInternalError("reserved function " + name + "redefinition. Probably a compiler bug.");
+			m_errorPortal.AddInternalError("reserved function " + name + " redefinition. Probably a compiler bug.");
 			return;
 		}
 
@@ -1384,12 +1426,16 @@ transpiler::ScopeType GetScopeFromScopeCtx(PredaParser::ScopeContext* ctx)
 	else if (ctx->UintType())
 	{
 		std::string uintType = ctx->UintType()->getText();
-		if (uintType == "uint16")
-			return transpiler::ScopeType::Uint16;
-		else if (uintType == "uint32")
+		if (uintType == "uint32")
 			return transpiler::ScopeType::Uint32;
 		else if (uintType == "uint64")
 			return transpiler::ScopeType::Uint64;
+		else if (uintType == "uint96")
+			return transpiler::ScopeType::None;			// uint96 scope not enabled at language level yet
+		else if (uintType == "uint128")
+			return transpiler::ScopeType::Uint128;
+		else if (uintType == "uint160")
+			return transpiler::ScopeType::None;			// uint160 scope not enabled at language level yet
 		else if (uintType == "uint256")
 			return transpiler::ScopeType::Uint256;
 		else if (uintType == "uint512")
@@ -1427,12 +1473,6 @@ bool PredaRealListener::GenFunctionSignatureFromFunctionDeclareCtx(transpiler::F
 		ConcreteTypePtr pType = m_identifierHub.GetTypeFromTypeNameContext(declCtx->functionReturnTypeName()->typeName());
 		if (pType == nullptr)
 			return false;
-		if (pType->typeCategory == transpiler::ConcreteType::ContractType)
-		{
-			m_errorPortal.SetAnchor(declCtx->functionReturnTypeName()->typeName()->start);
-			m_errorPortal.AddIllegalUseOfContractTypeError();
-			return  false;
-		}
 
 		outSig.returnType = transpiler::QualifiedConcreteType(pType, declCtx->functionReturnTypeName()->ConstantKeyword() != nullptr, false);
 	}
@@ -1476,17 +1516,11 @@ bool PredaRealListener::GenFunctionSignatureFromFunctionDeclareCtx(transpiler::F
 		ConcreteTypePtr pType = m_identifierHub.GetTypeFromTypeNameContext(vParamCtx[i]->typeName());
 		if (pType == nullptr)
 			return false;
-		if (pType->typeCategory == transpiler::ConcreteType::ContractType)
-		{
-			m_errorPortal.SetAnchor(vParamCtx[i]->typeName()->start);
-			m_errorPortal.AddIllegalUseOfContractTypeError();
-			return false;
-		}
 
 		if (bIsTransactionFunction && (pType->nestingPropagatableFlags & uint32_t(transpiler::PredaTypeNestingPropagatableFlags::MoveOnly)) != 0)
 		{
 			m_errorPortal.SetAnchor(vParamCtx[i]->typeName()->start);
-			m_errorPortal.AddMoveOnlyParamOfTxnFunctionError();
+			m_errorPortal.AddMoveOnlyParamOfTxnFunctionOrConstructorError();
 			return false;
 		}
 
@@ -1544,8 +1578,7 @@ void PredaRealListener::ForwardDeclareFunction(PredaParser::FunctionDefinitionCo
 	// reserved functions are only for contracts
 	if (thisType->typeCategory == transpiler::ConcreteType::ContractType)
 	{
-		m_errorPortal.SetAnchor(declCtx->identifier()->start);
-		if (!ReservedFunctions_OnDeclare(functionName, functionSignature))
+		if (!ReservedFunctions_OnDeclare(declCtx, functionName, functionSignature))
 			return;
 	}
 
@@ -1612,6 +1645,16 @@ void PredaRealListener::DefineInterface(PredaParser::InterfaceDefinitionContext*
 		bool res = interfaceType->DefineMemberFunction("@constructor", signature, false) != nullptr;
 		assert(res);
 	}
+
+	// __id()
+	{
+		transpiler::DefinedIdentifierPtr pDefinedFunction = interfaceType->DefineMemberFunction("__id", transpiler::FunctionSignature(
+			transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInIntegerType(64, false), true, false),
+			std::vector<transpiler::DefinedIdentifierPtr>(),
+			uint32_t(transpiler::FunctionFlags::IsConst)
+		), true);
+	}
+
 
 	std::vector<PredaParser::FunctionDeclarationContext*> functionDeclarations = ctx->functionDeclaration();
 	for (uint32_t i = 0; i < uint32_t(functionDeclarations.size()); i++)
@@ -1682,13 +1725,6 @@ void PredaRealListener::DefineStateVariable(PredaParser::StateVariableDeclaratio
 		return;
 	}
 
-	if (pType->typeCategory == transpiler::ConcreteType::ContractType)
-	{
-		m_errorPortal.SetAnchor(ctx->typeName()->start);
-		m_errorPortal.AddIllegalUseOfContractTypeError();
-		return;
-	}
-
 	assert(m_transpilerCtx.thisPtrStack.stack.size() > 0);
 
 	if (!m_identifierHub.ValidateNewIdentifier(ctx->identifier()))
@@ -1714,7 +1750,7 @@ void PredaRealListener::DefineConstVariable(PredaParser::ConstVariableDeclaratio
 	if (pType->typeCategory != transpiler::ConcreteType::ValueType && pType->typeCategory != transpiler::ConcreteType::ReferenceType && pType->typeCategory != transpiler::ConcreteType::EnumType)
 	{
 		m_errorPortal.SetAnchor(ctx->typeName()->start);
-		m_errorPortal.InvalidConstMemberVarType();
+		m_errorPortal.AddInvalidConstMemberVarTypeError();
 		return;
 	}
 
@@ -1785,13 +1821,6 @@ void PredaRealListener::DefineStruct(PredaParser::StructDefinitionContext *ctx)
 			ConcreteTypePtr pType = memberTypes[i];
 			if (pType == nullptr)
 				continue;
-
-			if (pType->typeCategory == transpiler::ConcreteType::ContractType)
-			{
-				m_errorPortal.SetAnchor(memberVariableDeclarations[i]->typeName()->start);
-				m_errorPortal.AddIllegalUseOfContractTypeError();
-				continue;
-			}
 
 			if (!m_identifierHub.ValidateNewIdentifier(memberVariableDeclarations[i]->identifier()))
 				continue;
@@ -1922,6 +1951,17 @@ void PredaRealListener::enterContractDefinition(PredaParser::ContractDefinitionC
 	m_currentContractOutputName = contractType->outputFullName;
 	codeSerializer.AddLine("struct " + m_currentContractOutputName + " {");
 	codeSerializer.PushIndent();
+	codeSerializer.AddLine("uint64_t contract_id = 0;");		// id of the contract, initialized in CreateInstance()
+	codeSerializer.AddLine("");
+	for (uint32_t i = 0; i < uint32_t(m_importedContracts.size()); i++)
+	{
+		auto itor = m_importedContractsType.find(m_importedContracts[i]);
+		if (itor != m_importedContractsType.end())
+		{
+			codeSerializer.AddLine(itor->second->outputFullName + " imported_contract_" + std::to_string(i) + ";");
+		}
+	}
+
 
 	// We have a two pass algorithm for declaration and definitions in a contract
 	// Here is the first pass that forward declares all struct types, functions, and defines all enumeration types and state variables 
@@ -2039,16 +2079,16 @@ void PredaRealListener::enterContractDefinition(PredaParser::ContractDefinitionC
 	}
 
 	// Generate code for interfaces
-	for (auto itor : m_definedInterfaces)
+	for (uint32_t interfaceIdx = 0; interfaceIdx < uint32_t(m_definedInterfaces.size()); interfaceIdx++)
 	{
-		ConcreteTypePtr interfaceType = itor;
+		ConcreteTypePtr interfaceType = m_definedInterfaces[interfaceIdx];
 		if (interfaceType == nullptr)
 			continue;
 		assert(interfaceType->typeCategory == transpiler::ConcreteType::InterfaceType);
 
 		codeSerializer.AddLine("struct " + interfaceType->outputFullName.substr(interfaceType->outputFullName.rfind("::") + 2) + " : public prlrt::interface_struct {");
 		codeSerializer.PushIndent();
-		codeSerializer.AddLine("INTERFACE_INHERIT");
+		codeSerializer.AddLine("using interface_struct::interface_struct;");		// inherit the constructors from base class
 
 		for (size_t i = 0; i < interfaceType->vInterfaceMemberFuncIndexMapping.size(); i++)
 		{
@@ -2059,7 +2099,7 @@ void PredaRealListener::enterContractDefinition(PredaParser::ContractDefinitionC
 			assert(funcType && funcType->typeCategory == transpiler::ConcreteType::FunctionType);
 			const transpiler::FunctionSignature & functionSignature = funcType->vOverloadedFunctions[interfaceType->vInterfaceMemberFuncIndexMapping[i].second];
 
-			GenerateCodeForInterfaceFunction(codeSerializer, interfaceType->exportName, pDefinedFunction->outputName, functionSignature, uint32_t(i));
+			GenerateCodeForInterfaceFunction(codeSerializer, -1, interfaceIdx, pDefinedFunction->outputName, functionSignature, uint32_t(i));
 		}
 		codeSerializer.PopIndent();
 		codeSerializer.AddLine("};");
@@ -2067,9 +2107,9 @@ void PredaRealListener::enterContractDefinition(PredaParser::ContractDefinitionC
 
 	// Generate code for state variables
 	{
-		transpiler::ScopeType perSectionFlags[] = { transpiler::ScopeType::Global, transpiler::ScopeType::Shard, transpiler::ScopeType::Address, transpiler::ScopeType::Uint16,
-													transpiler::ScopeType::Uint32, transpiler::ScopeType::Uint64, transpiler::ScopeType::Uint256, transpiler::ScopeType::Uint512 };
-		std::string perSectionNames[] = { "global", "shard", "address", "uint16", "uint32", "uint64", "uint256", "uint512" };
+		transpiler::ScopeType perSectionFlags[] = { transpiler::ScopeType::Global, transpiler::ScopeType::Shard, transpiler::ScopeType::Address, transpiler::ScopeType::Uint32, transpiler::ScopeType::Uint64,
+													transpiler::ScopeType::Uint96, transpiler::ScopeType::Uint128, transpiler::ScopeType::Uint160, transpiler::ScopeType::Uint256, transpiler::ScopeType::Uint512 };
+		std::string perSectionNames[] = { "global", "shard", "address", "uint32", "uint64", "uint96", "uint128", "uint160", "uint256", "uint512" };
 		static_assert(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]) == sizeof(perSectionNames) / sizeof(perSectionNames[0]), "state variable section metadata length doesn't match");
 
 		constexpr uint32_t numOfSections = uint32_t(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]));
@@ -2122,13 +2162,13 @@ void PredaRealListener::enterContractDefinition(PredaParser::ContractDefinitionC
 			transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInIntegerType(64, false), true, false),
 			std::vector<transpiler::DefinedIdentifierPtr>(),
 			uint32_t(transpiler::FunctionFlags::IsConst)
-		), true);
+		), false);
 		if (pDefinedFunction == nullptr)
 		{
 			m_errorPortal.AddInternalError(ctx->identifier()->start, "Cannot define built-in function __id() for contract. Probably compiler bug.");
 			return;
 		}
-		codeSerializer.AddLine("static " + m_transpilerCtx.GetBuiltInIntegerType(64, false)->outputFullName + " __prli___id() { return cur_contract_id; }");
+		codeSerializer.AddLine(m_transpilerCtx.GetBuiltInIntegerType(64, false)->outputFullName + " __prli___id() { return contract_id; }");
 	}
 
 	// __address()
@@ -2137,13 +2177,13 @@ void PredaRealListener::enterContractDefinition(PredaParser::ContractDefinitionC
 			transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInAddressType(), true, false),
 			std::vector<transpiler::DefinedIdentifierPtr>(),
 			uint32_t(transpiler::FunctionFlags::IsConst)
-		), true);
+		), false);
 		if (pDefinedFunction == nullptr)
 		{
 			m_errorPortal.AddInternalError(ctx->identifier()->start, "Cannot define built-in function __address() for contract. Probably compiler bug.");
 			return;
 		}
-		codeSerializer.AddLine("static " + m_transpilerCtx.GetBuiltInAddressType()->outputFullName + " __prli___address() { " + m_transpilerCtx.GetBuiltInAddressType()->outputFullName + " ret; ret.SetAsContract(cur_contract_id); return ret; }");
+		codeSerializer.AddLine(m_transpilerCtx.GetBuiltInAddressType()->outputFullName + " __prli___address() { " + m_transpilerCtx.GetBuiltInAddressType()->outputFullName + " ret; ret.SetAsContract(contract_id); return ret; }");
 	}
 
 	// __mint()
@@ -2152,13 +2192,13 @@ void PredaRealListener::enterContractDefinition(PredaParser::ContractDefinitionC
 			transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInTokenType(), false, false),
 			{transpiler::Allocator::New<transpiler::DefinedIdentifier>(m_transpilerCtx.GetBuiltInBigIntType(), true, true, "amount", 0)},
 			uint32_t(transpiler::FunctionFlags::IsConst)
-		), true);
+		), false);
 		if (pDefinedFunction == nullptr)
 		{
 			m_errorPortal.AddInternalError(ctx->identifier()->start, "Cannot define built-in function __mint() for contract. Probably compiler bug.");
 			return;
 		}
-		codeSerializer.AddLine("static " + m_transpilerCtx.GetBuiltInTokenType()->outputFullName + " __prli___mint(__prlt_bigint amount) { return prlrt::mint(cur_contract_id, amount); }");
+		codeSerializer.AddLine(m_transpilerCtx.GetBuiltInTokenType()->outputFullName + " __prli___mint(__prlt_bigint amount) { return prlrt::mint(contract_id, amount); }");
 	}
 
 	TraverseAllFunctions();
@@ -2413,7 +2453,8 @@ void PredaRealListener::GenerateAuxiliaryFunctions()
 		codeSerializer.AddLine("API_EXPORT uint32_t Contract_" + m_currentContractUniqueIdentifierStr + "_ContractCallEntry(void *pContractInstance, uint32_t functionId, const void **ptrs, uint32_t numPtrs) {");
 		codeSerializer.PushIndent();
 		{
-			uint32_t numContractFunction = 0;
+			std::vector<uint32_t> contractFunctions;
+			contractFunctions.reserve(m_exportedFunctions.size());
 			for (size_t funcIdx = 0; funcIdx < m_exportedFunctions.size(); funcIdx++)
 			{
 				transpiler::FunctionRef &curFunc = m_exportedFunctions[funcIdx];
@@ -2421,11 +2462,11 @@ void PredaRealListener::GenerateAuxiliaryFunctions()
 					continue;
 				transpiler::FunctionSignature &signature = curFunc.functionIdentifier->qualifiedType.baseConcreteType->vOverloadedFunctions[curFunc.overloadIndex];
 				bool bIsContractFunction = (signature.flags & (uint32_t(transpiler::FunctionFlags::CallableFromOtherContract))) != 0;
-				if (bIsContractFunction)
-					numContractFunction++;
+				if (bIsContractFunction || funcIdx == m_globalDeployFunctionExportIdx)		// always allow constructor to be called from other contracts (TODO: maybe only enable it when on_deploy is declared as public)
+					contractFunctions.push_back(uint32_t(funcIdx));
 			}
 
-			if (numContractFunction == 0)
+			if (contractFunctions.size() == 0)
 			{
 				codeSerializer.AddLine("return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallFunctionNotFound) << 8);");
 			}
@@ -2435,33 +2476,31 @@ void PredaRealListener::GenerateAuxiliaryFunctions()
 				codeSerializer.PushIndent();
 				{
 					codeSerializer.AddLine("switch (functionId){");
-					for (size_t funcIdx = 0; funcIdx < m_exportedFunctions.size(); funcIdx++)
+
+					for (uint32_t funcIdx : contractFunctions)
 					{
 						transpiler::FunctionRef &curFunc = m_exportedFunctions[funcIdx];
 						if (curFunc.functionIdentifier == nullptr || curFunc.functionIdentifier->qualifiedType.baseConcreteType == nullptr)
 							continue;
 						transpiler::FunctionSignature &signature = curFunc.functionIdentifier->qualifiedType.baseConcreteType->vOverloadedFunctions[curFunc.overloadIndex];
-						bool bIsContractFunction = (signature.flags & (uint32_t(transpiler::FunctionFlags::CallableFromOtherContract))) != 0;
-						if (bIsContractFunction)
+
+						codeSerializer.AddLine("case " + std::to_string(funcIdx) + ":");
+						codeSerializer.AddLine("{");
+						codeSerializer.PushIndent();
 						{
-							codeSerializer.AddLine("case " + std::to_string(funcIdx) + ":");
-							codeSerializer.AddLine("{");
-							codeSerializer.PushIndent();
-							{
-								uint32_t numExpectedPtrs = uint32_t(signature.parameters.size()) + (signature.returnType.baseConcreteType != nullptr ? 1 : 0);
-								codeSerializer.AddLine("if (numPtrs != " + std::to_string(numExpectedPtrs) + ") return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallArgumentMismatch) << 8);");
-								std::string line;
-								if (signature.returnType.baseConcreteType != nullptr)
-									line = "*(" + signature.returnType.baseConcreteType->outputFullName + " *)ptrs[numPtrs - 1] = ";
-								line += "((" + m_currentContractOutputName + " *)pContractInstance)->" + curFunc.functionIdentifier->outputName + "(";
-								for (size_t paramIdx = 0; paramIdx < signature.parameters.size(); paramIdx++)
-									line += std::string(paramIdx > 0 ? ", " : "") + "*(" + signature.parameters[paramIdx]->qualifiedType.baseConcreteType->outputFullName + " *)ptrs[" + std::to_string(paramIdx) + "]";
-								codeSerializer.AddLine(line + ");");
-								codeSerializer.AddLine("break;");
-							}
-							codeSerializer.PopIndent();
-							codeSerializer.AddLine("}");
+							uint32_t numExpectedPtrs = uint32_t(signature.parameters.size()) + (signature.returnType.baseConcreteType != nullptr ? 1 : 0);
+							codeSerializer.AddLine("if (numPtrs != " + std::to_string(numExpectedPtrs) + ") return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallArgumentMismatch) << 8);");
+							std::string line;
+							if (signature.returnType.baseConcreteType != nullptr)
+								line = "*(" + signature.returnType.baseConcreteType->outputFullName + " *)ptrs[numPtrs - 1] = ";
+							line += "((" + m_currentContractOutputName + " *)pContractInstance)->" + curFunc.functionIdentifier->outputName + "(";
+							for (size_t paramIdx = 0; paramIdx < signature.parameters.size(); paramIdx++)
+								line += std::string(paramIdx > 0 ? ", " : "") + "*(" + signature.parameters[paramIdx]->qualifiedType.baseConcreteType->outputFullName + " *)ptrs[" + std::to_string(paramIdx) + "]";
+							codeSerializer.AddLine(line + ");");
+							codeSerializer.AddLine("break;");
 						}
+						codeSerializer.PopIndent();
+						codeSerializer.AddLine("}");
 					}
 					codeSerializer.AddLine("default: return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallFunctionNotFound) << 8);");
 					codeSerializer.AddLine("}");
@@ -2483,22 +2522,29 @@ void PredaRealListener::GenerateAuxiliaryFunctions()
 
 		codeSerializer.AddLine("");
 
-		codeSerializer.AddLine("API_EXPORT void Contract_" + m_currentContractUniqueIdentifierStr + "_InitTables(uint64_t curContractId, uint64_t *importedContractIds) {");
-		codeSerializer.PushIndent();
-		{
-			codeSerializer.AddLine("cur_contract_id = curContractId;");
-			codeSerializer.AddLine("imported_contract_ids = importedContractIds;");
-		}
-		codeSerializer.PopIndent();
+		// currently does nothing
+		codeSerializer.AddLine("API_EXPORT void Contract_" + m_currentContractUniqueIdentifierStr + "_InitTables() {");
 		codeSerializer.AddLine("}");
 
 		codeSerializer.AddLine("");
 
-		codeSerializer.AddLine("API_EXPORT void* Contract_" + m_currentContractUniqueIdentifierStr + "_CreateInstance(prlrt::IRuntimeInterface *pInterface) {");
+		codeSerializer.AddLine("API_EXPORT void* Contract_" + m_currentContractUniqueIdentifierStr + "_CreateInstance(prlrt::IRuntimeInterface *pInterface, uint64_t curContractId, const uint64_t *importedContractIds, uint32_t numImportedContracts) {");
 		codeSerializer.PushIndent();
 		{
+			codeSerializer.AddLine("if (numImportedContracts != " + std::to_string(m_importedContracts.size()) + ") return nullptr;");
 			codeSerializer.AddLine("prlrt::g_executionEngineInterface = pInterface;");
-			codeSerializer.AddLine("return new " + m_currentContractOutputName + ";");
+			codeSerializer.AddLine(m_currentContractOutputName + " *ret = new " + m_currentContractOutputName + ";");
+			codeSerializer.AddLine("if (ret) ret->contract_id = curContractId;");
+			for (uint32_t i = 0; i < uint32_t(m_importedContracts.size()); i++)
+			{
+				auto itor = m_importedContractsType.find(m_importedContracts[i]);
+				if (itor != m_importedContractsType.end())
+				{
+					codeSerializer.AddLine("ret->imported_contract_" + std::to_string(i) + ".contract_id = importedContractIds[" + std::to_string(i) + "];");
+				}
+			}
+
+			codeSerializer.AddLine("return ret;");
 		}
 		codeSerializer.PopIndent();
 		codeSerializer.AddLine("}");
@@ -2524,9 +2570,9 @@ void PredaRealListener::GenerateAuxiliaryFunctions()
 			codeSerializer.AddLine("");
 			codeSerializer.AddLine("switch (type) {");
 
-			transpiler::ScopeType perSectionFlags[] = { transpiler::ScopeType::Global, transpiler::ScopeType::Shard, transpiler::ScopeType::Address, transpiler::ScopeType::Uint16,
-														transpiler::ScopeType::Uint32, transpiler::ScopeType::Uint64, transpiler::ScopeType::Uint256, transpiler::ScopeType::Uint512 };
-			std::string perSectionEnum[] = { "Global", "Shard", "Address", "Uint16", "Uint32", "Uint64", "Uint256", "Uint512" };
+			transpiler::ScopeType perSectionFlags[] = { transpiler::ScopeType::Global, transpiler::ScopeType::Shard, transpiler::ScopeType::Address, transpiler::ScopeType::Uint32, transpiler::ScopeType::Uint64,
+														transpiler::ScopeType::Uint96, transpiler::ScopeType::Uint128, transpiler::ScopeType::Uint160, transpiler::ScopeType::Uint256, transpiler::ScopeType::Uint512 };
+			std::string perSectionEnum[] = { "Global", "Shard", "Address", "Uint32", "Uint64", "Uint96", "Uint128", "Uint160", "Uint256", "Uint512" };
 			static_assert(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]) == sizeof(perSectionEnum) / sizeof(perSectionEnum[0]), "state variable section metadata length doesn't match");
 
 			constexpr uint32_t numOfSections = uint32_t(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]));
@@ -2574,9 +2620,9 @@ void PredaRealListener::GenerateAuxiliaryFunctions()
 			codeSerializer.AddLine("");
 			codeSerializer.AddLine("switch (type) {");
 
-			transpiler::ScopeType perSectionFlags[] = { transpiler::ScopeType::Global, transpiler::ScopeType::Shard, transpiler::ScopeType::Address, transpiler::ScopeType::Uint16,
-														transpiler::ScopeType::Uint32, transpiler::ScopeType::Uint64, transpiler::ScopeType::Uint256, transpiler::ScopeType::Uint512 };
-			std::string perSectionEnum[] = { "Global", "Shard", "Address", "Uint16", "Uint32", "Uint64", "Uint256", "Uint512" };
+			transpiler::ScopeType perSectionFlags[] = { transpiler::ScopeType::Global, transpiler::ScopeType::Shard, transpiler::ScopeType::Address, transpiler::ScopeType::Uint32, transpiler::ScopeType::Uint64,
+														transpiler::ScopeType::Uint96, transpiler::ScopeType::Uint128, transpiler::ScopeType::Uint160, transpiler::ScopeType::Uint256, transpiler::ScopeType::Uint512 };
+			std::string perSectionEnum[] = { "Global", "Shard", "Address", "Uint32", "Uint64", "Uint96", "Uint128", "Uint160", "Uint256", "Uint512" };
 			static_assert(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]) == sizeof(perSectionEnum) / sizeof(perSectionEnum[0]), "state variable section metadata length doesn't match");
 
 			constexpr uint32_t numOfSections = uint32_t(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]));
@@ -2626,9 +2672,9 @@ void PredaRealListener::GenerateAuxiliaryFunctions()
 			{
 				codeSerializer.AddLine("switch (type) {");
 
-				transpiler::ScopeType perSectionFlags[] = { transpiler::ScopeType::Global, transpiler::ScopeType::Shard, transpiler::ScopeType::Address, transpiler::ScopeType::Uint16,
-															transpiler::ScopeType::Uint32, transpiler::ScopeType::Uint64, transpiler::ScopeType::Uint256, transpiler::ScopeType::Uint512 };
-				std::string perSectionEnum[] = { "Global", "Shard", "Address", "Uint16", "Uint32", "Uint64", "Uint256", "Uint512" };
+				transpiler::ScopeType perSectionFlags[] = { transpiler::ScopeType::Global, transpiler::ScopeType::Shard, transpiler::ScopeType::Address, transpiler::ScopeType::Uint32, transpiler::ScopeType::Uint64,
+															transpiler::ScopeType::Uint96, transpiler::ScopeType::Uint128, transpiler::ScopeType::Uint160, transpiler::ScopeType::Uint256, transpiler::ScopeType::Uint512 };
+				std::string perSectionEnum[] = { "Global", "Shard", "Address", "Uint32", "Uint64", "Uint96", "Uint128", "Uint160", "Uint256", "Uint512" };
 				static_assert(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]) == sizeof(perSectionEnum) / sizeof(perSectionEnum[0]), "state variable section metadata length doesn't match");
 
 				constexpr uint32_t numOfSections = uint32_t(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]));
@@ -3134,12 +3180,16 @@ ConcreteTypePtr PredaRealListener::ScopeTypeToConcreteType(transpiler::ScopeType
 	{
 	case transpiler::ScopeType::Address:
 		return m_transpilerCtx.GetBuiltInAddressType();
-	case transpiler::ScopeType::Uint16:
-		return m_transpilerCtx.GetBuiltInIntegerType(16, false);
 	case transpiler::ScopeType::Uint32:
 		return m_transpilerCtx.GetBuiltInIntegerType(32, false);
 	case transpiler::ScopeType::Uint64:
 		return m_transpilerCtx.GetBuiltInIntegerType(64, false);
+	case transpiler::ScopeType::Uint96:
+		return nullptr;								// uint96 / 160 scopes are not supported yet because there's no corresponding uint types yet
+	case transpiler::ScopeType::Uint128:
+		return m_transpilerCtx.GetBuiltInIntegerType(128, false);
+	case transpiler::ScopeType::Uint160:
+		return nullptr;								// uint96 / 160 scopes are not supported yet because there's no corresponding uint types yet
 	case transpiler::ScopeType::Uint256:
 		return m_transpilerCtx.GetBuiltInIntegerType(256, false);
 	case transpiler::ScopeType::Uint512:
@@ -3154,16 +3204,18 @@ transpiler::ScopeType PredaRealListener::ConcreteTypeToScopeType(ConcreteTypePtr
 {
 	if (type == m_transpilerCtx.GetBuiltInAddressType())
 		return transpiler::ScopeType::Address;
-	else if (type == m_transpilerCtx.GetBuiltInIntegerType(16, false))
-		return transpiler::ScopeType::Uint16;
 	else if (type == m_transpilerCtx.GetBuiltInIntegerType(32, false))
 		return transpiler::ScopeType::Uint32;
 	else if (type == m_transpilerCtx.GetBuiltInIntegerType(64, false))
 		return transpiler::ScopeType::Uint64;
+	else if (type == m_transpilerCtx.GetBuiltInIntegerType(128, false))
+		return transpiler::ScopeType::Uint128;
 	else if (type == m_transpilerCtx.GetBuiltInIntegerType(256, false))
 		return transpiler::ScopeType::Uint256;
 	else if (type == m_transpilerCtx.GetBuiltInIntegerType(512, false))
 		return transpiler::ScopeType::Uint512;
+
+	// uint96 / 160 scopes are not supported yet because there's no corresponding uint types yet
 
 	return transpiler::ScopeType::None;
 }

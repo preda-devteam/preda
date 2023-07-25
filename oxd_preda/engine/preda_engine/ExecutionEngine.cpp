@@ -58,10 +58,10 @@ void CExecutionEngine::ReleaseExecutionIntermediateData()
 	m_inputStateCopies.clear();
 }
 
-ContractRuntimeInstance* CExecutionEngine::CreateContractInstance(PredaContractDID deployId, rvm::ContractId contractId)
+ContractRuntimeInstance* CExecutionEngine::CreateContractInstance(const rvm::ContractModuleID &moduleId, rvm::ContractVersionId cvId, const rvm::ContractVersionId *importedCvId, uint32_t numImportedContracts)
 {
 	{
-		auto itor = m_intermediateContractInstances.find(deployId);
+		auto itor = m_intermediateContractInstances.find(cvId);
 		if (itor != m_intermediateContractInstances.end())
 		{
 			return itor->second;
@@ -71,17 +71,17 @@ ContractRuntimeInstance* CExecutionEngine::CreateContractInstance(PredaContractD
 	ContractModuleLoaded* loaded_mod = nullptr;
 
 	{
-		auto it = m_loadedContractModule.find(deployId);
+		auto it = m_loadedContractModule.find(moduleId);
 		if (it != m_loadedContractModule.end())
 		{
 			loaded_mod = it->second.get();
 		}
 		else
 		{
-			ContractModule* mod = m_pDB->GetContractModule(deployId);
+			ContractModule* mod = m_pDB->GetContractModule(moduleId);
 			if (mod)
 			{
-				loaded_mod = m_loadedContractModule.emplace(deployId, mod->LoadToEngine(*this)).first->second.get();
+				loaded_mod = m_loadedContractModule.emplace(moduleId, mod->LoadToEngine(*this)).first->second.get();
 			}
 		}
 	}
@@ -90,15 +90,15 @@ ContractRuntimeInstance* CExecutionEngine::CreateContractInstance(PredaContractD
 		return nullptr;
 	}
 
-	ContractRuntimeInstance* pContractInstance = loaded_mod->NewInstance(*this).release();
+	ContractRuntimeInstance* pContractInstance = loaded_mod->NewInstance(*this, cvId, importedCvId, numImportedContracts).release();
 	if (!pContractInstance) {
 		return nullptr;
 	}
-	pContractInstance->deployId = deployId;
-	pContractInstance->contractId = contractId;
+	pContractInstance->mId = moduleId;
+	pContractInstance->cvId = cvId;
 	pContractInstance->currentMappedContractContextLevel = prlrt::ContractContextType::None;
 
-	m_intermediateContractInstances.try_emplace(deployId, pContractInstance);
+	m_intermediateContractInstances.try_emplace(cvId, pContractInstance);
 
 	return pContractInstance;
 }
@@ -127,13 +127,15 @@ bool CExecutionEngine::MapNeededContractContext(rvm::ExecutionContext *execution
 		const uint8_t *buffer = nullptr;
 		uint32_t buffer_size = 0;
 		rvm::Scope scope = _details::PredaScopeToRvmScope(_details::RuntimeContextTypeToPredaScope(prlrt::ContractContextType(neededContexts[i])));
-		if (scope == rvm::Scope::Neutral)
+		if (scope == rvm::Scope::_Bitmask)
 			return false;
 
 		{
-			rvm::ConstStateData state = executionContext->GetState(rvm::_details::CONTRACT_SET_SCOPE(pInstance->contractId, scope));
+			rvm::ConstStateData state = executionContext->GetState(rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(pInstance->cvId), scope));
 			if (state.DataSize)
 			{
+				if (state.Version != rvm::CONTRACT_BUILD(pInstance->cvId))		// the version of the state doesn't match the contract version, TODO: upgrade state when contract state upgrading is implemented in the future
+					return false;
 				m_inputStateCopies.push_back(std::vector<uint8_t>());
 				m_inputStateCopies.back().resize(state.DataSize);
 				memcpy(&m_inputStateCopies.back()[0], state.DataPtr, state.DataSize);
@@ -155,19 +157,24 @@ bool CExecutionEngine::MapNeededContractContext(rvm::ExecutionContext *execution
 	return true;
 }
 
-uint32_t CExecutionEngine::InvokeContractCall(rvm::ExecutionContext *executionContext, rvm::ContractId contractId, uint32_t opCode, const void **ptrs, uint32_t numPtrs)
+uint32_t CExecutionEngine::InvokeContractCall(rvm::ExecutionContext *executionContext, rvm::ContractVersionId cvId, uint32_t opCode, const void **ptrs, uint32_t numPtrs)
 {
-	PredaContractDID deployId = _details::RvmCDIDToPredaCDID(executionContext->GetContractDeploymentIdentifier(contractId));                // cross contract call always calls the latest build
-	const ContractDatabaseEntry *pContractEntry = m_pDB->FindContractEntry(deployId);;
+	const rvm::DeployedContract* deployedContract = executionContext->GetContractDeployed(cvId);
+	if (deployedContract == nullptr)
+		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallContractNotFound) << 8);
+
+	const ContractDatabaseEntry *pContractEntry = m_pDB->FindContractEntry(deployedContract->Module);;
 	if (!pContractEntry
 		|| opCode >= uint32_t(pContractEntry->compileData.functions.size())
 		|| (pContractEntry->compileData.functions[opCode].flags & uint32_t(transpiler::FunctionFlags::CallableFromOtherContract)) == 0)
 		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallFunctionNotFound) << 8);
 
-	m_runtimeInterface.PushContractStack(deployId, pContractEntry->deployData.contractId, pContractEntry->compileData.functions[opCode].flags);
+	m_runtimeInterface.PushContractStack(deployedContract->Module, cvId, pContractEntry->compileData.functions[opCode].flags, (const rvm::ContractVersionId*)deployedContract->Stub, deployedContract->StubSize / sizeof(rvm::ContractVersionId));
 	// no need to call m_runtimeInterface.SetExecutionContext() here, contract call is only possible after a transaction call, therefore execution context is already set
 
-	ContractRuntimeInstance *pContractInstance = CreateContractInstance(deployId, contractId);
+	if (deployedContract->StubSize % sizeof(rvm::ContractVersionId) != 0 || deployedContract->StubSize / sizeof(rvm::ContractVersionId) != pContractEntry->compileData.importedContracts.size())
+		return uint32_t(ExecutionResult::CannotCreateContractInstance);
+	ContractRuntimeInstance* pContractInstance = CreateContractInstance(deployedContract->Module, cvId, (const rvm::ContractVersionId*)deployedContract->Stub, deployedContract->StubSize / sizeof(rvm::ContractVersionId));
 	if (pContractInstance == nullptr)
 		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallContractNotFound) << 8);
 
@@ -181,7 +188,7 @@ uint32_t CExecutionEngine::InvokeContractCall(rvm::ExecutionContext *executionCo
 	return ret;
 }
 
-rvm::InvokeResult CExecutionEngine::Invoke(rvm::ExecutionContext *executionContext, uint32_t gas_limit, const rvm::ContractDID *contract_deployment_id, rvm::OpCode opCode, const rvm::ConstData* args_serialized)
+rvm::InvokeResult CExecutionEngine::Invoke(rvm::ExecutionContext *executionContext, uint32_t gas_limit, rvm::ContractInvokeId contract, rvm::OpCode opCode, const rvm::ConstData* args_serialized)
 {
 	rvm::InvokeResult ret;
 	ret.SubCodeHigh = 0;
@@ -189,15 +196,11 @@ rvm::InvokeResult CExecutionEngine::Invoke(rvm::ExecutionContext *executionConte
 
 	// TODO: get gas from executionContext once it's implemented.
 	m_runtimeInterface.SetGas(1000000);
-
 	m_runtimeInterface.SetChainState(executionContext);
 
-	rvm::_details::ExecutionStateScope::Set(executionContext);
-
-	PredaContractDID deployId = _details::RvmCDIDToPredaCDID(contract_deployment_id);
-	
-	uint32_t internalRet = Invoke_Internal(executionContext, deployId, opCode, args_serialized, gas_limit);
-	rvm::_details::ExecutionStateScope::Unset();
+	rvm::ContractVersionId cvId = rvm::CONTRACT_UNSET_SCOPE(contract);
+	const rvm::DeployedContract* deployedContract = executionContext->GetContractDeployed(cvId);
+	uint32_t internalRet = Invoke_Internal(executionContext, cvId, deployedContract, opCode, args_serialized, gas_limit);
 
 	ret.GasBurnt = 1;
 	ret.SubCodeHigh = internalRet & 0xff;
@@ -260,11 +263,14 @@ rvm::InvokeResult CExecutionEngine::Invoke(rvm::ExecutionContext *executionConte
 	return ret;
 }
 
-uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionContext, PredaContractDID deployId, rvm::OpCode opCode, const rvm::ConstData* args_serialized, uint32_t gas_limit)
+uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionContext, rvm::ContractVersionId cvId, const rvm::DeployedContract *deployedContract, rvm::OpCode opCode, const rvm::ConstData* args_serialized, uint32_t gas_limit)
 {
 	AutoReleaseExecutionIntermediateData autoRelease(this);
 
-	const ContractDatabaseEntry *pContractEntry = m_pDB->FindContractEntry(deployId);
+	if (deployedContract == nullptr)
+		return uint32_t(ExecutionResult::ContractNotFound);
+
+	const ContractDatabaseEntry *pContractEntry = m_pDB->FindContractEntry(deployedContract->Module);
 	if (!pContractEntry)
 		return uint32_t(ExecutionResult::ContractNotFound);
 
@@ -279,10 +285,12 @@ uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionConte
 			return uint32_t(ExecutionResult::FunctionSignatureMismatch);
 	}
 
-	m_runtimeInterface.PushContractStack(deployId, pContractEntry->deployData.contractId, pContractEntry->compileData.functions[opCodeReal].flags);
+	m_runtimeInterface.PushContractStack(deployedContract->Module, cvId, pContractEntry->compileData.functions[opCodeReal].flags, (const rvm::ContractVersionId*)deployedContract->Stub, deployedContract->StubSize / sizeof(rvm::ContractVersionId));
 	m_runtimeInterface.SetExecutionContext(executionContext);
 
-	ContractRuntimeInstance *pContractInstance = CreateContractInstance(deployId, pContractEntry->deployData.contractId);
+	if (deployedContract->StubSize % sizeof(rvm::ContractVersionId) != 0 || deployedContract->StubSize / sizeof(rvm::ContractVersionId) != pContractEntry->compileData.importedContracts.size())
+		return uint32_t(ExecutionResult::CannotCreateContractInstance);
+	ContractRuntimeInstance *pContractInstance = CreateContractInstance(deployedContract->Module, cvId, (const rvm::ContractVersionId *)deployedContract->Stub, deployedContract->StubSize / sizeof(rvm::ContractVersionId));
 	if (pContractInstance == nullptr)
 		return uint32_t(ExecutionResult::CannotCreateContractInstance);
 
@@ -309,7 +317,25 @@ uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionConte
 
 	if ((ret & 0xff) == uint32_t(ExecutionResult::NoError))
 	{
-		thread_local std::vector<std::tuple<rvm::ContractId, rvm::Scope, uint8_t *>> pendingStates;
+		// first check if multiple states will different versions of a contract is to be committed.
+		// This could happen is some cases, e.g.A[v2] --calls--> B --calls--> A[v1] and A didn't have an existing state.
+		std::map<rvm::ContractId, rvm::BuildNum> modifiedContractVersions;
+		for (auto itor : m_intermediateContractInstances)
+		{
+			rvm::ContractVersionId cvId = itor.first;
+			rvm::ContractId cId = rvm::CONTRACT_UNSET_BUILD(cvId);
+			rvm::BuildNum version = rvm::CONTRACT_BUILD(cvId);
+			auto itor2 = modifiedContractVersions.find(cId);
+			if (itor2 == modifiedContractVersions.end())
+				modifiedContractVersions.emplace(cId, version);
+			else
+			{
+				if (itor2->second != version)
+					return uint32_t(ExecutionResult::SerializeOutMultipleVersionState);
+			}
+		}
+
+		thread_local std::vector<std::tuple<rvm::ContractVersionId, rvm::Scope, uint8_t *>> pendingStates;
 		pendingStates.clear();
 		for (auto itor : m_intermediateContractInstances)
 		{
@@ -338,38 +364,53 @@ uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionConte
 							return (serializeRes << 8) | uint32_t(ExecutionResult::ExecutionError);
 						}
 
-						pendingStates.emplace_back(itor.second->contractId, _details::PredaScopeToRvmScope(_details::RuntimeContextTypeToPredaScope(prlrt::ContractContextType(i))), pStateData);
+						pendingStates.emplace_back(itor.second->cvId, _details::PredaScopeToRvmScope(_details::RuntimeContextTypeToPredaScope(prlrt::ContractContextType(i))), pStateData);
 					}
 				}
 			}
 		}
 
 		for (auto &it : pendingStates)
-			executionContext->CommitNewState(rvm::BuildNumLatest, rvm::_details::CONTRACT_SET_SCOPE(std::get<0>(it), std::get<1>(it)), std::get<2>(it));
+			executionContext->CommitNewState(rvm::CONTRACT_SET_SCOPE(std::get<0>(it), std::get<1>(it)), std::get<2>(it));
 	}
 
 	return ret;
 }
 
-rvm::InvokeResult CExecutionEngine::Deploy(rvm::ExecutionContext* exec, uint32_t gas_limit, rvm::CompiledContracts* linked, rvm::ContractDID* contract_deployment_ids, rvm::InterfaceDID** interface_deployment_ids, rvm::LogMessageOutput* log_msg_output)
+bool CExecutionEngine::DeployContracts(rvm::ExecutionContext* exec, rvm::CompiledModules* linked, rvm::DataBuffer** deploy_stub, rvm::LogMessageOutput* log_msg_output)
+{
+	return m_pDB->Deploy(exec, linked, deploy_stub, log_msg_output);
+}
+
+rvm::InvokeResult CExecutionEngine::InitializeContracts(rvm::ExecutionContext* executionContext, uint32_t gas_limit, rvm::CompiledModules* linked, const rvm::ConstData* ctor_args)
 {
 	PredaCompiledContracts* pCompiledContracts = (PredaCompiledContracts*)linked;
 	assert(pCompiledContracts->IsLinked());
 
 	uint32_t numContracts = linked->GetCount();
-	std::vector<rvm::ContractId> ids(numContracts);
+	std::vector<rvm::ContractVersionId> ids(numContracts);
 	for (uint32_t i = 0; i < numContracts; i++)
 	{
 		const ContractCompileData* pCompiledData = pCompiledContracts->GetCompiledData(i);
-		ids[i] = _details::GetOnChainContractIdFromContractFullName(exec, pCompiledData->dapp + "." + pCompiledData->name);
-		if (ids[i] == rvm::ContractIdInvalid)
+		ids[i] = _details::GetOnChainContractIdFromContractFullName(executionContext, pCompiledData->dapp + "." + pCompiledData->name);
+		if (ids[i] == rvm::ContractVersionIdInvalid)
 			return {0, 0, rvm::InvokeErrorCode::ContractUnavailable, 0};
 	}
 
-	if (!m_pDB->Deploy(exec, &ids[0], linked, contract_deployment_ids, interface_deployment_ids, log_msg_output))
-		return { 0, 0, rvm::InvokeErrorCode::ContractUnavailable, 0 };
-
-	// TODO: trigger on_deploy on all the deployed contracts
+	const std::vector<uint32_t>& compileOrder = pCompiledContracts->GetCompileOrder();
+	for (uint32_t i = 0; i < uint32_t(compileOrder.size()); i++)
+	{
+		uint32_t slot = compileOrder[i];
+		rvm::SystemFunctionOpCodes opCodes;
+		linked->GetContract(slot)->GetSystemFunctionOpCodes(&opCodes);
+		if (opCodes.GlobalDeploy != rvm::OpCodeInvalid)
+		{
+			// TODO: design a mechanism to distribute gas among multiple contracts
+			rvm::InvokeResult result = Invoke(executionContext, gas_limit, rvm::CONTRACT_SET_SCOPE(ids[slot], rvm::Scope::Global), opCodes.GlobalDeploy, &ctor_args[slot]);
+			if (result.Code != rvm::InvokeErrorCode::Success)
+				return result;
+		}
+	}
 
 	return { 0, 0, rvm::InvokeErrorCode::Success, 0 };
 }

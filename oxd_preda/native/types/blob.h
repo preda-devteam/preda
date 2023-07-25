@@ -65,6 +65,7 @@ public:
 	// blob:(mime)={base64_encoded}	
 	// plain text (not starts with "blob:")
 	bool	FromString(const rt::String_Ref& s);
+	bool	JsonParse(const rt::String_Ref& s){ return FromString(s.TrimQuotes()); }
 	bool	IsEmpty() const { return _DataPadded.GetSize() == 0 && !_File.IsOpen(); }
 	void	Empty(){ _DataPadded.ShrinkSize(0); _File.Close(); }
 	bool	IsFile() const { return _File.IsOpen(); }
@@ -83,7 +84,7 @@ private:
 // its content will be off-load to DKVS as immutable value, if its size > TINY_SIZEMAX
 struct Blob
 {
-	TYPETRAITS_DECLARE_NON_POD;
+	TYPETRAITS_DECLARE_POD;
 	static const uint32_t	HASHED_BLOB = 0x80;
 	static const uint32_t	TINY_SIZEMAX = RVM_HASH_SIZE + 2;
 

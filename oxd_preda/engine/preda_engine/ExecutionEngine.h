@@ -16,14 +16,14 @@ enum class ExecutionResult : uint8_t {
 	FunctionSignatureMismatch				= 3,
 	ExecutionError							= 4,
 	//ContractStateExceedsSizeLimit			= 5,
-	//SerializeOutContractStateError		= 6,
+	SerializeOutMultipleVersionState		= 6,
 	SystemErrorBegin						= 128,
 	CannotLoadLibrary						= 128,
 	CannotCreateContractInstance			= 129,
 	MapContractStateError					= 130,
 };
 
-class CExecutionEngine : public rvm::ExecuteUnit {
+class CExecutionEngine : public rvm::ExecutionUnit {
 	friend struct AutoReleaseExecutionIntermediateData;
 	friend class CRuntimeInterface;
 private:
@@ -42,17 +42,25 @@ private:
 	// But it doesn't check that strictly in the source code.
 	std::optional<wasmtime::Linker> m_base_linker;
 
-	std::map<PredaContractDID, std::unique_ptr<ContractModuleLoaded>> m_loadedContractModule;
-	std::map<PredaContractDID, ContractRuntimeInstance*> m_intermediateContractInstances;
+	std::map<rvm::ContractModuleID, std::unique_ptr<ContractModuleLoaded>, _details::ModuleIdCompare> m_loadedContractModule;
+
+	// the intermediate instances are contracts that are already loaded on the current call chain.
+	// It's not indexed by ContractInvokeId because the current relay scheme doesn't allow cross-contract
+	// call to other scopes (except global /shard), therefore it's not possible for multiple custom scopes
+	// of the same contract to co-exist during the execution of a call chain.
+	// It's not indexed by ContractId because different versions of the same contract might co-exist along
+	// the call chain. (e.g. A[v2] -> B -> A[v1]). Although in this case the call would fail if A[v1] tries
+	// to map a non-empty chain state that has already been converted to A[v2] format.
+	std::map<rvm::ContractVersionId, ContractRuntimeInstance*> m_intermediateContractInstances;
 	std::vector<std::vector<uint8_t>> m_inputStateCopies;
 	void ReleaseExecutionIntermediateData();
 
-	uint32_t InvokeContractCall(rvm::ExecutionContext *executionContext, rvm::ContractId contractId, uint32_t opCode, const void **ptrs, uint32_t numPtrs);
+	uint32_t InvokeContractCall(rvm::ExecutionContext *executionContext, rvm::ContractVersionId cvId, uint32_t opCode, const void **ptrs, uint32_t numPtrs);
 
-	ContractRuntimeInstance *CreateContractInstance(PredaContractDID deployId, rvm::ContractId contractId);
+	ContractRuntimeInstance *CreateContractInstance(const rvm::ContractModuleID &moduleId, rvm::ContractVersionId cvId, const rvm::ContractVersionId *importedCvId, uint32_t numImportedContracts);
 	bool MapNeededContractContext(rvm::ExecutionContext *executionContext, ContractRuntimeInstance *pInstance, uint32_t calledFunctionFlag);
 
-	uint32_t Invoke_Internal(rvm::ExecutionContext *executionContext, PredaContractDID deployId, rvm::OpCode opCode, const rvm::ConstData* args_serialized, uint32_t gas_limit);
+	uint32_t Invoke_Internal(rvm::ExecutionContext *executionContext, rvm::ContractVersionId cvId, const rvm::DeployedContract *deployedContract, rvm::OpCode opCode, const rvm::ConstData* args_serialized, uint32_t gas_limit);
 public:
 	CContractDatabase* contractDatabase() {
 		return m_pDB;
@@ -76,8 +84,9 @@ public:
 	CExecutionEngine(CContractDatabase *pDB);
 	virtual ~CExecutionEngine() {}
 
-	virtual rvm::InvokeResult Invoke(rvm::ExecutionContext *executionContext, uint32_t gas_limit, const rvm::ContractDID *contract_deployment_id, rvm::OpCode opCode, const rvm::ConstData* args_serialized) override;
-	virtual rvm::InvokeResult Deploy(rvm::ExecutionContext* exec, uint32_t gas_limit, rvm::CompiledContracts* linked, rvm::ContractDID* contract_deployment_ids, rvm::InterfaceDID** interface_deployment_ids, rvm::LogMessageOutput* log_msg_output) override;
+	virtual rvm::InvokeResult Invoke(rvm::ExecutionContext *executionContext, uint32_t gas_limit, rvm::ContractInvokeId contract, rvm::OpCode opCode, const rvm::ConstData* args_serialized) override;
+	virtual bool DeployContracts(rvm::ExecutionContext* exec, rvm::CompiledModules* linked, rvm::DataBuffer** deploy_stub, rvm::LogMessageOutput* log_msg_output) override;
+	virtual rvm::InvokeResult InitializeContracts(rvm::ExecutionContext* executionContext, uint32_t gas_limit, rvm::CompiledModules* linked, const rvm::ConstData* ctor_args) override;
 
 	virtual void Release() override
 	{

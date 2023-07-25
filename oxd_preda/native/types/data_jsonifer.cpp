@@ -164,18 +164,24 @@ bool TypeStrStreamPeekNextTypeIsValidMapKeyType(std::stringstream &typeStrStream
 	return true;
 }
 
-CDataJsonifier::CDataJsonifier(const char *pTypeStr, ISymbolDatabaseForJsonifier *pSymbolDatabase, const uint8_t *pData, uint32_t dataSize, bool bWrapValueWithQuotation)
+RvmDataJsonifier::RvmDataJsonifier(const char *pTypeStr, ISymbolDatabaseForJsonifier *pSymbolDatabase)
 {
 	m_simplifiedTypeString = pTypeStr;
 	std::replace_if(m_simplifiedTypeString.begin(), m_simplifiedTypeString.end(), [](const char &c) { return c == ':' || c == '=' || c == '<' || c == '>' || c == '{' || c == '}' || c == ';' || c == '(' || c == ')' || c == ','; }, ' ');
 	m_typeStrStream << m_simplifiedTypeString;
 	m_pSymbolDatabase = pSymbolDatabase;
-	m_dataSize = dataSize;
-	m_pData = pData;
-	m_bWrapValueWithQuotation = bWrapValueWithQuotation;
 }
 
-bool CDataJsonifier::Jsonify(std::string &outJson)
+int RvmDataJsonifier::Jsonify(std::string& outJson, const uint8_t* pData, uint32_t dataSize, bool bWrapValueWithQuotation)
+{
+	uint32_t remainingSize = dataSize;
+	if (!_Jsonify(outJson, pData, remainingSize, bWrapValueWithQuotation))
+		return -1;
+
+	return dataSize - remainingSize;
+}
+
+bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uint32_t &dataSize, bool bWrapValueWithQuotation)
 {
 	std::string curType;
 	if(!(m_typeStrStream >> curType))
@@ -187,30 +193,30 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 		if(!(m_typeStrStream >> numMember))
 			return false;
 
-		if (m_pData)
+		if (pData)
 		{
 			// parse struct header
-			if (m_dataSize < 1)
+			if (dataSize < 1)
 				return false;
-			uint8_t bytesPerOffset = (m_pData[0] & 3) + 1;			// lower 4 bits of first byte is offset byte width
-			if (m_dataSize < bytesPerOffset)
+			uint8_t bytesPerOffset = (pData[0] & 3) + 1;			// lower 4 bits of first byte is offset byte width
+			if (dataSize < bytesPerOffset)
 				return false;
 
-			uint32_t numMember2 = (m_pData[0] >> 4);				// rest of first byteWidth bytes is number of members
+			uint32_t numMember2 = (pData[0] >> 4);				// rest of first byteWidth bytes is number of members
 			for (uint8_t i = 1; i < bytesPerOffset; i++)
-				numMember2 += uint32_t(m_pData[i]) << ((i - 1) * 8 + 4);
+				numMember2 += uint32_t(pData[i]) << ((i - 1) * 8 + 4);
 			if (numMember2 != numMember)							// the number of members should match the one in signature
 				return false;
-			if (m_dataSize < bytesPerOffset * (numMember2 + 1))		// skip the offset table
+			if (dataSize < bytesPerOffset * (numMember2 + 1))		// skip the offset table
 				return false;
-			m_pData += bytesPerOffset * (numMember2 + 1);
-			m_dataSize -= bytesPerOffset * (numMember2 + 1);
+			pData += bytesPerOffset * (numMember2 + 1);
+			dataSize -= bytesPerOffset * (numMember2 + 1);
 		}
 		outJson = "{";
 		for(uint32_t i = 0; i < numMember; i++)
 		{
 			std::string memberJson;
-			if(!Jsonify(memberJson))
+			if(!_Jsonify(memberJson, pData, dataSize, bWrapValueWithQuotation))
 				return false;
 
 			std::string memberName;
@@ -220,7 +226,7 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 			if(i > 0)
 				outJson += ", ";
 
-			if(m_bWrapValueWithQuotation)
+			if(bWrapValueWithQuotation)
 				outJson += "\"" + memberName + "\" : " + memberJson;
 			else
 				outJson += memberName + " : " + memberJson;
@@ -229,24 +235,29 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 
 		return true;
 	}
-	else if (curType == "uint512" || curType == "uint256" || curType == "uint128" || curType == "uint64" || curType == "uint32" || curType == "uint16" || curType == "uint8")
+	else if (curType == "uint512" || curType == "uint256" || curType == "uint128" || curType == "uint64" || curType == "uint32" || curType == "uint16" || curType == "uint8" || curType == "interface" || curType == "contract")
 	{
-		if (!m_pData)
+		if (!pData)
 		{
 			outJson = "0";
 			return true;
 		}
 		uint32_t width;
+		if (curType == "interface" || curType == "contract")
+			width = 64;
+		else
+		{
 #ifdef _WIN32
-		sscanf_s(curType.c_str() + 4, "%ud", &width);
+			sscanf_s(curType.c_str() + 4, "%ud", &width);
 #else
-		sscanf(curType.c_str() + 4, "%ud", &width);
+			sscanf(curType.c_str() + 4, "%ud", &width);
 #endif
-		if(m_dataSize < width / 8)
+		}
+		if(dataSize < width / 8)
 			return false;
-		const uint8_t *pRead = m_pData;
-		m_dataSize -= width / 8;
-		m_pData += width / 8;
+		const uint8_t *pRead = pData;
+		dataSize -= width / 8;
+		pData += width / 8;
 		switch (width)
 		{
 		case 8:
@@ -276,7 +287,7 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 	}
 	else if (curType == "int512" || curType == "int256" || curType == "int128" || curType == "int64" || curType == "int32" || curType == "int16" || curType == "int8")
 	{
-		if (!m_pData)
+		if (!pData)
 		{
 			outJson = "0";
 			return true;
@@ -287,11 +298,11 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 #else
 		sscanf(curType.c_str() + 3, "%ud", &width);
 #endif
-		if(m_dataSize < width / 8)
+		if(dataSize < width / 8)
 			return false;
-		const uint8_t *pRead = m_pData;
-		m_dataSize -= width / 8;
-		m_pData += width / 8;
+		const uint8_t *pRead = pData;
+		dataSize -= width / 8;
+		pData += width / 8;
 		switch (width)
 		{
 		case 8:
@@ -319,7 +330,7 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 		return false;
 	}
 	else if(curType == "float256" || curType == "float512" || curType == "float1024") {
-		if (!m_pData)
+		if (!pData)
 		{
 			outJson = "0";
 			return true;
@@ -330,11 +341,11 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 		#else
 				sscanf(curType.c_str() + 5, "%ud", &width);
 		#endif
-		if(width/8 + 4 > m_dataSize)
+		if(width/8 + 4 > dataSize)
 			return false;
-		const uint8_t* pRead = m_pData;
-		m_dataSize -= (width/8 + 4);
-		m_pData += (width/8 + 4);
+		const uint8_t* pRead = pData;
+		dataSize -= (width/8 + 4);
+		pData += (width/8 + 4);
 		switch (width)
 		{
 		case 256:
@@ -351,39 +362,39 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 	}
 	else if(curType == "bool")
 	{
-		if (!m_pData)
+		if (!pData)
 		{
 			outJson = "false";
 			return true;
 		}
-		if(m_dataSize < 1)
+		if(dataSize < 1)
 			return false;
-		outJson = (*(bool*)m_pData) ? "true" : "false";
-		m_dataSize -= 1;
-		m_pData += 1;
+		outJson = (*(bool*)pData) ? "true" : "false";
+		dataSize -= 1;
+		pData += 1;
 
 		return true;
 	}
 	else if(curType == "string")
 	{
-		if (!m_pData)
+		if (!pData)
 		{
-			outJson = m_bWrapValueWithQuotation ? "\"\"" : "";
+			outJson = bWrapValueWithQuotation ? "\"\"" : "";
 			return true;
 		}
-		if(m_dataSize < 2)
+		if(dataSize < 2)
 			return false;
-		uint16_t len = *(uint16_t*)m_pData;
-		m_dataSize -= 2;
-		m_pData += 2;
+		uint16_t len = *(uint16_t*)pData;
+		dataSize -= 2;
+		pData += 2;
 
-		if(m_dataSize < len)
+		if(dataSize < len)
 			return false;
-		if(m_bWrapValueWithQuotation)
+		if(bWrapValueWithQuotation)
 		{
 			outJson.resize(len + 2);
 			if(len > 0)
-				memcpy(&outJson[1], m_pData, len);
+				memcpy(&outJson[1], pData, len);
 			outJson[0] = '\"';
 			outJson[outJson.length() - 1] = '\"';
 		}
@@ -391,27 +402,27 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 		{
 			outJson.resize(len);
 			if(len > 0)
-				memcpy(&outJson[0], m_pData, len);
+				memcpy(&outJson[0], pData, len);
 		}
 
-		m_dataSize -= len;
-		m_pData += len;
+		dataSize -= len;
+		pData += len;
 
 		return true;
 	}
 	else if(curType == "array")
 	{
-		if (!m_pData)
+		if (!pData)
 		{
 			outJson = "[]";
 			std::string tmp;
 			m_typeStrStream >> tmp;
 			return true;
 		}
-		if(m_dataSize < 4)
+		if(dataSize < 4)
 			return false;
 
-		uint32_t numElement = *(uint32_t*)(m_pData);
+		uint32_t numElement = *(uint32_t*)(pData);
 
 		bool bIsFixedElementSize;
 		if(!TypeStrStreamPeekNextTypeIsFixedSize(m_typeStrStream, bIsFixedElementSize))
@@ -419,10 +430,10 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 
 		uint32_t offsetToElementData = bIsFixedElementSize ? 4 : (4 + 4 * numElement);
 
-		if(m_dataSize < offsetToElementData)
+		if(dataSize < offsetToElementData)
 			return false;
-		m_dataSize -= offsetToElementData;
-		m_pData += offsetToElementData;
+		dataSize -= offsetToElementData;
+		pData += offsetToElementData;
 
 		std::stringstream::pos_type savedPos = m_typeStrStream.tellg();
 
@@ -434,7 +445,7 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 
 			m_typeStrStream.seekg(savedPos);
 			std::string elementJson;
-			if(!Jsonify(elementJson))
+			if(!_Jsonify(elementJson, pData, dataSize, bWrapValueWithQuotation))
 				return false;
 
 			outJson += elementJson;
@@ -451,7 +462,7 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 	}
 	else if(curType == "map")
 	{
-		if (!m_pData)
+		if (!pData)
 		{
 			outJson = "{}";
 			std::string tmp;
@@ -459,12 +470,12 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 			m_typeStrStream >> tmp;
 			return true;
 		}
-		if(m_dataSize < 4)
+		if(dataSize < 4)
 			return false;
 
-		uint32_t numElement = *(uint32_t*)(m_pData);
-		m_dataSize -= 4;
-		m_pData += 4;
+		uint32_t numElement = *(uint32_t*)(pData);
+		dataSize -= 4;
+		pData += 4;
 
 		bool bIsValueMapKeyType;
 		if(!TypeStrStreamPeekNextTypeIsValidMapKeyType(m_typeStrStream, bIsValueMapKeyType))
@@ -479,7 +490,7 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 		for(uint32_t i = 0; i < numElement; i++)
 		{
 			m_typeStrStream.seekg(savedPos);
-			if(!Jsonify(keyJsons[i]))
+			if(!_Jsonify(keyJsons[i], pData, dataSize, bWrapValueWithQuotation))
 				return false;
 
 			if(!(keyJsons[i].size() >= 2 && keyJsons[i][0] == '\"' && keyJsons[i][keyJsons[i].size() - 1] == '\"'))
@@ -498,10 +509,10 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 			return false;
 
 		uint32_t extraOffsetToElementData = bIsFixedElementSize ? 0 : (numElement * 4);
-		if(m_dataSize < extraOffsetToElementData)
+		if(dataSize < extraOffsetToElementData)
 			return false;
-		m_dataSize -= extraOffsetToElementData;
-		m_pData += extraOffsetToElementData;
+		dataSize -= extraOffsetToElementData;
+		pData += extraOffsetToElementData;
 
 		for(uint32_t i = 0; i < numElement; i++)
 		{
@@ -510,7 +521,7 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 
 			m_typeStrStream.seekg(savedPos);
 			std::string valueJson;
-			if(!Jsonify(valueJson))
+			if(!_Jsonify(valueJson, pData, dataSize, bWrapValueWithQuotation))
 				return false;
 
 			outJson += keyJsons[i] + ": " + valueJson;
@@ -527,156 +538,156 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 	}
 	else if(curType == "blob")
 	{
-		if (!m_pData)
+		if (!pData)
 		{
-			outJson = m_bWrapValueWithQuotation ? "\"null\"" : "null";
+			outJson = bWrapValueWithQuotation ? "\"null\"" : "null";
 			return true;
 		}
 		uint32_t numBytes = sizeof(::rvm::Blob);
-		if(m_dataSize < numBytes)
+		if(dataSize < numBytes)
 			return false;
 
-		rt::String res;
-		::rvm::_details::_Jsonify(*(::rvm::Blob *)m_pData, res);
-		outJson = res.GetString();
-		if(!m_bWrapValueWithQuotation && outJson.size() >= 2 && outJson[0] == '\"' && outJson[outJson.size() - 1] == '\"')
+		rt::Json res;
+		::rvm::RvmTypeJsonify(*(::rvm::Blob *)pData, res);
+		outJson = res.GetInternalString();
+		if(!bWrapValueWithQuotation && outJson.size() >= 2 && outJson[0] == '\"' && outJson[outJson.size() - 1] == '\"')
 			outJson = outJson.substr(1, outJson.size() - 2);
 
-		m_dataSize -= numBytes;
-		m_pData += numBytes;
+		dataSize -= numBytes;
+		pData += numBytes;
 
 		return true;
 	}
 	else if(curType == "hash")
 	{
-		if (!m_pData)
+		if (!pData)
 		{
-			outJson = m_bWrapValueWithQuotation ? "\"\"" : "";
+			outJson = bWrapValueWithQuotation ? "\"\"" : "";
 			return true;
 		}
 		uint32_t numBytes = sizeof(::rvm::HashValue);
-		if(m_dataSize < numBytes)
+		if(dataSize < numBytes)
 			return false;
 
-		rt::String res;
-		::rvm::_details::_Jsonify(*(::rvm::HashValue *)m_pData, res);
-		outJson += res.GetString();
-		if(!m_bWrapValueWithQuotation && outJson.size() >= 2 && outJson[0] == '\"' && outJson[outJson.size() - 1] == '\"')
+		rt::Json res;
+		::rvm::RvmTypeJsonify(*(::rvm::HashValue *)pData, res);
+		outJson += res.GetInternalString();
+		if(!bWrapValueWithQuotation && outJson.size() >= 2 && outJson[0] == '\"' && outJson[outJson.size() - 1] == '\"')
 			outJson = outJson.substr(1, outJson.size() - 2);
 
-		m_dataSize -= numBytes;
-		m_pData += numBytes;
+		dataSize -= numBytes;
+		pData += numBytes;
 
 		return true;
 	}
 	else if(curType == "address")
 	{
-		if (!m_pData)
+		if (!pData)
 		{
-			outJson = m_bWrapValueWithQuotation ? "\"\"" : "";
+			outJson = bWrapValueWithQuotation ? "\"\"" : "";
 			return true;
 		}
 		uint32_t numBytes = sizeof(::rvm::Address);
-		if(m_dataSize < numBytes)
+		if(dataSize < numBytes)
 			return false;
 
-		rt::String res;
-		::rvm::_details::_Jsonify(*(::rvm::Address *)m_pData, res);
-		outJson += res.GetString();
-		if(!m_bWrapValueWithQuotation && outJson.size() >= 2 && outJson[0] == '\"' && outJson[outJson.size() - 1] == '\"')
+		rt::Json res;
+		::rvm::RvmTypeJsonify(*(::rvm::Address *)pData, res);
+		outJson += res.GetInternalString();
+		if(!bWrapValueWithQuotation && outJson.size() >= 2 && outJson[0] == '\"' && outJson[outJson.size() - 1] == '\"')
 			outJson = outJson.substr(1, outJson.size() - 2);
 
-		m_dataSize -= numBytes;
-		m_pData += numBytes;
+		dataSize -= numBytes;
+		pData += numBytes;
 
 		return true;
 	}
 	else if(curType == "data")
 	{
-		if (!m_pData)
+		if (!pData)
 		{
-			outJson = m_bWrapValueWithQuotation ? "\"null\"" : "null";
+			outJson = bWrapValueWithQuotation ? "\"null\"" : "null";
 			return true;
 		}
-		::rvm::Data &data = *(::rvm::Data*)m_pData;
+		::rvm::Data &data = *(::rvm::Data*)pData;
 		uint32_t numReadBytes = uint32_t(data.GetEmbeddedSize());
-		if(numReadBytes > m_dataSize)
+		if(numReadBytes > dataSize)
 			return false;
 
-		rt::String res;
-		::rvm::_details::_Jsonify(data, res);
-		outJson = res.GetString();
-		if(!m_bWrapValueWithQuotation && outJson.size() >= 2 && outJson[0] == '\"' && outJson[outJson.size() - 1] == '\"')
+		rt::Json res;
+		::rvm::RvmTypeJsonify(data, res);
+		outJson = res.GetInternalString();
+		if(!bWrapValueWithQuotation && outJson.size() >= 2 && outJson[0] == '\"' && outJson[outJson.size() - 1] == '\"')
 			outJson = outJson.substr(1, outJson.size() - 2);
 
-		m_dataSize -= numReadBytes;
-		m_pData += numReadBytes;
+		dataSize -= numReadBytes;
+		pData += numReadBytes;
 
 		return true;
 	}
 	else if(curType == "bigint")
 	{
-		if (!m_pData)
+		if (!pData)
 		{
-			outJson = m_bWrapValueWithQuotation ? "\"0\"" : "0";
+			outJson = bWrapValueWithQuotation ? "\"0\"" : "0";
 			return true;
 		}
-		::rvm::BigNum &bignum = *(::rvm::BigNum*)m_pData;
+		::rvm::BigNum &bignum = *(::rvm::BigNum*)pData;
 
 		uint32_t numReadBytes = uint32_t(bignum.GetEmbeddedSize());
-		if(numReadBytes > m_dataSize)
+		if(numReadBytes > dataSize)
 			return false;
 
-		rt::String res;
-		::rvm::_details::_Jsonify(bignum, res);
-		outJson = res.GetString();
-		if(!m_bWrapValueWithQuotation && outJson.size() >= 2 && outJson[0] == '\"' && outJson[outJson.size() - 1] == '\"')
+		rt::Json res;
+		::rvm::RvmTypeJsonify(bignum, res);
+		outJson = res.GetInternalString();
+		if(!bWrapValueWithQuotation && outJson.size() >= 2 && outJson[0] == '\"' && outJson[outJson.size() - 1] == '\"')
 			outJson = outJson.substr(1, outJson.size() - 2);
 
-		m_dataSize -= numReadBytes;
-		m_pData += numReadBytes;
+		dataSize -= numReadBytes;
+		pData += numReadBytes;
 
 		return true;
 	}
 	else if(curType == "token")
 	{
-		if (!m_pData)
+		if (!pData)
 		{
-			outJson = m_bWrapValueWithQuotation ? "{\"id\":0,\"amount\":\"0\"}" : "{id:0,amount:0}";
+			outJson = bWrapValueWithQuotation ? "{\"id\":0,\"amount\":\"0\"}" : "{id:0,amount:0}";
 			return true;
 		}
-		if(m_bWrapValueWithQuotation)
+		if(bWrapValueWithQuotation)
 			outJson = "{\"id\" : ";
 		else
 			outJson = "{id : ";
-		if(m_dataSize < 4)
+		if(dataSize < 4)
 			return false;
-		outJson += std::to_string(*(uint64_t*)m_pData);
-		m_pData += 8;
-		m_dataSize -= 8;
+		outJson += std::to_string(*(uint64_t*)pData);
+		pData += 8;
+		dataSize -= 8;
 
-		if(m_bWrapValueWithQuotation)
+		if(bWrapValueWithQuotation)
 			outJson += ", \"amount\" : ";
 		else
 			outJson += ", amount : ";
 
-		::rvm::BigNum &bignum = *(::rvm::BigNum*)m_pData;
+		::rvm::BigNum &bignum = *(::rvm::BigNum*)pData;
 
 		uint32_t numReadBytes = uint32_t(bignum.GetEmbeddedSize());
-		if(numReadBytes > m_dataSize)
+		if(numReadBytes > dataSize)
 			return false;
 
-		rt::String res;
-		::rvm::_details::_Jsonify(bignum, res);
-		std::string amountJson = res.GetString();
-		if(!m_bWrapValueWithQuotation && amountJson.size() >= 2 && amountJson[0] == '\"' && amountJson[amountJson.size() - 1] == '\"')
+		rt::Json res;
+		::rvm::RvmTypeJsonify(bignum, res);
+		std::string amountJson(res.GetInternalString());
+		if(!bWrapValueWithQuotation && amountJson.size() >= 2 && amountJson[0] == '\"' && amountJson[amountJson.size() - 1] == '\"')
 			amountJson = amountJson.substr(1, amountJson.size() - 2);
 
 		outJson += amountJson;
 		outJson += "}";
 
-		m_dataSize -= numReadBytes;
-		m_pData += numReadBytes;
+		dataSize -= numReadBytes;
+		pData += numReadBytes;
 
 		return true;
 
@@ -687,61 +698,61 @@ bool CDataJsonifier::Jsonify(std::string &outJson)
 		if(!(m_typeStrStream >> enumTypeName))
 			return false;
 		uint16_t value = 0;
-		if (m_pData)
+		if (pData)
 		{
-			if (m_dataSize < 2)
+			if (dataSize < 2)
 				return false;
-			value = *(uint16_t*)m_pData;
+			value = *(uint16_t*)pData;
 		}
-		const char *enumString = m_pSymbolDatabase->GetEnumStringFromValue(enumTypeName.c_str(), value);
+		const char *enumString = m_pSymbolDatabase ? m_pSymbolDatabase->GetEnumStringFromValue(enumTypeName.c_str(), value) : nullptr;
 		if(enumString == nullptr)
 			return false;
-		if(m_bWrapValueWithQuotation)
+		if(bWrapValueWithQuotation)
 			outJson = "\"" + std::string(enumString) + "\"";
 		else
 			outJson = std::string(enumString);
-		if (m_pData)
+		if (pData)
 		{
-			m_dataSize -= 2;
-			m_pData += 2;
+			dataSize -= 2;
+			pData += 2;
 		}
 		return true;
 	}
 	else if(curType == "vault")
 	{
-		if (!m_pData)
+		if (!pData)
 		{
 			outJson = "[]";
 			return true;
 		}
-		::rvm::NonFungibleVault& vault = *(::rvm::NonFungibleVault*)m_pData;
+		::rvm::NonFungibleVault& vault = *(::rvm::NonFungibleVault*)pData;
 		uint32_t numReadBytes = uint32_t(vault.GetEmbeddedSize());
-		if(numReadBytes > m_dataSize)
+		if(numReadBytes > dataSize)
 			return false;
 
 		rt::Json json;
 		vault.Jsonify(json);
 		rt::String res(json.GetInternalString());
 		outJson = res.GetString();
-		if(!m_bWrapValueWithQuotation && outJson.size() >= 2 && outJson[0] == '\"' && outJson[outJson.size() - 1] == '\"')
+		if(!bWrapValueWithQuotation && outJson.size() >= 2 && outJson[0] == '\"' && outJson[outJson.size() - 1] == '\"')
 			outJson = outJson.substr(1, outJson.size() - 2);
 
-		m_dataSize -= numReadBytes;
-		m_pData += numReadBytes;
+		dataSize -= numReadBytes;
+		pData += numReadBytes;
 		return true;
 	}
 	return false;
 }
 
-CDataJsonParser::CDataJsonParser(const char *pTypeStr, ISymbolDatabaseForJsonifier *pSymbolDatabase)
+RvmDataJsonParser::RvmDataJsonParser(const char *pTypeStr, ISymbolDatabaseForJsonifier *pSymbolDatabase)
 {
-	m_simplifiedTypeString = pTypeStr;
+	m_simplifiedTypeString = pTypeStr ? pTypeStr : "";
 	std::replace_if(m_simplifiedTypeString.begin(), m_simplifiedTypeString.end(), [](const char &c) { return c == ':' || c == '=' || c == '<' || c == '>' || c == '{' || c == '}' || c == ';' || c == '(' || c == ')' || c == ','; }, ' ');
 	m_typeStrStream << m_simplifiedTypeString;
 	m_pSymbolDatabase = pSymbolDatabase;
 }
 
-bool CDataJsonParser::IsLongIntegerLiteralInRange(const rt::String_Ref& literalBody, size_t bitWidth, bool bIsSigned)
+bool RvmDataJsonParser::IsLongIntegerLiteralInRange(const rt::String_Ref& literalBody, size_t bitWidth, bool bIsSigned)
 {
 	bool literalIsNonPositive = literalBody[0] == '-';
 	rt::String_Ref str = literalIsNonPositive ? literalBody.SubStr(1) : literalBody;
@@ -781,7 +792,7 @@ bool CDataJsonParser::IsLongIntegerLiteralInRange(const rt::String_Ref& literalB
 	return true;
 }
 
-bool CDataJsonParser::IsIntegerLiteralInRange(const rt::String_Ref& literalBody, size_t bitWidth, bool bIsSigned)
+bool RvmDataJsonParser::IsIntegerLiteralInRange(const rt::String_Ref& literalBody, size_t bitWidth, bool bIsSigned)
 {
 	ASSERT(bitWidth == 8 || bitWidth == 16 || bitWidth == 32 || bitWidth == 64 || bitWidth == 128 || bitWidth == 256 || bitWidth == 512);
 	int base = 10;
@@ -840,7 +851,7 @@ bool CDataJsonParser::IsIntegerLiteralInRange(const rt::String_Ref& literalBody,
 	return true;
 }
 
-bool CDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uint8_t> &outBuffer)
+bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uint8_t> &outBuffer)
 {
 	std::string curType;
 	if(!(m_typeStrStream >> curType))
@@ -888,38 +899,45 @@ bool CDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uint8
 
 		return true;
 	}
-	else if (curType == "uint512" || curType == "uint256" || curType == "uint128" || curType == "uint64" || curType == "uint32" || curType == "uint16" || curType == "uint8") 
+	else if (curType == "uint512" || curType == "uint256" || curType == "uint128" || curType == "uint64" || curType == "uint32" || curType == "uint16" || curType == "uint8" || curType == "interface" || curType == "contract")
 	{
 		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_NUMBER)
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting number.");
 		uint32_t width;
+		if (curType == "interface" || curType == "contract")
+		{
+			width = 64;
+		}
+		else
+		{
 #ifdef _WIN32
-		sscanf_s(curType.c_str() + 4, "%ud", &width);
+			sscanf_s(curType.c_str() + 4, "%ud", &width);
 #else
-		sscanf(curType.c_str() + 4, "%ud", &width);
+			sscanf(curType.c_str() + 4, "%ud", &width);
 #endif
+		}
 		outBuffer.resize(width / 8);
-		if(!IsIntegerLiteralInRange(jsonStr, width, false)) {
-			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonConversionFailure, "Invalid literal for uint");
+		if(!IsIntegerLiteralInRange(jsonStr, width, false))
+		{
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonConversionFailure, "Invalid literal for " + curType);
 		}
 		switch (width)
 		{
 		case 8:
-
 			if(jsonStr.ToNumber<uint8_t>(*(uint8_t*)(&outBuffer[0])) == 0)
-				return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonConversionFailure, "Cannot convert number to uint8.");
+				return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonConversionFailure, "Cannot convert number to " + curType + ".");
 			return true;
 		case 16:
 			if(jsonStr.ToNumber<uint16_t>(*(uint16_t*)(&outBuffer[0])) == 0)
-				return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonConversionFailure, "Cannot convert number to uint16.");
+				return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonConversionFailure, "Cannot convert number to " + curType + ".");
 			return true;
 		case 32:
 			if(jsonStr.ToNumber<uint32_t>(*(uint32_t*)(&outBuffer[0])) == 0)
-				return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonConversionFailure, "Cannot convert number to uint32.");
+				return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonConversionFailure, "Cannot convert number to " + curType + ".");
 			return true;
 		case 64:
 			if(jsonStr.ToNumber<uint64_t>(*(uint64_t*)(&outBuffer[0])) == 0)
-				return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonConversionFailure, "Cannot convert number to uint64.");
+				return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonConversionFailure, "Cannot convert number to " + curType + ".");
 			return true;
 		case 128:
 		{
@@ -1011,21 +1029,21 @@ bool CDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uint8
 		{
 		case 256:
 		{
-			rvm::Float256 temp256(jsonStr._p);
+			::rvm::Float256 temp256(jsonStr._p);
 			memcpy(&outBuffer[0], temp256._Data, sizeof(temp256._Data) / sizeof(uint8_t));
 			return true;
 		}
 
 		case 512:
 		{
-			rvm::Float512 temp512(jsonStr._p);
+			::rvm::Float512 temp512(jsonStr._p);
 			memcpy(&outBuffer[0], temp512._Data, sizeof(temp512._Data) / sizeof(uint8_t));
 			return true;
 		}
 
 		case 1024:
 		{
-			rvm::Float1024 temp1024(jsonStr._p);
+			::rvm::Float1024 temp1024(jsonStr._p);
 			memcpy(&outBuffer[0], temp1024._Data, sizeof(temp1024._Data) / sizeof(uint8_t));
 			return true;
 		}
@@ -1215,7 +1233,7 @@ bool CDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uint8
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting string.");
 
 		outBuffer.resize(sizeof(::rvm::Blob));
-		if(!::rvm::_details::_JsonParse(*(::rvm::Blob*)&outBuffer[0], jsonStr))
+		if(!::rvm::RvmTypeJsonParse(*(::rvm::Blob*)&outBuffer[0], jsonStr))
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::InvalidBlobValue, "Invalid blob value.");
 
 		return true;
@@ -1226,7 +1244,7 @@ bool CDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uint8
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting string.");
 
 		outBuffer.resize(sizeof(::rvm::HashValue));
-		if(!::rvm::_details::_JsonParse(*(::rvm::HashValue*)&outBuffer[0], jsonStr))
+		if(!::rvm::RvmTypeJsonParse(*(::rvm::HashValue*)&outBuffer[0], jsonStr))
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::InvalidHashValue, "Invalid hash value.");
 
 		return true;
@@ -1237,7 +1255,7 @@ bool CDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uint8
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting string.");
 
 		outBuffer.resize(sizeof(::rvm::Address));
-		if(!::rvm::_details::_JsonParse(*(::rvm::Address *)&outBuffer[0], jsonStr))
+		if(!::rvm::RvmTypeJsonParse(*(::rvm::Address *)&outBuffer[0], jsonStr))
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::InvalidAddressValue, "Invalid address value.");
 
 		return true;
@@ -1248,7 +1266,7 @@ bool CDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uint8
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting string.");
 
 		::rvm::DataMutable data;
-		if(!::rvm::_details::_JsonParse(data, jsonStr))
+		if(!::rvm::RvmTypeJsonParse(data, jsonStr))
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::InvalidDataValue, "Data parse error.");
 
 		uint32_t embedSize = (uint32_t)::rvm::_details::_Embed<::rvm::Data, ::rvm::DataMutable>::GetEmbeddedSize(data);
@@ -1264,7 +1282,7 @@ bool CDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uint8
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting string.");
 
 		::rvm::BigNumMutable bigint;
-		if(!::rvm::_details::_JsonParse(bigint, jsonStr))
+		if(!::rvm::RvmTypeJsonParse(bigint, jsonStr))
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::BigintParseError, "Bigint parse error.");
 		if(bigint.GetLength() > 127)
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::BigintTooLarge, "Bigint too large.");
@@ -1296,7 +1314,7 @@ bool CDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uint8
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonObjectMemberMissing, "Object missing expected member \"amount\".");
 
 		::rvm::BigNumMutable bigint;
-		if(!::rvm::_details::_JsonParse(bigint, data))
+		if(!::rvm::RvmTypeJsonParse(bigint, data))
 			return SetError(data.Begin(), JsonParseErrorCode::BigintParseError, "Bigint parse error.");
 		if(bigint.GetLength() > 127)
 			return SetError(data.Begin(), JsonParseErrorCode::BigintTooLarge, "Bigint too large.");
@@ -1317,7 +1335,7 @@ bool CDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uint8
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::TypeStreamFormatError, "Internal error. Type stream has invalid format.");
 
 		uint16_t value;
-		if(!m_pSymbolDatabase->GetEnumValueFromString(enumTypeName, std::string(rt::String(jsonStr).GetString()), value))
+		if(!m_pSymbolDatabase || !m_pSymbolDatabase->GetEnumValueFromString(enumTypeName, std::string(rt::String(jsonStr).GetString()), value))
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::InvalidEnumerator, "Invalid enumerator.");
 
 		outBuffer.resize(2);
@@ -1328,8 +1346,8 @@ bool CDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uint8
 	else if(curType == "vault") {
 		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_ARRAY)
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting array of Ranges.");
-		rvm::NonFungibleVaultMutable idSet;
-		if(!::rvm::_details::_JsonParse(idSet, jsonStr))
+		::rvm::NonFungibleVaultMutable idSet;
+		if(!::rvm::RvmTypeJsonParse(idSet, jsonStr))
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::BigintParseError, "Bigint parse error.");
 		uint32_t embedSize = (uint32_t)::rvm::_details::_Embed<::rvm::NonFungibleVault, ::rvm::NonFungibleVaultMutable>::GetEmbeddedSize(idSet);
 		outBuffer.resize(embedSize);
@@ -1351,13 +1369,14 @@ bool FunctionArgumentUtil::JsonifyArguments(const char *pArgSignatureStr, ISymbo
 
 	for(int i = 0; i < (int)argumentTypes.size(); i++)
 	{
-		CDataJsonifier jsonifier(argumentTypes[i].c_str(), pSymbolDatabase, pData, dataSize, true);
+		RvmDataJsonifier jsonifier(argumentTypes[i].c_str(), pSymbolDatabase);
 		std::string paramJson;
-		if(!jsonifier.Jsonify(paramJson))
+		int32_t numConsumedBytes = jsonifier.Jsonify(paramJson, pData, dataSize, true);
+		if (numConsumedBytes == -1)
 			return false;
 
-		pData += dataSize - jsonifier.GetRemainingDataSize();
-		dataSize = jsonifier.GetRemainingDataSize();
+		pData += numConsumedBytes;
+		dataSize -= numConsumedBytes;
 
 		if(i > 0)
 			outJson += ", ";
@@ -1395,7 +1414,7 @@ bool FunctionArgumentUtil::JsonParseArguments(const char *pArgSignatureStr, ISym
 			return false;
 
 		std::vector<uint8_t> buffer;
-		CDataJsonParser dejsonifier(argumentTypes[i].c_str(), pSymbolDatabase);
+		RvmDataJsonParser dejsonifier(argumentTypes[i].c_str(), pSymbolDatabase);
 		if(!dejsonifier.JsonParse(data, buffer))
 			return false;
 

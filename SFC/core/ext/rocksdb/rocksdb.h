@@ -446,9 +446,9 @@ public:
 					}
 					rt::String _keytype_name;
 					cmp(){ _keytype_name = rt::TypeNameToString<KeyType>(); }
-					virtual const char* Name() const { return _keytype_name; }
-					virtual void FindShortestSeparator(std::string* start, const ::rocksdb::Slice& limit) const {}
-					virtual void FindShortSuccessor(std::string* key) const {}
+					virtual const char* Name() const override { return _keytype_name; }
+					virtual void FindShortestSeparator(std::string* start, const ::rocksdb::Slice& limit) const override {}
+					virtual void FindShortSuccessor(std::string* key) const override {}
 				};
 				static const cmp _cmp;
 				Opt.comparator = &_cmp;

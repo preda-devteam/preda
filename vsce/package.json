@@ -2,7 +2,7 @@
   "name": "preda",
   "displayName": "PREDA Language Preview Toolchain",
   "description": "Local development environment for the PREDA smart contract programming language",
-  "version": "0.1.79",
+  "version": "0.1.80",
   "engines": {
     "vscode": "^1.56.0"
   },

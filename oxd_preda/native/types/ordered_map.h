@@ -78,7 +78,6 @@ public:
 						   }
 					   );
 			}
-	static auto&	Zero(){ static const UINT _=0; return (const ORDERED_MAP&)_; }
 };
 #pragma pack(pop)
 } // namespace _details
@@ -124,14 +123,14 @@ class OrderedMap<KEY, VAL, OFF, false>: public _details::OrderedMapOp<OrderedMap
 {
 	_DETAILS_ORDEREDMAPOP_DECL_FRIEND_TYPES;
 	static_assert(sizeof(OFF) <= 4, "type of OFF is too large");
-	static_assert(rt::TypeTraits<KEY>::IsPOD || !_details::_TypeTraits<KEY>::IsMutable, "KEY must be Immutable type");
-	static_assert(rt::TypeTraits<VAL>::IsPOD || !_details::_TypeTraits<VAL>::IsMutable, "VAL must be Immutable type");
+	static_assert(rt::TypeTraits<KEY>::IsPOD || TypeTraits<KEY>::IsImmutable, "KEY must be Immutable type");
+	static_assert(rt::TypeTraits<VAL>::IsPOD || TypeTraits<VAL>::IsImmutable, "VAL must be Immutable type");
 	static const OFF OFF_MAX_NUM = ((1U << (8 * sizeof(OFF) - 1)) - 1);
 	template<typename KEY_, typename VAL_, typename OFF_, bool is_pod>
 	friend class OrderedMapMutable;
 	typedef _details::OrderedMapOp<OrderedMap<KEY, VAL, OFF, false>, KEY, VAL> _SC;
 	TYPETRAITS_DECLARE_NON_POD;
-	RVM_IMMUTABLE_TYPE(OrderedMap);
+	RVM_IMMUTABLE_TYPE(OrderedMap)
 protected:
 	typedef _details::_map_pair<true, KEY, VAL>	ITEM;
 	OFF				Count;			// # of keys
@@ -182,8 +181,8 @@ template<typename KEY, typename VAL, typename OFF, bool is_pod>
 class OrderedMapMutable: public _details::OrderedMapOp<OrderedMapMutable<KEY, VAL, OFF, is_pod>, KEY, VAL>
 					   , public _details::_MapMutableOp<OrderedMapMutable<KEY, VAL, OFF, is_pod>, KEY, VAL>
 {
-	static_assert(rt::TypeTraits<KEY>::IsPOD || !_details::_TypeTraits<KEY>::IsMutable, "KEY should be Immutable type");
-	static_assert(rt::TypeTraits<VAL>::IsPOD || !_details::_TypeTraits<VAL>::IsMutable, "VAL should be Immutable type");
+	static_assert(rt::TypeTraits<KEY>::IsPOD || TypeTraits<KEY>::IsImmutable, "KEY should be Immutable type");
+	static_assert(rt::TypeTraits<VAL>::IsPOD || TypeTraits<VAL>::IsImmutable, "VAL should be Immutable type");
 	_DETAILS_ORDEREDMAPOP_DECL_FRIEND_TYPES;
 	template<typename KEY_, typename VAL_, typename OFF_, bool is_pod_>
 	friend class OrderedMap;
@@ -341,22 +340,6 @@ public:
 #endif
 };
 
-namespace _details
-{
-	template<typename KEY, typename VAL, typename OFF, bool is_pod>
-	struct _TypeTraits<OrderedMap<KEY,VAL,OFF,is_pod>, false>
-	{	typedef OrderedMapMutable<KEY,VAL,OFF,is_pod>	Mutable;
-		typedef OrderedMap<KEY,VAL,OFF,is_pod>			Immutable;
-		static const bool IsMutable = false;
-	};
-	template<typename KEY, typename VAL, typename OFF, bool is_pod>
-	struct _TypeTraits<OrderedMapMutable<KEY,VAL,OFF,is_pod>, false>
-	{	typedef OrderedMapMutable<KEY,VAL,OFF,is_pod>	Mutable;
-		typedef OrderedMap<KEY,VAL,OFF,is_pod>			Immutable;
-		static const bool IsMutable = true;
-	};
-} // namespace _details
-
 template<typename KEY, typename OFF = UINT>
 using OrderedSet = OrderedMap<KEY,void,OFF>;
 
@@ -365,3 +348,9 @@ using OrderedSetMutable = OrderedMapMutable<KEY,void,OFF>;
 
 #undef _DETAILS_ORDEREDMAPOP_DECL_FRIEND_TYPES
 } // namespace rvm
+
+RVM_TYPETRAITS_GENERIC_DEF(
+	MARCO_CONCAT(typename KEY, typename VAL, typename OFF, bool is_pod),
+	MARCO_CONCAT(OrderedMap<KEY,VAL,OFF,is_pod>),
+	MARCO_CONCAT(OrderedMapMutable<KEY,VAL,OFF,is_pod>)
+)

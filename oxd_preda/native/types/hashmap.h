@@ -127,13 +127,12 @@ struct ItemOp
 	{	append += '{';
 		for(UINT i=0; i<count; i++)
 		{
-			if(i)append += ',';
-			_JsonDictKey(x->key, append);
-			append += ':';
-			_Jsonify(x->value, append);
+			append += '"';	RvmTypeToString(x->key, append);				append += '"';
+			append += ':';	RvmTypeJsonify(x->value, (rt::Json&)append);	append += ',';
+			
 			x = (const Item<KEY, VAL>*)(((LPCBYTE)x) + x->GetSize());
 		}
-		append += '}';
+		append.EndClosure('}');
 	}
 };
 	template<typename KEY>
@@ -142,10 +141,10 @@ struct ItemOp
 		{	append += '[';
 			for(UINT i=0; i<count; i++)
 			{
-				if(i)append += ',';
-				_Jsonify(x[i].key, append);
+				RvmTypeJsonify(x[i].key, (rt::Json&)append);
+				append += ',';
 			}
-			append += ']';
+			append.EndClosure(']');
 		}
 	};
 
@@ -155,13 +154,13 @@ struct HashMapMutableBase;
 template<typename KEY, typename VAL>
 struct _HashMapSigature
 {	static void Get(rt::String& n)
-	{	n += rt::SS("hashmap<"); _details::_TypeSignature<KEY>::Get(n); n+=','; _details::_TypeSignature<VAL>::Get(n); n+='>';
+	{	n += rt::SS("hashmap<"); RvmTypeSignature<KEY>::Get(n); n+=','; RvmTypeSignature<VAL>::Get(n); n+='>';
 	}
 };
 template<typename KEY>
 struct _HashMapSigature<KEY, void>
 {	static void Get(rt::String& n)
-	{	n += rt::SS("hashset<"); _details::_TypeSignature<KEY>::Get(n); n+='>';
+	{	n += rt::SS("hashset<"); RvmTypeSignature<KEY>::Get(n); n+='>';
 	}
 };
 
@@ -340,11 +339,12 @@ struct HashMapMutableBase
 } // namespace _details
 
 template<typename KEY, typename VAL, typename OFF>
-struct HashMapMutable<KEY, VAL, OFF, true>
+class HashMapMutable<KEY, VAL, OFF, true>
 					: protected ext::fast_map<KEY, VAL>
 					, protected _details::HashMapMutableBase<KEY, VAL, OFF>
 {   typedef _details::HashMapMutableBase<KEY, VAL, OFF> _SC;
     typedef ext::fast_map<KEY, VAL> _FM;
+public:
     typedef const HashMap<KEY, VAL, OFF> ImmutableMap;
 	HashMapMutable() = default;
 	HashMapMutable(const ImmutableMap& x){ _SC::_SetBase(x); }
@@ -379,12 +379,14 @@ struct HashMapMutable<KEY, VAL, OFF, true>
 					}
 };
 	template<typename KEY, typename OFF>
-	struct HashMapMutable<KEY, void, OFF>
+	class HashMapMutable<KEY, void, OFF>
 					: protected ext::fast_set<KEY>
 					, protected _details::HashMapMutableBase<KEY, void, OFF>
-    {   typedef const HashMap<KEY, void, OFF> ImmutableMap;
+    {
         typedef _details::HashMapMutableBase<KEY, void, OFF> _SC;
         typedef ext::fast_set<KEY> _FM;
+	public:
+		typedef const HashMap<KEY, void, OFF> ImmutableMap;
 		HashMapMutable() = default;
 		HashMapMutable(const ImmutableMap& x){ _SC::_SetBase(x); }
 		UINT			GetCount() const { return (UINT)_FM::size() + _SC::_BaseCount; }
@@ -425,7 +427,7 @@ class HashMap<KEY, VAL, T_OFF, false>
 	TYPETRAITS_DECLARE_NON_POD;
 	RVM_IMMUTABLE_TYPE(HashMap);
 	static const T_OFF OFF_MAX_NUM = ((1U << (8 * sizeof(T_OFF) - 1)) - 1);
-	static_assert(!_details::_TypeTraits<VAL>::IsMutable, "VAL must be Immutable type");
+	static_assert(TypeTraits<VAL>::IsImmutable, "VAL must be Immutable type");
 	static_assert(rt::TypeTraits<KEY>::IsPOD, "KEY is not POD");
 	static_assert(sizeof(T_OFF) <= 4, "type of OFF is too large");
 	
@@ -540,7 +542,7 @@ public:
 						return GetEmbeddedSize();
 					}
 	static auto&	ZeroValue(){ static const HashMap _zero(0); return _zero; }
-	static void		GetTypeSignature(rt::String& n){ n += rt::SS("hashmap<"); _details::_TypeSignature<KEY>::Get(n); n+=','; _details::_TypeSignature<VAL>::Get(n); n+='>'; }
+	static void		GetTypeSignature(rt::String& n){ n += rt::SS("hashmap<"); RvmTypeSignature<KEY>::Get(n); n+=','; RvmTypeSignature<VAL>::Get(n); n+='>'; }
 };
 #pragma pack(pop)
 
@@ -549,7 +551,7 @@ class HashMapMutable<KEY, VAL, OFF, false>
 					: protected ext::fast_map<KEY, _details::rvmtype_ptr<VAL>>
 {   typedef ext::fast_map<KEY, _details::rvmtype_ptr<VAL>> _SC;
 	TYPETRAITS_DECLARE_NON_POD;
-	static_assert(!_details::_TypeTraits<VAL>::IsMutable, "VAL should be Immutable type");
+	static_assert(TypeTraits<VAL>::IsImmutable, "VAL should be Immutable type");
 	static_assert(rt::TypeTraits<KEY>::IsPOD, "KEY is not POD");
 	static_assert(sizeof(OFF) <= 4, "type of OFF is too large");
 	typedef const HashMap<KEY, VAL, OFF> ImmutableMap;
@@ -689,22 +691,6 @@ public:
 				}
 };
 
-namespace _details
-{
-	template<typename KEY, typename VAL, typename OFF, bool is_pod>
-	struct _TypeTraits<HashMap<KEY,VAL,OFF,is_pod>, false>
-	{	typedef HashMapMutable<KEY,VAL,OFF,is_pod>	Mutable;
-		typedef HashMap<KEY,VAL,OFF,is_pod>	Immutable;
-		static const bool IsMutable = false;
-	};
-	template<typename KEY, typename VAL, typename OFF, bool is_pod>
-	struct _TypeTraits<HashMapMutable<KEY,VAL,OFF,is_pod>, false>
-	{	typedef HashMapMutable<KEY,VAL,OFF,is_pod>	Mutable;
-		typedef HashMap<KEY,VAL,OFF,is_pod>	Immutable;
-		static const bool IsMutable = true;
-	};
-} // namespace _details
-
 template<typename KEY, typename OFF = UINT>
 using HashSet = HashMap<KEY,void,OFF>;
 
@@ -712,3 +698,9 @@ template<typename KEY, typename OFF = UINT>
 using HashSetMutable = HashMapMutable<KEY,void,OFF>;
 
 } // namespace rvm
+
+RVM_TYPETRAITS_GENERIC_DEF(
+	MARCO_CONCAT(typename KEY, typename VAL, typename OFF, bool is_pod),
+	MARCO_CONCAT(HashMap<KEY,VAL,OFF,is_pod>),
+	MARCO_CONCAT(HashMapMutable<KEY,VAL,OFF,is_pod>)
+)

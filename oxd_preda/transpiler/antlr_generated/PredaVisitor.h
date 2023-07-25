@@ -39,6 +39,8 @@ public:
 
     virtual antlrcpp::Any visitStateVariableDeclaration(PredaParser::StateVariableDeclarationContext *context) = 0;
 
+    virtual antlrcpp::Any visitConstVariableDeclaration(PredaParser::ConstVariableDeclarationContext *context) = 0;
+
     virtual antlrcpp::Any visitScope(PredaParser::ScopeContext *context) = 0;
 
     virtual antlrcpp::Any visitStructDefinition(PredaParser::StructDefinitionContext *context) = 0;

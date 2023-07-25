@@ -3,7 +3,7 @@ random.reseed 88
 allocate.address $~count$
 chain.gaslimit 256
 
-chain.deploy Kitty.prd
+chain.deploy @1 Kitty.prd
 
 log.highlight Kitty breeding test
 

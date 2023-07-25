@@ -66,14 +66,6 @@
 
 namespace os
 {
-/** \defgroup thread_primitive thread_primitive
- * @ingroup os
- *  @{
- */
-/**
- * @brief All Atomic operation return the value after operation, EXCEPT AtomicOr and AtomicAnd 
- * 
- */
 #if defined(PLATFORM_WIN)
 	FORCEINL int		AtomicIncrement(volatile int *theValue){ return _InterlockedIncrement((long volatile *)theValue); }
 	FORCEINL int		AtomicDecrement(volatile int *theValue){ return _InterlockedDecrement((long volatile *)theValue); }
@@ -203,9 +195,14 @@ public:
         if(_OwnerTID == GetCurrentThreadId())
         {    _Recurrence++;    }
         else{ _OwnerTID = GetCurrentThreadId(); _Recurrence = 1; }
+        
+        ASSERT(_Recurrence);
     }
     void Unlock() const
-    {   _Recurrence--;
+    {   
+        ASSERT(_Recurrence);
+            
+        _Recurrence--;
         if(_Recurrence == 0)_OwnerTID = 0;
         VERIFY(0 == pthread_mutex_unlock((pthread_mutex_t*)&hCS));
     }
@@ -259,37 +256,33 @@ public:
 	~Event(){ ::CloseHandle(hEvent); }
 #else
 protected:
-	CriticalSection	hMutex;
-	pthread_cond_t	hEvent;
-	bool			bSet;
-	bool			bIsPulsed;
+	std::mutex				hMutex;
+	std::condition_variable	hEvent;
+	bool					bSet		= false;
+	bool					bIsPulsed	= false;
 public:	
 	INLFUNC bool WaitSignal(DWORD Timeout = INFINITE)
-	{	EnterCSBlock(hMutex);
+	{	std::unique_lock<std::mutex> lock(hMutex);
 		if(Timeout == INFINITE)
 		{	while(!bSet)
-			{	if(0 != pthread_cond_wait(&hEvent, &hMutex.hCS))return false;
+			{	hEvent.wait(lock);
 				if(bIsPulsed){ bIsPulsed = false; return true; }
-		}	}
+			}	
+		}
 		else
-		{	struct timespec ts;
-			{	struct timeval tv;
-				gettimeofday(&tv, NULL);
-				ts.tv_sec = tv.tv_sec + Timeout/1000;
-				ts.tv_nsec = tv.tv_usec*1000 + (Timeout%1000)*1000000;
-			}
-			while(!bSet)
-			{	if(0 != pthread_cond_timedwait(&hEvent,&hMutex.hCS,&ts))return false;
+		{	while(!bSet)
+			{	if(hEvent.wait_for(lock, std::chrono::milliseconds(Timeout)) == std::cv_status::timeout)
+					return true;
 				if(bIsPulsed){ bIsPulsed = false; return true; }				
-		}	}
+			}	
+		}
 		return true;
 	}
 	FORCEINL bool IsSignaled(){ return bSet; }
-	FORCEINL void Pulse(){ EnterCSBlock(hMutex); bSet = false; pthread_cond_signal(&hEvent); }
-	FORCEINL void Set(){ EnterCSBlock(hMutex); bSet = true; pthread_cond_broadcast(&hEvent); }
-	FORCEINL void Reset(){ EnterCSBlock(hMutex); bSet = false; }
-	Event(){ VERIFY(0 == pthread_cond_init(&hEvent,NULL)); bSet = false; }
-	~Event(){ pthread_cond_destroy(&hEvent); }
+	FORCEINL void Pulse(){ std::unique_lock<std::mutex> lock(hMutex); bSet = false; bIsPulsed = true; hEvent.notify_one(); }
+	FORCEINL void Set(){ std::unique_lock<std::mutex> lock(hMutex); bSet = true; hEvent.notify_all(); }
+	FORCEINL void Reset(){ std::unique_lock<std::mutex> lock(hMutex); bSet = false; }
+	Event(){};
 #endif
 };
 
@@ -477,6 +470,16 @@ public:
 };
 #endif
 
-/** @}*/
+template<typename T>
+class RefCounted
+{
+	volatile int _RefCount = 1;
+public:
+	void	AddRef(){ os::AtomicIncrement(&_RefCount); }
+	void	Release()
+			{	int rc = os::AtomicDecrement(&_RefCount);
+				if(rc == 0)_SafeDel_ConstPtr((T*)this);
+			}
+};
+
 } // namespace os
-/** @}*/

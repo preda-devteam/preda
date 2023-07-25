@@ -830,16 +830,16 @@ INLFUNC T MaxPower2Within(T within)
 }
 
 template<typename T>
-INLFUNC T* _CastToNonconst(const T * p){ return (T*)((size_t)p); }
+inline T* _CastToNonconst(const T * p){ return (T*)((size_t)p); }
 
 template<typename T>
-INLFUNC T& _CastToNonconst(const T& x){ return *(T*)&x; }
+inline T& _CastToNonconst(const T& x){ return *(T*)&x; }
 
 template<typename T>
-INLFUNC const T* _CastToConst(T * p){ return p; }
+inline const T* _CastToConst(T * p){ return p; }
 
 template<typename T>
-INLFUNC const T& _CastToConst(T& x){ return x; }
+inline const T& _CastToConst(T& x){ return x; }
 
 template<typename T>
 INLFUNC T* _RelocatePointer(LPCVOID new_base, LPCVOID old_base, T* old_p)
@@ -1309,21 +1309,30 @@ public:
 };
 
 template<typename T, bool has_default_obj = true>
-class Singleton
-{   typedef T* LPT;
-    static LPT& _Ptr(){ static T* ptr = nullptr; return ptr; }
-    static T&   _Def(){ static T ret; return ret; }
-public:
-    static T&   Get()
-				{	T* p = _Ptr();
-					if constexpr (!has_default_obj){ ASSERT(p); return *p; }
-					else return p?*p:_Def();
-				}
-    static bool HasInstance(){ return _Ptr(); }
-protected:
-    Singleton(){ ASSERT(_Ptr() == nullptr); _Ptr() = static_cast<T*>(this); }
-    ~Singleton(){ ASSERT(_Ptr()); _Ptr() = nullptr; }
-};
+class Singleton;
+	template<typename T>
+	class Singleton<T, true>
+	{   typedef T* LPT;
+		static LPT& _Ptr(){ static T* ptr = nullptr; return ptr; }
+		static T&   _Def(){ static T ret; return ret; }
+	public:
+		static T&   Get(){ T* p = _Ptr(); return p?*p:_Def(); }
+		static bool HasInstance(){ return _Ptr(); }
+	protected:
+		Singleton(){ ASSERT(_Ptr() == nullptr); _Ptr() = static_cast<T*>(this); }
+		~Singleton(){ ASSERT(_Ptr()); _Ptr() = nullptr; }
+	};
+	template<typename T>
+	class Singleton<T, false>
+	{   typedef T* LPT;
+		static LPT& _Ptr(){ static T* ptr = nullptr; return ptr; }
+	public:
+		static T&   Get(){ T* p = _Ptr(); ASSERT(p); return *p; }
+		static bool HasInstance(){ return _Ptr(); }
+	protected:
+		Singleton(){ ASSERT(_Ptr() == nullptr); _Ptr() = static_cast<T*>(this); }
+		~Singleton(){ ASSERT(_Ptr()); _Ptr() = nullptr; }
+	};
 
 struct FrequencyDivision
 {

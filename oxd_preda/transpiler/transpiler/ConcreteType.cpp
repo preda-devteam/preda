@@ -86,7 +86,9 @@ namespace transpiler {
 
 		pMember->qualifiedType.baseConcreteType->vOverloadedFunctions.push_back(signature);
 
-		if (typeCategory == InterfaceType && name[0] != '@')	// function name starting with '@' are reserved internal functions like "@constructor" and should not be included in the interface function mapping
+		if (typeCategory == InterfaceType	// function name starting with '@' or "__" are automatically generated functions like "@constructor" or "__id" and should not be included in the interface function mapping
+			&& (name.size() > 0 && name[0] != '@')
+			&& (name.size() < 2 || name[0] != '_' || name[1] != '_'))
 		{
 			vInterfaceMemberFuncIndexMapping.emplace_back(pMember, pMember->qualifiedType.baseConcreteType->vOverloadedFunctions.size() - 1);
 		}
@@ -171,7 +173,7 @@ namespace transpiler {
 		contractType->inputName = typeName;
 		contractType->outputFullName = typeOutputPrefix + typeName;
 		contractType->exportName = contractfullName;
-		contractType->supportedOperatorMask = uint64_t(OperatorTypeBitMask::DotBit);
+		contractType->supportedOperatorMask = uint64_t(OperatorTypeBitMask::AssignmentBit) | uint64_t(OperatorTypeBitMask::DotBit);
 
 		if (!AttachInnerConcreteType(contractType))
 			return nullptr;
@@ -233,7 +235,7 @@ namespace transpiler {
 		ConcreteTypePtr interfaceType = Allocator::New<ConcreteType>(InterfaceType);
 		interfaceType->bIsUserDefinedStructType = false;
 		interfaceType->inputName = typeName;
-		interfaceType->outputFullName = typeOutputPrefix + typeName;			// User-defined enum names are kept the same in the output
+		interfaceType->outputFullName = typeOutputPrefix + typeName;
 		interfaceType->exportName = typeName;
 		interfaceType->supportedOperatorMask = uint64_t(OperatorTypeBitMask::AssignmentBit) | uint64_t(OperatorTypeBitMask::DotBit);
 

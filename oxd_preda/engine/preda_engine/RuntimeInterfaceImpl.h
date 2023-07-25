@@ -31,18 +31,20 @@ class CRuntimeInterface : public prlrt::IRuntimeInterface {
 private:
 	struct ContractStackEntry
 	{
-		PredaContractDID deployId;
-		rvm::ContractId contractId;
+		rvm::ContractModuleID moduleId;
+		rvm::ContractVersionId cvId;
+		const rvm::ContractVersionId *importedCvIds;
+		uint32_t numImportedContracts;
 		uint32_t funtionFlags;
 	};
 	std::vector<ContractStackEntry> m_contractStack;
 	std::unordered_map<prlrt::CBigInt*, std::unique_ptr<prlrt::CBigInt>> m_bigint;
 
-	std::map<PredaContractDID, std::array<bool, uint8_t(prlrt::ContractContextType::Num)>> m_contractStateModifiedFlags;
+	std::map<rvm::ContractVersionId, std::array<bool, uint8_t(prlrt::ContractContextType::Num)>> m_contractStateModifiedFlags;
 	rvm::ExecutionContext *m_pExecutionContext = nullptr;
 	CExecutionEngine *m_pExecutionEngine = nullptr;
 	CContractDatabase *m_pDB = nullptr;
-	rvm::ChainState* m_pChainState = nullptr;
+	rvm::ChainStates* m_pChainState = nullptr;
 	bool m_bReportOrphanToken = true;
 
 	uint32_t m_remainingGas = 0;
@@ -52,7 +54,7 @@ private:
 	prlrt::ExceptionType* curr_exc = nullptr;
 
 public:
-	void PushContractStack(PredaContractDID deployId, rvm::ContractId contractId, uint32_t functionFlags);
+	void PushContractStack(const rvm::ContractModuleID &moduleId, rvm::ContractVersionId cvId, uint32_t functionFlags, const rvm::ContractVersionId* importedCvId, uint32_t numImportedContracts);
 	void PopContractStack()
 	{
 		m_contractStack.pop_back();
@@ -69,13 +71,9 @@ public:
 	{
 		return uint32_t(m_contractStack.size());
 	}
-	PredaContractDID GetContractStackItemDeployId(uint32_t idx)
+	bool* GetStateModifiedFlags(rvm::ContractVersionId cvId)
 	{
-		return m_contractStack[idx].deployId;
-	}
-	bool* GetStateModifiedFlags(PredaContractDID deployId)
-	{
-		auto itor = m_contractStateModifiedFlags.find(deployId);
+		auto itor = m_contractStateModifiedFlags.find(cvId);
 		if (itor == m_contractStateModifiedFlags.end())
 			return nullptr;
 		return &itor->second[0];
@@ -107,7 +105,7 @@ public:
 		m_remainingGas = totalGas;
 	}
 
-	void SetChainState(rvm::ChainState* pChainState)
+	void SetChainState(rvm::ChainStates* pChainState)
 	{
 		m_pChainState = pChainState;
 	}

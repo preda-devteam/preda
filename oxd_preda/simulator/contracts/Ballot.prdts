@@ -8,7 +8,7 @@ allocate.address $~count$
 chain.gaslimit 256
 
 // deploy contract
-chain.deploy Ballot.prd
+chain.deploy @1 Ballot.prd
 
 // log
 log.highlight Token test

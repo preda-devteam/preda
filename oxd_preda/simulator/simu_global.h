@@ -8,20 +8,25 @@ namespace oxd
 
 class BuildContracts: protected rvm::LogMessageOutput
 {
+	friend class SimuGlobalShard;
 protected:
 	rvm::RvmEngine*				_pEngine = nullptr;
 	rvm::EngineId				_EngineId = rvm::EngineId::Unassigned;
 	rvm::DAppId					_DAppId = rvm::DAppIdInvalid;
 	rt::String_Ref				_DAppName;
 
-	rt::Buffer<rt::String_Ref>	_Sources;
-	rt::Buffer<rt::String_Ref>	_Filenames;
-	rvm::CompiledContracts*		_pCompiled = nullptr;
-	DataBuffer					_CompileDependency;
+	rt::BufferEx<rt::String>	_Sources;
+	rt::BufferEx<rt::String>	_ConstructorArgs;
+	rt::BufferEx<rt::String>	_Filenames;
+	rvm::CompiledModules*		_pCompiled = nullptr;
+	rvm::DataBufferImpl			_CompileDependency;
 
-	rt::BufferEx<rvm::ContractDID>		_ContractDeploymentIds;
-	rt::BufferEx<rvm::InterfaceDID*>	_InterfaceDeploymentIds;
-	ext::fast_map<rt::String, rt::String> _ContractToFN;
+	rt::BufferEx<rvm::ConstData>			_ContractDeployArgs;
+	rt::BufferEx<rvm::ContractModuleID>		_ContractModuleIds;
+	rt::BufferEx<rvm::DataBufferImpl>		_ContractDeployStub;
+
+	void						_ResetContractWorkData(uint32_t size = 0);
+
 protected:
 	enum Stage
 	{
@@ -37,43 +42,28 @@ protected:
 	virtual void				Log(rvm::LogMessageType type, uint32_t code, uint32_t unitIndex, uint32_t line, uint32_t lineOffset, const rvm::ConstString *message) override;
 
 public:
+	ext::fast_map<rt::String, rt::String>	_ContractToFilename;
+
 	BuildContracts(rvm::RvmEngine* e, rvm::EngineId eid):_pEngine(e), _EngineId(eid){}
 	~BuildContracts(){ Term(); }
 
 	void		Init(const rt::String_Ref& dapp, rvm::DAppId dapp_id, rvm::EngineId eid);
 	void		Term();
 	uint32_t	GetSourceCount() const { return (uint32_t)_Sources.GetSize(); }
-	operator	const rvm::CompiledContracts* () const { return VERIFY(_pCompiled); }
 
-	void		AddSource(const rt::String_Ref& code, const rt::String_Ref& fn = nullptr);
-	bool		Compile(const rvm::ChainState* global_state);
+	void		AddContractCode(const rt::String_Ref& code, const rt::String_Ref& deploy_arg, const rt::String_Ref& fn = nullptr);
+	bool		Compile(bool checkDeployArg = true);
 	bool		Link();
-	bool		VerifyDependency(const rvm::ChainState* global_state) const;
-	bool		Deploy(rvm::ExecuteUnit* exec, rvm::ExecutionContext* exec_ctx, uint32_t gas_limit);
+	bool		VerifyDependency(const rvm::GlobalStates* global_state) const;
+	bool		Deploy(rvm::ExecutionUnit* exec, rvm::ExecutionContext* exec_ctx);
+	rvm::InvokeResult	InvokeConstructor(rvm::ExecutionUnit* exec, rvm::ExecutionContext* exec_ctx, uint32_t gas_limit);
 
-	auto*		GetContractDeploymentIds() const { ASSERT(_Stage == STAGE_DEPLOY); return (const rvm::ContractDID*)_ContractDeploymentIds; }
-	auto		GetInterfaceDeploymentIds() const { ASSERT(_Stage == STAGE_DEPLOY); return (const rvm::InterfaceDID* const*)_InterfaceDeploymentIds.Begin(); }
-
+	auto*		GetContractModuleIds() const { ASSERT(_Stage == STAGE_DEPLOY); return (const rvm::ContractModuleID*)_ContractModuleIds; }
 	bool		IsCompiled() const { return _Stage >= STAGE_COMPILE; }
-	void		GetContractsInfo(rt::Json& json, const rvm::ChainState* global_state) const; // _Stage >= STAGE_COMPILE
+	void		GetContractsInfo(rt::Json& json) const; // _Stage >= STAGE_COMPILE
 };
 
 #pragma pack(push, 1)
-struct ContractVersionedId
-{
-	TYPETRAITS_DECLARE_POD;
-	union {
-	rvm::ContractId		Contract;
-	rvm::InterfaceId	Interface;
-	};
-	rvm::BuildNum		Version;
-
-	ContractVersionedId(){}
-	ContractVersionedId(rvm::ContractId cid, rvm::BuildNum v){ Contract = cid; Version = v; }
-	ContractVersionedId(rvm::InterfaceId ifid, rvm::BuildNum v){ Interface = ifid; Version = v; }
-	bool operator == (const ContractVersionedId& x) const { return rt::IsEqual(*this, x); }
-};
-
 struct ContractFunction
 {
 	rvm::ContractId	Contract;
@@ -85,26 +75,31 @@ struct ContractFunction
 
 struct ContractsDatabase
 {
-#pragma pack(push, 1)
 	struct ContractInfo
 	{
-		rvm::BuildNum		Version;
-		rvm::DeploymentId	DeploymentId;
-		rvm::Scope			ScopeOfOpcode[256];
-		ContractInfo(){ Version = (rvm::BuildNum)0; }
+		rvm::Scope				ScopeOfOpcode[256];
+		rvm::DeployedContract	Deployment;
+		
+		void			Release(){ _SafeFree32AL_ConstPtr(this); }
+		uint32_t		GetSize() const { return offsetof(ContractInfo, Deployment.Stub) + Deployment.StubSize; }
+		ContractInfo*	Clone() const;
 	};
-#pragma pack(pop)
 
-	ext::fast_map_ptr<ContractVersionedId, ContractInfo, rt::_details::hash_compare_fix<ContractVersionedId>>	_ContractInfo; // includes interfaces as well
-	ext::fast_map<rt::String, rvm::ContractId>			_Contracts;
-	ext::fast_map<rvm::ContractId, rvm::BuildNum>		_ContractBuildNumLatest;
-	ext::fast_map<rt::String, rt::BufferEx<ContractFunction>>			_ContractFunctions;
-	ext::fast_map<rt::String, rvm::EngineId>			_ContractEngine;
-	uint32_t											_NextContractSN = 1;
+	typedef ext::fast_map_ptr<rvm::ContractVersionId, ContractInfo> t_ContractInfo;
+	// unnamed + named
+	t_ContractInfo												_ContractInfo; // includes interfaces as well
+	ext::fast_map<rvm::ContractId, rvm::BuildNum>				_ContractBuildNumLatest;
+	// named only
+	ext::fast_map<rt::String, rvm::ContractVersionId>			_Contracts;
+	ext::fast_map<rt::String, rt::BufferEx<ContractFunction>>	_ContractFunctions;
+	ext::fast_map<rt::String, rvm::EngineId>					_ContractEngine;
+	uint32_t													_NextContractSN = 1;
 
 	void	Reset(const ContractsDatabase& x);
 	void	Commit(ContractsDatabase& x);
 	void	Revert();
+	auto	FindContractInfo(const rvm::ContractModuleID& mid) -> const ContractInfo*;
+	~ContractsDatabase(){ Revert(); }
 };
 
 class SimuGlobalShard: public SimuShard
@@ -120,33 +115,34 @@ protected:
 	ShardStates							_DeployingStates;
 
 protected:
+	rvm::DAppId							_GetDAppByName(const rvm::ConstString* dapp_name) const;
+	rvm::ContractVersionId				_GetContractByName(const rvm::ConstString* dapp_contract_name) const;
 	rvm::BuildNum						_GetContractEffectiveBuild(rvm::ContractId contract) const;
-	const rvm::ContractDID*				_GetContractDeploymentIdentifier(rvm::ContractId cid, rvm::BuildNum version = rvm::BuildNumLatest) const;
-	const rvm::InterfaceDID*			_GetInterfaceDeploymentIdentifier(rvm::InterfaceId ifid, rvm::BuildNum version = rvm::BuildNumLatest) const;
-	rvm::ContractId						_GetContractByName(rvm::DAppId dapp_id, const rvm::ConstString* contract_name) const;
-	void								_FinalizeFunctionInfo(const ContractVersionedId& cvid, const rt::String_Ref& func_prefix, const rvm::DeploymentId& deploy_id, const rvm::Interface* info);
+	const rvm::DeployedContract*		_GetContractDeployed(rvm::ContractVersionId contract) const;
+	void								_FinalizeFunctionInfo(const rvm::ContractVersionId& cvid, const rt::String_Ref& func_prefix, const rvm::ContractModuleID& deploy_id, const rvm::Interface* info, const rvm::ConstData& stub);
 
 protected:
-	// From ChainState
+	// From GlobalStates
 	virtual rvm::ConstStateData			GetState(rvm::ContractScopeId contract) const override;
 	virtual rvm::ConstStateData			GetState(rvm::ContractScopeId contract, const rvm::ScopeKey* key) const override;
 
+	virtual rvm::DAppId					GetDAppByName(const rvm::ConstString* dapp_name) const override { return _GetDAppByName(dapp_name); }
+	virtual rvm::ContractVersionId		GetContractByName(const rvm::ConstString* dapp_contract_name) const override { return _GetContractByName(dapp_contract_name); }
 	virtual rvm::BuildNum				GetContractEffectiveBuild(rvm::ContractId contract) const override { return _GetContractEffectiveBuild(contract); }
-	virtual const rvm::ContractDID*		GetContractDeploymentIdentifier(rvm::ContractId contract, rvm::BuildNum version) const override { return _GetContractDeploymentIdentifier(contract, version); }
-	virtual const rvm::InterfaceDID*	GetInterfaceDeploymentIdentifier(rvm::InterfaceId contract) const override { return _GetInterfaceDeploymentIdentifier(contract); }
+
+	virtual const rvm::DeployedContract*GetContractDeployed(rvm::ContractVersionId contract) const override { return _GetContractDeployed(contract); };
 
 	// From ExecutionContext
-	virtual void						CommitNewState(rvm::BuildNum version, rvm::ContractScopeId contract, uint8_t* state_memory) override;
-	virtual void						CommitNewState(rvm::BuildNum version, rvm::ContractScopeId contract, const rvm::ScopeKey* key, uint8_t* state_memory) override;
+	virtual void						CommitNewState(rvm::ContractInvokeId contract, uint8_t* state_memory) override;
+	virtual void						CommitNewState(rvm::ContractInvokeId contract, const rvm::ScopeKey* key, uint8_t* state_memory) override;
+	virtual rvm::ContractVersionId		DeployUnnamedContract(rvm::DAppId dapp_id, rvm::EngineId engine_id, const rvm::ContractModuleID* module_id) override;
 
 public:
-	void		DeployBegin(SimuTxn* txn);
+	bool		IsDeploying() const { return _bDeploying; }
+	void		DeployBegin();
 	void		DeployEnd(bool commit);
-	bool		AllocateContractIds(const rvm::CompiledContracts* linked);
-	bool		FinalizeDeployment(	const rvm::CompiledContracts* deployed, 
-									const rvm::ContractDID* contract_deployment_ids,
-									const rvm::InterfaceDID* const* interface_deployment_ids
-				);
+	bool		AllocateContractIds(const BuildContracts& linked);
+	bool		CommitDeployment(const BuildContracts& deployed);
 	void		Term();
 	auto&		GetExecuteUnits(){ return _ExecUnits; }
 

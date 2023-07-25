@@ -181,7 +181,7 @@ template<typename VAL, typename OFF>
 class Array<VAL, OFF, false>: public _details::ArrayOp<Array<VAL, OFF, false>, VAL>
 {
 	static_assert(sizeof(OFF) <= 4, "type of OFF is too large");
-	static_assert(!_details::_TypeTraits<VAL>::IsMutable, "VAL must be immutable type");
+	static_assert(TypeTraits<VAL>::IsImmutable, "VAL must be immutable type");
 	template<typename, typename, bool>
 	friend class ArrayMutable;
 	friend class _details::ArrayOp<Array, VAL>;
@@ -189,9 +189,11 @@ class Array<VAL, OFF, false>: public _details::ArrayOp<Array<VAL, OFF, false>, V
         NEWBIT = 1U<<(8*sizeof(OFF)-1),
         OFFBITMASK = NEWBIT-1
     };
+public:
 	TYPETRAITS_DECLARE_NON_POD;
 	TYPETRAITS_DECLARE_ELEMENT(VAL);
 	RVM_IMMUTABLE_TYPE(Array)
+
 protected:
 	OFF				Count;			// # of keys
 	OFF				ItemTotalSize;	// sizeof(<VAL>[Count])
@@ -218,7 +220,7 @@ public:
 						{	if(i)str += ',';
 							auto off = offsets[i];
 							if(off != OFFBITMASK)
-								_details::_Jsonify(*(const VAL*)(p + off), str);
+								RvmTypeJsonify(*(const VAL*)(p + off), (rt::Json&)str);
 							else
 								str += rt::SS("null");
 						}
@@ -253,7 +255,7 @@ public:
 						return GetEmbeddedSize();
 					}
 	static auto&	Zero(){ static const Array _zero(0); return _zero; }
-	static void		GetTypeSignature(rt::String& n){ n += rt::SS("array<"); _details::_TypeSignature<VAL>::Get(n); n += '>'; }
+	static void		GetTypeSignature(rt::String& n){ n += rt::SS("array<"); RvmTypeSignature<VAL>::Get(n); n += '>'; }
 };
 #pragma pack(pop)
 
@@ -262,7 +264,7 @@ class ArrayMutable<VAL, OFF, false>: public _details::ArrayMutableOp<ArrayMutabl
 {
 	TYPETRAITS_DECLARE_NON_POD;
 	static_assert(sizeof(OFF) <= 4, "type of OFF is too large");
-	static_assert(!_details::_TypeTraits<VAL>::IsMutable, "VAL should be Immutable type");
+	static_assert(TypeTraits<VAL>::IsImmutable, "VAL should be Immutable type");
 	template<typename, typename, bool>
 	friend class Array;
 	friend class _details::ArrayOp<ArrayMutable, VAL>;
@@ -420,12 +422,12 @@ public:
 					{	Empty();
 						rt::String_Ref str = str_in.TrimSpace();
 						if(str[0] != '[' || str.Last() != ']')return false;
-						typedef typename _details::_TypeTraits<VAL>::Mutable val_mutable;
+						typedef typename TypeTraits<VAL>::Mutable val_mutable;
 						rt::String_Ref item;
 						rt::JsonArray json = str;
 						val_mutable m;
 						while(json.GetNextObjectRaw(item))
-						{	if(!_details::_JsonParse(m, item)){ Empty(); return false; }
+						{	if(!RvmTypeJsonParse(m, item)){ Empty(); return false; }
 							Append(RvmImmutableTypeCompose(m), RVMPTR_TAKE);
 						}
 						return true;
@@ -487,12 +489,12 @@ public:
 						str += '[';
 						for(UINT i=0; i<Count; i++)
 						{	if(i)str += ',';
-							_details::_Jsonify(Data[i], str);
+							RvmTypeJsonify(Data[i], (rt::Json&)str);
 						}
 						str += ']';
 					}
 	static auto&	Zero(){ static const Array _zero(0); return _zero; }
-	static void		GetTypeSignature(rt::String& n){ n += rt::SS("array<"); _details::_TypeSignature<VAL>::Get(n); n += '>'; }
+	static void		GetTypeSignature(rt::String& n){ n += rt::SS("array<"); RvmTypeSignature<VAL>::Get(n); n += '>'; }
 };
 #pragma pack(pop)
 
@@ -615,12 +617,12 @@ public:
 					{	Empty();
 						rt::String_Ref str = str_in.TrimSpace();
 						if(str[0] != '[' || str.Last() != ']')return false;
-						typedef typename _details::_TypeTraits<VAL>::Mutable val_mutable;
+						typedef typename TypeTraits<VAL>::Mutable val_mutable;
 						rt::String_Ref item;
 						rt::JsonArray json = str;
 						val_mutable m;
 						while(json.GetNextObjectRaw(item))
-						{	if(!_details::_JsonParse(m, item)){ Empty(); return false; }
+						{	if(!RvmTypeJsonParse(m, item)){ Empty(); return false; }
 							VAL x;
 							_details::_Embed<VAL, val_mutable>::Set((LPBYTE)&x, m);
 							Append(x);
@@ -629,20 +631,10 @@ public:
 					}
 };
 
-namespace _details
-{
-	template<typename VAL, typename OFF, bool is_pod>
-	struct _TypeTraits<Array<VAL,OFF,is_pod>, false>
-	{	typedef Array<VAL,OFF,is_pod>			Immutable;
-		typedef ArrayMutable<VAL,OFF,is_pod>	Mutable;	
-		static const bool IsMutable =	false;
-	};
-	template<typename VAL, typename OFF, bool is_pod>
-	struct _TypeTraits<ArrayMutable<VAL,OFF,is_pod>, false>
-	{	typedef Array<VAL,OFF,is_pod>			Immutable;
-		typedef ArrayMutable<VAL,OFF,is_pod>	Mutable;
-		static const bool IsMutable = true;
-	};
-} // namespace _details
-
 } // namespace rvm
+
+RVM_TYPETRAITS_GENERIC_DEF(
+	MARCO_CONCAT(typename VAL, typename OFF, bool is_pod),
+	MARCO_CONCAT(Array<VAL,OFF,is_pod>), 
+	MARCO_CONCAT(ArrayMutable<VAL,OFF,is_pod>)
+)

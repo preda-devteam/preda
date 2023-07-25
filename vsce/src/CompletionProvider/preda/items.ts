@@ -35,6 +35,10 @@ const completaionItems: CompletationItems[] = [
         "get_initiator_address",
         vscode.CompletionItemKind.Method
       ),
+      new vscode.CompletionItem(
+        "get_sender",
+        vscode.CompletionItemKind.Method
+      ),
     ],
   },
   {

@@ -208,19 +208,14 @@ public:
 		else
 			return false;
 	}
-	/**
-	 * @brief return 0 for out of the set
-	 * 
-	 * @param c 
-	 * @return int 
-	 */
-	int Mapped(int c) const 
+	int Mapped(int c) const  // return 0 for out of the set
 	{	if(c>=1 && _Set[c-1])
 			return _Set[c-1]; 
 		else
 			return c;
 	}
 };
+
 /**
  * @brief Escape for C/Json string
  * 
@@ -281,7 +276,6 @@ struct CharacterSet_Number: public CharacterSet_Digits
 	}
 };
 
-
 struct CharacterSet_AlphabetDigits: public CharacterSet
 {	CharacterSet_AlphabetDigits(LPCSTR sep_additional = nullptr)
 	{	for(int i='0'; i<='9'; i++)_Set[i-1] = true;
@@ -309,14 +303,14 @@ namespace _details
 	struct _StringPtrStore
 	{	char*	_p;
 		size_t	_len;
-		bool	IsEmpty() const { return this == nullptr || _p == nullptr || _len == 0; }
+		bool	IsEmpty() const { return (size_t)this == 0 || _p == nullptr || _len == 0; }
 		void	Empty(){ _p = nullptr; _len = 0; }
 	};
 	template<SIZE_T SIZE_RESERVED>
 	struct _StringArrayStore
 	{	char	_p[SIZE_RESERVED+1];
 		size_t	_len;
-		bool	IsEmpty() const { return this == nullptr || _len == 0; }
+		bool	IsEmpty() const { return (size_t)this == 0 || _len == 0; }
 		void	Empty(){ _len = 0; }
 		static const SIZE_T	_len_reserved = SIZE_RESERVED;
 	};
@@ -413,8 +407,8 @@ public:
 				{	return Begin() >= x.Begin() && (End() <= x.End());
 				}
 public:
-	SIZE_T		CommonPrefixLength(const t_StrRef& x) const { SIZE_T i=0; SIZE_T len = rt::min(GetLength(), x.GetLength()); for(;i<len && _SC::_p[i] == x[i];i++); return i; }
-	SIZE_T		CommonSuffixLength(const t_StrRef& x) const { SIZE_T i=1; SIZE_T len = rt::min(GetLength(), x.GetLength()); for(;i<len && _SC::_p[_SC::_len-i] == x[x._len-i];i++); return i-1; }
+	SIZE_T		CommonPrefixLength(const t_StrRef& x) const { SIZE_T i=0; SIZE_T len = rt::min(GetLength(), x.GetLength()); for(;i<len && _SC::_p[i] == x[i];i++){}; return i; }
+	SIZE_T		CommonSuffixLength(const t_StrRef& x) const { SIZE_T i=1; SIZE_T len = rt::min(GetLength(), x.GetLength()); for(;i<len && _SC::_p[_SC::_len-i] == x[x._len-i];i++){}; return i-1; }
 	t_StrRef	SubStrTail(SIZE_T len) const { return len > GetLength() ? *this : t_StrRef(_SC::_p+GetLength()-len, len); }
 	t_StrRef	SubStrHead(SIZE_T len) const { return t_StrRef(_SC::_p,rt::min(len,GetLength())); }
 	t_StrRef	SubStr(SIZE_T start, SIZE_T len) const { return start < GetLength() ? t_StrRef(_SC::_p+start,rt::min(len,GetLength()-start)) : nullptr; }
@@ -435,6 +429,11 @@ public:
 	SSIZE_T		FindCharacter(const CharacterSet& seps, SIZE_T start_offset = 0) const
 				{	for(;start_offset<GetLength();start_offset++)
 						if(seps.Has(_SC::_p[start_offset]))return start_offset;
+					return -1;
+				}
+	SSIZE_T		FindCharacterExcluded(const CharacterSet& seps_exclude, SIZE_T start_offset = 0) const
+				{	for(;start_offset<GetLength();start_offset++)
+						if(!seps_exclude.Has(_SC::_p[start_offset]))return start_offset;
 					return -1;
 				}
 	SSIZE_T		FindCharacterReverse(char ch, SIZE_T start_offset = 0) const
@@ -642,90 +641,97 @@ public:
 	 */
     template<typename T, int BASE, bool ALLOW_LEADING_NON_NUMERIC, char DECIMAL_POINT, char DIGIT_GROUP_SEPARATOR, bool NO_GROUP_SEPARATOR = false>
 	int			ToNumber(T& x) const  
-				{	x = (T)0;
-					char *s, *d, *end = _SC::_p + GetLength();
-					bool neg = false;
-					if(_SC::_p == end) return -1; // string is empty
-
-					// find the first digit
-					for (d = _SC::_p; _details::_to_num<BASE>::call(*d)>=BASE && d<end; d++){};
-					if (d == end) return -1; // no digit found
-
-					// (if is float) look for possible decimal point before the first digit
-					if(rt::NumericTraits<T>::IsFloat)
+				{	if constexpr (std::is_enum<T>::value)
 					{
-						if ((d-_SC::_p)>=1 && *(d-1)==(char)DECIMAL_POINT) --d; // set 'd' to decimal point so that x will be 0 and fragment parse will start at this point
+						auto& ix = *(typename std::underlying_type<T>::type*)&x;
+						return ToNumber(ix);
 					}
-					s = d;
+					else 
+					{	x = (T)0;
+						char *s, *d, *end = _SC::_p + GetLength();
+						bool neg = false;
+						if(_SC::_p == end) return -1; // string is empty
 
-					// (if is signed) look for possible signs (+/-)
-					if(rt::NumericTraits<T>::IsSigned || rt::NumericTraits<T>::IsFloat)
-					{
-						if ((s-_SC::_p)>=1 && (*(s-1)==(char)'+' || *(s-1)==(char)'-'))
+						// find the first digit
+						for (d = _SC::_p; _details::_to_num<BASE>::call(*d)>=BASE && d<end; d++){};
+						if (d == end) return -1; // no digit found
+
+						// (if is float) look for possible decimal point before the first digit
+						if(rt::NumericTraits<T>::IsFloat)
 						{
-							if (*(--s)==(char)'-') neg = true;
+							if ((d-_SC::_p)>=1 && *(d-1)==(char)DECIMAL_POINT) --d; // set 'd' to decimal point so that x will be 0 and fragment parse will start at this point
 						}
-					}
-					else if (!rt::NumericTraits<T>::IsSigned && (s - _SC::_p) >= 1 && (*(s-1) == (char)'-')) return -1;
-					// check if there is leading non-numeric
-					if(!ALLOW_LEADING_NON_NUMERIC)
-					{
-						if (s != _SC::_p) return -1; // number doesn't start at position 0
-					}
+						s = d;
 
-					// parse integral 'x'
-					UINT val = 0;
-					while(((*d==DIGIT_GROUP_SEPARATOR && !NO_GROUP_SEPARATOR) || (val = _details::_to_num<BASE>::call(*d))<BASE) && d<end)
-						if(*d++!=DIGIT_GROUP_SEPARATOR || NO_GROUP_SEPARATOR)
-						{	
-							if ((x || val) && rt::TypeTraits<T>::MaxVal() / BASE < x)
+						// (if is signed) look for possible signs (+/-)
+						if(rt::NumericTraits<T>::IsSigned || rt::NumericTraits<T>::IsFloat)
+						{
+							if ((s-_SC::_p)>=1 && (*(s-1)==(char)'+' || *(s-1)==(char)'-'))
 							{
-								return -1; // detect 'x' overflow
+								if (*(--s)==(char)'-') neg = true;
 							}
-							auto x_new = (T)(x*BASE + val);
-							if ((x || val) && x_new <= x)
-							{
-								if(!(neg && x_new == rt::TypeTraits<T>::MinVal())) // could be min value
-								return -1;
-							}
-							x = x_new;
+						}
+						else if (!rt::NumericTraits<T>::IsSigned && (s - _SC::_p) >= 1 && (*(s-1) == (char)'-')) return -1;
+						// check if there is leading non-numeric
+						if(!ALLOW_LEADING_NON_NUMERIC)
+						{
+							if (s != _SC::_p) return -1; // number doesn't start at position 0
 						}
 
-					// (if is float) parse fragment
-					if(rt::NumericTraits<T>::IsFloat)
-					{
-						if(*d == (char)DECIMAL_POINT && d<end)
-						{	d++;
-							double frag = 0, div = 1;
-							while(((*d==DIGIT_GROUP_SEPARATOR && !NO_GROUP_SEPARATOR) || (val = _details::_to_num<BASE>::call(*d))<BASE) && d<end)
-							{
-								if (*d++!=DIGIT_GROUP_SEPARATOR || NO_GROUP_SEPARATOR)
+						// parse integral 'x'
+						UINT val = 0;
+						while(((*d==DIGIT_GROUP_SEPARATOR && !NO_GROUP_SEPARATOR) || (val = _details::_to_num<BASE>::call(*d))<BASE) && d<end)
+							if(*d++!=DIGIT_GROUP_SEPARATOR || NO_GROUP_SEPARATOR)
+							{	
+								if((x||val) && (rt::TypeTraits<T>::MaxVal() / BASE < x))
 								{
-									div /= BASE;
-									frag += div * val;
+									return -1; // detect 'x' overflow
 								}
+								auto x_new = (T)(x*BASE + val);
+								if((x || val) && x_new <= x)
+								{
+									if(!(neg && x_new == rt::TypeTraits<T>::MinVal())) // could be min value
+									return -1;
+								}
+								x = x_new;
 							}
-							x = (T)(x + frag);
-						}
-						// parse scientific
-						if(*d == 'e' || *d == 'E')
-						{	d++; int index;
-							d += t_StrRef(d,End()).ToNumber(index);
-							if(index)x *= _details::_pow((T)10,index);
-						}
-					}
 
-					// apply sign
-					if(rt::NumericTraits<T>::IsSigned || rt::NumericTraits<T>::IsFloat)
-					{
-					#pragma warning(disable:4146)
-						if(neg)x = -x; 
-					#pragma warning(default:4146)
+						// (if is float) parse fragment
+						if(rt::NumericTraits<T>::IsFloat)
+						{
+							if(*d == (char)DECIMAL_POINT && d<end)
+							{	d++;
+								double frag = 0, div = 1;
+								while(((*d==DIGIT_GROUP_SEPARATOR && !NO_GROUP_SEPARATOR) || (val = _details::_to_num<BASE>::call(*d))<BASE) && d<end)
+								{
+									if (*d++!=DIGIT_GROUP_SEPARATOR || NO_GROUP_SEPARATOR)
+									{
+										div /= BASE;
+										frag += div * val;
+									}
+								}
+								x = (T)(x + frag);
+							}
+							// parse scientific
+							if(*d == 'e' || *d == 'E')
+							{	d++; int index;
+								d += t_StrRef(d,End()).ToNumber(index);
+								if(index)x *= _details::_pow((T)10,index);
+							}
+						}
+
+						// apply sign
+						if(rt::NumericTraits<T>::IsSigned || rt::NumericTraits<T>::IsFloat)
+						{
+						#pragma warning(disable:4146)
+							if(neg)x = -x; 
+						#pragma warning(default:4146)
+						}
+						return (int)(d - _SC::_p);
 					}
-					return (int)(d - _SC::_p);
 				}
 	template<typename T>
-	T			ToNumber() const { T ret = 0; ToNumber<T>(ret); return ret; }
+	T			ToNumber() const { T ret = (T)0; ToNumber<T>(ret); return ret; }
 private:
 	void		GetNextToken(const CharacterSet& token_charset, rt::String& token, rt::String& non_token) const { ASSERT(0); } // not supported
 	void		GetNextToken(const CharacterSet& token_charset, rt::String& token) const { ASSERT(0); } // not supported
@@ -1504,23 +1510,21 @@ namespace tos
 		}
 		S_(const S_& x){ _p = _string; _len = x._len; memcpy(_p, x._p, _len); }
 		S_(){ _p = _string; _len = 0; }
-		S_(bool x){ _len = __toS(_string,x); ASSERT(_len < LEN); _string[_len] = 0; _p = _string; }
-		S_(char x){ _len = __toS(_string,x); ASSERT(_len < LEN); _string[_len] = 0; _p = _string; }
-		S_(int x){ _len = __toS(_string,x); ASSERT(_len < LEN); _string[_len] = 0; _p = _string; }
-		S_(unsigned int x){ _len = __toS(_string,x); ASSERT(_len < LEN); _string[_len] = 0; _p = _string; }
-		S_(LONGLONG x){ _len = __toS(_string,x); ASSERT(_len < LEN); _string[_len] = 0; _p = _string; }
-		S_(ULONGLONG x){ _len = __toS(_string,x); ASSERT(_len < LEN); _string[_len] = 0; _p = _string; }
-#if defined(PLATFORM_WIN) || defined(PLATFORM_MAC) || defined(PLATFORM_IOS)
-		S_(long x){ _len = __toS(_string,x); ASSERT(_len < LEN); _string[_len] = 0; _p = _string; }
-		S_(unsigned long x){ _len = __toS(_string,x); ASSERT(_len < LEN); _string[_len] = 0; _p = _string; }
-#endif
-#if defined(PLATFORM_LINUX)
-		S_(long long int x){ _len = __toS(_string,(LONGLONG)x); ASSERT(_len < LEN); _string[_len] = 0; _p = _string; }
-		S_(unsigned long long int x){ _len = __toS(_string,(ULONGLONG)x); ASSERT(_len < LEN); _string[_len] = 0; _p = _string; }
-#endif
 		S_(LPCVOID x){ _len = __toS(_string,x); ASSERT(_len < LEN); _string[_len] = 0; _p = _string; }
 		S_(float x, int fractional_digits = 2){ _len = __toS(_string,x,fractional_digits); ASSERT(_len < LEN); _string[_len] = 0; _p = _string; }
 		S_(double x, int fractional_digits = 4){ _len = __toS(_string,x,fractional_digits); ASSERT(_len < LEN); _string[_len] = 0; _p = _string; }
+		template<typename T>
+		S_(T x)
+		{	if constexpr (std::is_enum<T>::value)
+			{	// as enum
+				_len = __toS(_string, *(typename std::underlying_type<T>::type*)&x);
+			}
+			else
+			{
+				_len = __toS(_string, x);
+			}
+			ASSERT(_len < LEN); _string[_len] = 0; _p = _string;
+		}
 	};
 
 } // namespace tos
@@ -2008,9 +2012,9 @@ public:
 					if(Last() == ',' || Last() == '.' || Last() == ';'){ Last() = closure_symb; return true; }
 					*this += closure_symb; return false;
 				}
-	LPSTR		Extend(SIZE_T count)
+	LPSTR		Extend(SIZE_T count) // return the address of the first character being extended
 				{	auto org_size = GetLength();
-					SetLength(rt::max(GetLength() + count, GetLength()*2));
+					SetLength(org_size + count);
 					return &_p[org_size];
 				}
 };

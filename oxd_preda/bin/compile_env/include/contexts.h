@@ -68,10 +68,10 @@ namespace prlrt {
 		}
 		__prlt_array<__prlt_address> __prli_get_signers()
 		{
-			if (__prli_get_type() != transaction_type::__prli_normal_type)
+			if (__prli_get_type() != transaction_type::__prli_normal_type && __prli_get_type() != transaction_type::__prli_system_type)
 				throw preda_exception("get_signer not available", prlrt::ExceptionType::AccessUnavailableContextFunction);
 			__prlt_array<__prlt_address> ret;
-			uint32_t numSigner = PREDA_CALL(Transaction_GetSingerCount, );
+			uint32_t numSigner = PREDA_CALL(Transaction_GetSignerCount, );
 			for (uint32_t i = 0; i < numSigner; i++) {
 				__prlt_address value;
 				PREDA_CALL(Transaction_GetSigner, i, (uint8_t*)&value);
@@ -83,7 +83,7 @@ namespace prlrt {
 		{
 			if (__prli_get_type() != transaction_type::__prli_normal_type)
 				return false;
-			if (signerIdx._v >= PREDA_CALL(Transaction_GetSingerCount, ))
+			if (signerIdx._v >= PREDA_CALL(Transaction_GetSignerCount, ))
 				return false;
 			return PREDA_CALL(Transaction_VerifySignerByIndex, signerIdx._v);
 		}

@@ -208,13 +208,12 @@ uint32_t CRuntimeInterface::BigintToString(prlrt::BigintPtr self, char* out, uin
 
 bool CRuntimeInterface::InitAddressFromLiteral(void *pAddress, const char *str)
 {
-	return ::rvm::_details::_JsonParse(*(::rvm::Address *)pAddress, rt::String_Ref(str)).ret;
+	return ::rvm::RvmTypeJsonParse(*(::rvm::Address *)pAddress, rt::String_Ref(str));
 }
 
 bool CRuntimeInterface::InitHashFromLiteral(void *pHash, const char *str)
 {
-	rt::String_Ref tmp(str, 52);
-	return ::oxd::b32str::Decode(pHash, 32, tmp.Begin(), tmp.GetLength());
+	return ::oxd::b32str::Decode(pHash, 32, str, os::Base32EncodeLength(sizeof(rvm::HashValue)));
 }
 
 void CRuntimeInterface::CalculateHash(void *pHash, const uint8_t *data, uint32_t data_len)
@@ -224,27 +223,22 @@ void CRuntimeInterface::CalculateHash(void *pHash, const uint8_t *data, uint32_t
 
 bool CRuntimeInterface::StringToAddress(void *pAddress, const char *data, uint32_t data_len)
 {
-	rvm::ConstString cs{ data, data_len };
-	_details::AddressInplaceBuffer buf((uint8_t*)pAddress);
-	if (!m_pDB->m_pRuntimeAPI->JsonParseCoreType(rvm::NativeTypeId::Address, &cs, &buf))
-		return false;
-	return true;
+	return ((oxd::SecureAddress*)pAddress)->FromString(rt::String_Ref(data, data_len));
 }
 
 uint32_t CRuntimeInterface::GetAddressToStringLength(const void* pAddress)
 {
-	return (uint32_t)(rvm::_details::ADDRESS_BASE32_LEN + 1 + oxd::SecuritySuite::IdToString(((rvm::Address*)pAddress)->_SSID).GetLength());
+	return oxd::SecureAddress::String::GetStringifyLength(*(oxd::SecureAddress*)pAddress);
 }
 
 bool CRuntimeInterface::AddressToString(const void* pAddress, uint32_t dataLen, char* out)
 {
-	rt::String result;
-	rvm::Address addr;
-	memcpy(&addr, pAddress, dataLen);
-	char addr_buf[rvm::_details::ADDRESS_BASE32_LEN];
-	rvm::_details::ADDRESS_TO_STRING(addr, addr_buf);
-	result = rt::String(addr_buf, rvm::_details::ADDRESS_BASE32_LEN)  + rt::SS(":") + oxd::SecuritySuite::IdToString(addr._SSID);
-	memcpy(out, result.Begin(), result.GetLength());
+	if (dataLen != sizeof(rvm::Address))
+		return false;
+
+	oxd::SecureAddress::String str(*(oxd::SecureAddress*)pAddress);
+	memcpy(out, str.GetString(), str.GetLength());
+
 	return true;
 }
 
@@ -264,12 +258,14 @@ bool CRuntimeInterface::HashToString(const void* pData, uint32_t dataLen, char* 
 	return true;
 }
 
-void CRuntimeInterface::PushContractStack(PredaContractDID deployId, rvm::ContractId contractId, uint32_t functionFlags)
+void CRuntimeInterface::PushContractStack(const rvm::ContractModuleID &moduleId, rvm::ContractVersionId cvId, uint32_t functionFlags, const rvm::ContractVersionId* importedCvId, uint32_t numImportedContracts)
 {
 	ContractStackEntry entry;
-	entry.deployId = deployId;
-	entry.contractId = contractId;
+	entry.moduleId = moduleId;
+	entry.cvId = cvId;
 	entry.funtionFlags = functionFlags;
+	entry.importedCvIds = importedCvId;
+	entry.numImportedContracts = numImportedContracts;
 	m_contractStack.push_back(entry);
 
 	bool bIsConstCall = (functionFlags & uint32_t(transpiler::FunctionFlags::IsConst)) != 0;
@@ -278,7 +274,7 @@ void CRuntimeInterface::PushContractStack(PredaContractDID deployId, rvm::Contra
 	{
 		std::array<bool, uint8_t(prlrt::ContractContextType::Num)> initialFlags;
 		initialFlags.fill(false);
-		auto itor = m_contractStateModifiedFlags.try_emplace(deployId, initialFlags);
+		auto itor = m_contractStateModifiedFlags.try_emplace(cvId, initialFlags);
 		transpiler::ScopeType scope = transpiler::ScopeType(functionFlags & uint32_t(transpiler::FunctionFlags::ScopeTypeMask));
 		itor.first->second[uint32_t(scope)] = true;
 		if (uint32_t(scope) > uint32_t(transpiler::ScopeType::Global))
@@ -299,7 +295,8 @@ bool CRuntimeInterface::EmitRelayToScope(const uint8_t* scope_key, uint32_t scop
 	args.DataSize = args_size;
 	// TODO: implement gas_redistribution_weight on preda code level
 	rvm::Scope rvmScope = _details::PredaScopeToRvmScope(transpiler::ScopeType(scope_type));
-	return m_pExecutionContext->EmitRelayToScope(rvm::BuildNumLatest, scope_key, scope_key_size, rvm::_details::CONTRACT_SET_SCOPE(m_contractStack.back().contractId, rvmScope), rvm::OpCode(opCode), &args, 1);
+	rvm::ScopeKey key{ scope_key, scope_key_size };
+	return m_pExecutionContext->EmitRelayToScope(rvm::CONTRACT_SET_SCOPE(m_contractStack.back().cvId, rvmScope), &key, rvm::OpCode(opCode), &args, 1);
 }
 
 bool CRuntimeInterface::EmitRelayToGlobal(uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)
@@ -308,7 +305,7 @@ bool CRuntimeInterface::EmitRelayToGlobal(uint32_t opCode, const uint8_t* args_s
 	args.DataPtr = args_serialized;
 	args.DataSize = args_size;
 	// TODO: implement gas_redistribution_weight on preda code level
-	return m_pExecutionContext->EmitRelayToGlobal(rvm::BuildNumLatest, rvm::_details::CONTRACT_SET_SCOPE(m_contractStack.back().contractId, rvm::Scope::Global), rvm::OpCode(opCode), &args, 1);
+	return m_pExecutionContext->EmitRelayToGlobal(rvm::CONTRACT_SET_SCOPE(m_contractStack.back().cvId, rvm::Scope::Global), rvm::OpCode(opCode), &args, 1);
 }
 
 bool CRuntimeInterface::EmitRelayToShards(uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)
@@ -317,36 +314,124 @@ bool CRuntimeInterface::EmitRelayToShards(uint32_t opCode, const uint8_t* args_s
 	args.DataPtr = args_serialized;
 	args.DataSize = args_size;
 	// TODO: implement gas_redistribution_weight on preda code level
-	return m_pExecutionContext->EmitBroadcastToShards(rvm::BuildNumLatest, rvm::_details::CONTRACT_SET_SCOPE(m_contractStack.back().contractId, rvm::Scope::Shard), rvm::OpCode(opCode), &args, 1);
+	return m_pExecutionContext->EmitBroadcastToShards(rvm::CONTRACT_SET_SCOPE(m_contractStack.back().cvId, rvm::Scope::Shard), rvm::OpCode(opCode), &args, 1);
 }
 
-uint32_t CRuntimeInterface::CrossCall(uint64_t contractId, uint32_t opCode, const void **ptrs, uint32_t numPtrs)
+uint32_t CRuntimeInterface::CrossCall(uint64_t cvId, int64_t templateContractImportSlot, uint32_t opCode, const void **ptrs, uint32_t numPtrs)
 {
-	return m_pExecutionEngine->InvokeContractCall(m_pExecutionContext, rvm::ContractId(contractId), opCode, ptrs, numPtrs);
+	static_assert(sizeof(cvId) == sizeof(rvm::ContractVersionId));
+
+	if (templateContractImportSlot < -1 || templateContractImportSlot >= int64_t(m_contractStack.back().numImportedContracts))
+		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallContractNotFound) << 8);
+
+	rvm::ContractVersionId templateCvId = templateContractImportSlot == -1 ? m_contractStack.back().cvId : m_contractStack.back().importedCvIds[templateContractImportSlot];
+
+	// since the call is via arbitrary contract id, it's possible that the contract is not a copy of the base contract
+	// check if their DID are the same
+	if (cvId != uint64_t(templateCvId))
+	{
+		const rvm::DeployedContract *deployedContract = m_pChainState->GetContractDeployed(rvm::ContractVersionId(cvId));
+		const rvm::DeployedContract *baseDeployedContract = m_pChainState->GetContractDeployed(templateCvId);
+		if (deployedContract == nullptr || baseDeployedContract == nullptr || memcmp(&deployedContract->Module, &baseDeployedContract->Module, sizeof(rvm::ContractModuleID)) != 0)
+			return uint32_t(ExecutionResult::InvalidFunctionId);
+	}
+	return m_pExecutionEngine->InvokeContractCall(m_pExecutionContext, rvm::ContractVersionId(cvId), opCode, ptrs, numPtrs);
 }
 
-uint32_t CRuntimeInterface::InterfaceCall(uint64_t contractId, const char* interfaceName, uint32_t funcIdx, const void** ptrs, uint32_t numPtrs)
+uint32_t CRuntimeInterface::InterfaceCall(uint64_t cvId, int64_t interfaceContractImportSlot, uint32_t interfaceSlot, uint32_t funcIdx, const void** ptrs, uint32_t numPtrs)
 {
-	PredaContractDID deployId = _details::RvmCDIDToPredaCDID(m_pChainState->GetContractDeploymentIdentifier(rvm::ContractId(contractId)));		// interface call always calls the latest build
+	static_assert(sizeof(cvId) == sizeof(rvm::ContractVersionId));
 
-	const ContractDatabaseEntry *pEntry = m_pDB->FindContractEntry(deployId);
+	if (interfaceContractImportSlot < -1 || interfaceContractImportSlot >= int64_t(m_contractStack.back().numImportedContracts))
+		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallContractNotFound) << 8);
+
+	rvm::ContractVersionId interfaceCvId = interfaceContractImportSlot == -1 ? m_contractStack.back().cvId : m_contractStack.back().importedCvIds[interfaceContractImportSlot];
+
+	const rvm::DeployedContract *contract = m_pChainState->GetContractDeployed(rvm::ContractVersionId(cvId));
+	if (contract == nullptr)
+		return uint32_t(ExecutionResult::ContractNotFound);
+	const rvm::ContractModuleID* moduleId = &contract->Module;
+
+	const ContractDatabaseEntry* pEntry = m_pDB->FindContractEntry(*moduleId);
 	if (!pEntry)
 		return uint32_t(ExecutionResult::ContractNotFound);
 
-	for (int i = 0; i < pEntry->compileData.implementedInterfaces.size(); i++)
+	const rvm::DeployedContract* interfaceContract = m_pChainState->GetContractDeployed(interfaceCvId);
+	if (interfaceContract == nullptr)
+		return uint32_t(ExecutionResult::InvalidFunctionId);
+	const rvm::ContractModuleID* interfaceModuleId = &interfaceContract->Module;
+
+	for (uint32_t i = 0; i < uint32_t(pEntry->compileData.implementedInterfaces.size()); i++)
 	{
-		if (pEntry->compileData.implementedInterfaces[i].name == interfaceName)
+		const ContractImplementedInterface& implementedInterface = pEntry->compileData.implementedInterfaces[i];
+		// compare slot index first because it's faster
+		if (implementedInterface.interfaceDefSlot == interfaceSlot && memcmp(&implementedInterface.interfaceDefContractModuleId, interfaceModuleId, sizeof(rvm::ContractModuleID)) == 0)
 		{
-			if (funcIdx < uint32_t(pEntry->compileData.implementedInterfaces[i].functionIds.size()))
+			if (funcIdx < uint32_t(implementedInterface.functionIds.size()))
 			{
-				uint32_t opCode = pEntry->compileData.implementedInterfaces[i].functionIds[funcIdx];
-				return m_pExecutionEngine->InvokeContractCall(m_pExecutionContext, rvm::ContractId(contractId), opCode, ptrs, numPtrs);
+				uint32_t opCode = implementedInterface.functionIds[funcIdx];
+				return m_pExecutionEngine->InvokeContractCall(m_pExecutionContext, rvm::ContractVersionId(cvId), opCode, ptrs, numPtrs);
 			}
 			return uint32_t(ExecutionResult::InvalidFunctionId);
 		}
 	}
 
 	return uint32_t(ExecutionResult::InvalidFunctionId);
+}
+
+uint64_t CRuntimeInterface::DeployCall(int64_t templateContractImportSlot, const void** ptrs, uint32_t numPtrs)
+{
+	static_assert((uint64_t)rvm::ContractVersionIdInvalid == 0, "rvm::::ContractVersionIdInvalid value changed, need to update deploy_call() in preda runtime");
+
+	rvm::ContractVersionId stackTopCvId = m_contractStack.back().cvId;
+	rvm::DAppId dappId = rvm::CONTRACT_DAPP(stackTopCvId);			// The new contract's dapp must be the same as the dapp of the caller, which is top of the call stack
+
+	if (templateContractImportSlot < -1 || templateContractImportSlot >= int64_t(m_contractStack.back().numImportedContracts))
+		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallContractNotFound) << 8);
+	rvm::ContractVersionId templateCvId = templateContractImportSlot == -1 ? m_contractStack.back().cvId : m_contractStack.back().importedCvIds[templateContractImportSlot];
+	rvm::EngineId engineId = rvm::CONTRACT_ENGINE(templateCvId);
+	const rvm::DeployedContract* templateContract = m_pChainState->GetContractDeployed(rvm::ContractVersionId(templateCvId));
+	if (!templateContract)
+		return (uint64_t)rvm::ContractVersionIdInvalid;
+	const rvm::ContractModuleID* pModuleId = &templateContract->Module;
+
+	rvm::ContractVersionId newCvId = m_pExecutionContext->DeployUnnamedContract(dappId, engineId, pModuleId);
+
+	const ContractDatabaseEntry* pContractEntry = m_pDB->FindContractEntry(*pModuleId);
+	if (!pContractEntry)
+		return (uint64_t)rvm::ContractVersionIdInvalid;
+
+	int32_t opCode = pContractEntry->compileData.globalDeployFunctionIdx;
+
+	// deployed contract has no constructor
+	static_assert(std::is_same<uint64_t, std::underlying_type_t<rvm::ContractId>>::value);
+	if (opCode == -1)
+		return (uint64_t)newCvId;
+
+	if (uint32_t(opCode) >= uint32_t(pContractEntry->compileData.functions.size())
+		|| (pContractEntry->compileData.functions[opCode].flags & uint32_t(transpiler::FunctionFlags::CallableFromSystem)) == 0)
+		return (uint64_t)rvm::ContractVersionIdInvalid;
+
+	// newly deployed contract should have the same stub as the template contract since it's just the imported contract ids
+	PushContractStack(*pModuleId, newCvId, pContractEntry->compileData.functions[opCode].flags, (const rvm::ContractVersionId*)templateContract->Stub, templateContract->StubSize / sizeof(rvm::ContractVersionId));
+	// no need to call SetExecutionContext() here, deploy call is only possible inside a transaction call, therefore execution context is already set
+
+	// newly deployed contract should have the same stub as the template contract since it's just the imported contract ids
+	ContractRuntimeInstance* pContractInstance = m_pExecutionEngine->CreateContractInstance(*pModuleId, newCvId, (const rvm::ContractVersionId*)templateContract->Stub, templateContract->StubSize / sizeof(rvm::ContractVersionId));
+	if (pContractInstance == nullptr)
+		return (uint64_t)rvm::ContractVersionIdInvalid;
+
+	if (!m_pExecutionEngine->MapNeededContractContext(m_pExecutionContext, pContractInstance, pContractEntry->compileData.functions[opCode].flags))
+		return (uint64_t)rvm::ContractVersionIdInvalid;
+
+	uint32_t ret = pContractInstance->ContractCall(opCode, ptrs, numPtrs);
+
+	PopContractStack();
+
+	if (ExecutionResult(ret & 0xff) != ExecutionResult::NoError)
+		return (uint64_t)rvm::ContractVersionIdInvalid;
+
+	return (uint64_t)newCvId;
 }
 
 void CRuntimeInterface::ReportOrphanToken(uint64_t id, prlrt::BigintPtr amount)
@@ -371,7 +456,7 @@ void CRuntimeInterface::DebugPrintBufferAppendSerializedData(const char *type_ex
 		return;
 
 	std::string outputStr;
-	bool res = m_pDB->VariableJsonify(m_contractStack.back().deployId, type_export_name, serialized_data, serialized_data_size, outputStr, m_pChainState);
+	bool res = m_pDB->VariableJsonify(m_contractStack.back().moduleId, type_export_name, serialized_data, serialized_data_size, outputStr, m_pChainState);
 	assert(res);
 
 	m_logOutputBuffer += outputStr;
@@ -381,7 +466,7 @@ void CRuntimeInterface::DebugPrintOutputBuffer(uint32_t line)
 {
 	rvm::ConstString s{ m_logOutputBuffer.c_str(), uint32_t(m_logOutputBuffer.size()) };
 
-	m_pDB->m_pRuntimeAPI->DebugPrint(rvm::DebugMessageType::Informational, &s, m_pExecutionContext, m_pDB->GetContract(m_contractStack.back().deployId), line);
+	m_pDB->m_pRuntimeAPI->DebugPrint(rvm::DebugMessageType::Informational, &s, m_pExecutionContext, m_pDB->GetContract(&m_contractStack.back().moduleId), line);
 	m_logOutputBuffer.clear();
 }
 
@@ -389,26 +474,14 @@ void CRuntimeInterface::DebugAssertionFailure(uint32_t line)
 {
 	std::string tmp = "Assertion failure on line " + std::to_string(line);
 	rvm::ConstString s{ tmp.c_str(), uint32_t(tmp.size()) };
-	m_pDB->m_pRuntimeAPI->DebugPrint(rvm::DebugMessageType::Warning, &s, m_pExecutionContext, m_pDB->GetContract(m_contractStack.back().deployId));
+	m_pDB->m_pRuntimeAPI->DebugPrint(rvm::DebugMessageType::Warning, &s, m_pExecutionContext, m_pDB->GetContract(&m_contractStack.back().moduleId));
 }
 
 void CRuntimeInterface::DebugAssertionFailureMessage(uint32_t line, const char* message, uint32_t length)
 {
 	std::string tmp = "Assertion failure on line " + std::to_string(line) + ": " + std::string(message, length);
 	rvm::ConstString s{ tmp.c_str(), uint32_t(tmp.size()) };
-	m_pDB->m_pRuntimeAPI->DebugPrint(rvm::DebugMessageType::Warning, &s, m_pExecutionContext, m_pDB->GetContract(m_contractStack.back().deployId));
-}
-
-uint32_t CRuntimeInterface::GetTokenIdByName(const char* name)
-{
-	const rvm::ConstString tokenName = { name, uint32_t(strlen(name)) };
-	rvm::TokenId id = m_pExecutionContext->GetTokenBySymbol(&tokenName);
-
-	uint32_t ret;
-	static_assert(std::is_same_v<std::underlying_type_t<decltype(id)>, std::remove_const_t<std::remove_reference_t<decltype(ret)>>>);
-
-	ret = enum_to_underlying(id);
-	return ret;
+	m_pDB->m_pRuntimeAPI->DebugPrint(rvm::DebugMessageType::Warning, &s, m_pExecutionContext, m_pDB->GetContract(&m_contractStack.back().moduleId));
 }
 
 bool CRuntimeInterface::IsUserAddress(const void *pAddress)
@@ -423,22 +496,17 @@ bool CRuntimeInterface::IsDelegatedAddress(const void *pAddress)
 
 bool CRuntimeInterface::IsDAppAddress(const void *pAddress)
 {
-	return ((oxd::SecureAddress*)pAddress)->GetSecuritySuiteId() == oxd::SEC_SUITE_REGISTERED_DAPP;
+	return ((oxd::SecureAddress*)pAddress)->GetSecuritySuiteId() == oxd::SEC_SUITE_DELEGATED_DAPP;
 }
 
 bool CRuntimeInterface::IsAssetAddress(const void *pAddress)
 {
-	return ((oxd::SecureAddress*)pAddress)->GetSecuritySuiteId() == oxd::SEC_SUITE_REGISTERED_TOKEN;
+	return ((oxd::SecureAddress*)pAddress)->GetSecuritySuiteId() == oxd::SEC_SUITE_DELEGATED_TOKEN;
 }
 
 bool CRuntimeInterface::IsNameAddress(const void *pAddress)
 {
-	return ((oxd::SecureAddress*)pAddress)->GetSecuritySuiteId() == oxd::SEC_SUITE_REGISTERED_NAME;
-}
-
-bool CRuntimeInterface::IsDomainAddress(const void *pAddress)
-{
-	return ((oxd::SecureAddress*)pAddress)->GetSecuritySuiteId() == oxd::SEC_SUITE_REGISTERED_DOMAIN;
+	return ((oxd::SecureAddress*)pAddress)->GetSecuritySuiteId() == oxd::SEC_SUITE_DELEGATED_NAME;
 }
 
 bool CRuntimeInterface::IsContractAddress(const void* pAddress)
@@ -448,12 +516,12 @@ bool CRuntimeInterface::IsContractAddress(const void* pAddress)
 
 bool CRuntimeInterface::IsCustomAddress(const void* pAddress)
 {
-	return ((oxd::SecureAddress*)pAddress)->GetSecuritySuiteId() == oxd::SEC_SUITE_CUSTOM;
+	return ((oxd::SecureAddress*)pAddress)->GetSecuritySuiteId() == oxd::SEC_SUITE_DELEGATED_HASH;
 }
 
 void CRuntimeInterface::SetAsCustomAddress(void* pAddress, const uint8_t* data)
 {
-	((oxd::SecureAddress*)pAddress)->SetAsCustom(data);
+	((oxd::SecureAddress*)pAddress)->SetDelegatedAsHash(data);
 }
 
 void CRuntimeInterface::SetAsContractAddress(void* pAddress, uint64_t contract_id)
@@ -722,7 +790,7 @@ prlrt::transaction_type CRuntimeInterface::Transaction_GetType()
 void CRuntimeInterface::Transaction_GetSelfAddress(uint8_t* out)
 {
 	// only if scope is address
-	if (rvm::_details::CONTRACT_SCOPE(m_pExecutionContext->GetContractId()) == rvm::Scope::Address)
+	if (rvm::CONTRACT_SCOPE(m_pExecutionContext->GetContractId()) == rvm::Scope::Address)
 		*(rvm::Address*)out = *(rvm::Address*)m_pExecutionContext->GetScopeTarget().Data;
 
 }
@@ -731,10 +799,10 @@ void CRuntimeInterface::Transaction_GetSender(uint8_t* out)
 {
 	// only if scope is address
 	if (m_contractStack.size() > 1)
-		((oxd::SecureAddress*)out)->SetAsContract(uint64_t(m_contractStack[m_contractStack.size() - 2].contractId));
+		((oxd::SecureAddress*)out)->SetAsContract(uint64_t(m_contractStack[m_contractStack.size() - 2].cvId));
 	else
 	{
-		if (Transaction_GetSingerCount() > 0)
+		if (Transaction_GetSignerCount() > 0)
 		{
 			*(rvm::Address*)out = *m_pExecutionContext->GetSigner(0);
 		}
@@ -757,7 +825,7 @@ void CRuntimeInterface::Transaction_GetSigner(uint32_t signerIdx, uint8_t* out)
 		((oxd::SecureAddress*)out)->Zero();
 }
 
-const uint32_t CRuntimeInterface::Transaction_GetSingerCount()
+const uint32_t CRuntimeInterface::Transaction_GetSignerCount()
 {
 	return m_pExecutionContext->GetSignerCount();
 }

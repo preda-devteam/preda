@@ -1,5 +1,6 @@
 #include "simu_global.h"
 #include "simulator.h"
+#include "../native/types/data_jsonifer.h"
 
 
 namespace oxd
@@ -8,14 +9,32 @@ namespace oxd
 void ContractsDatabase::Reset(const ContractsDatabase& x)
 {
 	_NextContractSN = x._NextContractSN;
+	ASSERT(_ContractInfo.size() == 0);
+}
+
+const ContractsDatabase::ContractInfo* ContractsDatabase::FindContractInfo(const rvm::ContractModuleID& mid)
+{
+	for(auto& it : _ContractInfo)
+	{
+		if(rt::IsEqual(it.second->Deployment.Module, mid))
+			return it.second;
+	}
+
+	return nullptr;
 }
 
 void ContractsDatabase::Commit(ContractsDatabase& x)
 {
-	for(auto& it : _Contracts)x._Contracts[it.first] = it.second;
-	for(auto& it : _ContractBuildNumLatest)x._ContractBuildNumLatest[it.first] = it.second;
-	for(auto& it : _ContractFunctions)x._ContractFunctions[it.first] = it.second;
-	for(auto& it : _ContractInfo)_SafeDel_ConstPtr(x._ContractInfo.replace(it.first, it.second));
+	for(auto& it : _ContractInfo)
+		x._ContractInfo[it.first] = it.second;
+	for(auto& it : _Contracts)
+		x._Contracts[it.first] = it.second;
+	for(auto& it : _ContractBuildNumLatest)
+		x._ContractBuildNumLatest[it.first] = it.second;
+	for(auto& it : _ContractFunctions)
+		x._ContractFunctions[it.first] = it.second;
+	for(auto& it : _ContractEngine)
+		x._ContractEngine[it.first] = it.second;
 
 	x._NextContractSN = _NextContractSN;
 
@@ -25,13 +44,14 @@ void ContractsDatabase::Commit(ContractsDatabase& x)
 
 void ContractsDatabase::Revert()
 {
+	for(auto& p : _ContractInfo)
+		p.second->Release();
+	_ContractInfo.clear();
+
 	_Contracts.clear();
 	_ContractBuildNumLatest.clear();
 	_ContractFunctions.clear();
-
-	for(auto& it : _ContractInfo)
-		_SafeDel_ConstPtr(it.second);
-	_ContractInfo.clear();
+	_ContractEngine.clear();
 
 	_NextContractSN = 0;
 }
@@ -54,58 +74,28 @@ rvm::BuildNum SimuGlobalShard::_GetContractEffectiveBuild(rvm::ContractId contra
 	return _ContractBuildNumLatest.get(contract, 0);
 }
 
-const rvm::ContractDID*	SimuGlobalShard::_GetContractDeploymentIdentifier(rvm::ContractId contract, rvm::BuildNum version) const
+const rvm::DeployedContract* SimuGlobalShard::_GetContractDeployed(rvm::ContractVersionId contract) const
 {
-	if(version == rvm::BuildNumLatest)
-		version = _GetContractEffectiveBuild(contract);
-
-	if(version)
+	if(_bDeploying)
 	{
-		ContractVersionedId k = { contract, version };
-
-		if(_bDeploying)
-		{
-			auto* it = _DeployingDatabase._ContractInfo.get(k);
-			if(it)return  (const rvm::ContractDID*)&it->DeploymentId;
-		}
-
-		auto* it = _ContractInfo.get(k);
-		if(it)return (const rvm::ContractDID*)&it->DeploymentId;
+		auto it = _DeployingDatabase._ContractInfo.find(contract);
+		if(it != _DeployingDatabase._ContractInfo.end())
+			return &it->second->Deployment;
 	}
 
-	return nullptr;
+	auto it = _ContractInfo.find(contract);
+	if(it != _ContractInfo.end())
+		return &it->second->Deployment;
+	else
+		return nullptr;
 }
 
-const rvm::InterfaceDID* SimuGlobalShard::_GetInterfaceDeploymentIdentifier(rvm::InterfaceId ifid, rvm::BuildNum version) const
-{
-	if(version == rvm::BuildNumLatest)
-		version = _GetContractEffectiveBuild(rvm::_details::INTERFACE_CONTRACT(ifid));
-
-	if(version)
-	{
-		ContractVersionedId k = { ifid, version };
-
-		if(_bDeploying)
-		{
-			auto* it = _DeployingDatabase._ContractInfo.get(k);
-			if(it)return  (const rvm::InterfaceDID*)&it->DeploymentId;
-		}
-
-		auto* it = _ContractInfo.get(k);
-		if(it)return (const rvm::InterfaceDID*)&it->DeploymentId;
-	}
-
-	return nullptr;
-}
-
-void SimuGlobalShard::DeployBegin(SimuTxn* txn)
+void SimuGlobalShard::DeployBegin()
 {
 	ASSERT(!_bDeploying);
 
 	_bDeploying = true;
 	_DeployingDatabase.Reset(*this);
-
-	_pTxn = txn;
 }
 
 void SimuGlobalShard::DeployEnd(bool commit)
@@ -124,7 +114,43 @@ void SimuGlobalShard::DeployEnd(bool commit)
 	}
 
 	_bDeploying = false;
-	_pTxn = nullptr;
+}
+
+ContractsDatabase::ContractInfo* ContractsDatabase::ContractInfo::Clone() const
+{
+	uint32_t len =  GetSize();
+	auto* ret = (ContractInfo*)_Malloc32AL(BYTE, len);
+	memcpy(ret, this, len);
+
+	return ret;
+}
+
+rvm::ContractVersionId SimuGlobalShard::DeployUnnamedContract(rvm::DAppId dapp_id, rvm::EngineId engine_id, const rvm::ContractModuleID* module_id)
+{
+	ASSERT(module_id);
+	ASSERT(_pTxn);
+	if(!_bDeploying)
+	{	// DeployBegin
+		_bDeploying = true;
+		_DeployingDatabase.Reset(*this);
+	}
+
+	auto* info = _DeployingDatabase.FindContractInfo(*module_id);
+	if(!info)info = FindContractInfo(*module_id);
+	if(info)
+	{
+		rvm::ContractVersionId cid = rvm::CONTRACT_ID_MAKE(_DeployingDatabase._NextContractSN++, dapp_id, engine_id, BUILD_NUM_INIT);
+
+		auto& new_info = _DeployingDatabase._ContractInfo[cid];
+		new_info = info->Clone();
+		new_info->Deployment.Version = BUILD_NUM_INIT;
+
+		_DeployingDatabase._ContractBuildNumLatest[rvm::CONTRACT_UNSET_BUILD(cid)] = rvm::CONTRACT_BUILD(cid);
+
+		return cid;
+	}
+	else
+		return rvm::ContractVersionIdInvalid;
 }
 
 rvm::ConstStateData SimuGlobalShard::GetState(rvm::ContractScopeId contract) const
@@ -156,36 +182,37 @@ FOUND:
 	else return { nullptr, 0, 0 };
 }
 
-void SimuGlobalShard::CommitNewState(rvm::BuildNum version, rvm::ContractScopeId contract, uint8_t* state)
+void SimuGlobalShard::CommitNewState(rvm::ContractInvokeId ciid, uint8_t* state)
 {
 	if(_bDeploying)
 	{
 		if(state)
 		{
 			auto* s = (SimuState*)(state - offsetof(SimuState, Data));
-			s->Version = version;
+			s->Version = rvm::CONTRACT_BUILD(ciid);
 
-			_DeployingStates._ShardStates.Set(contract, s);
+			_DeployingStates._ShardStates.Set(rvm::CONTRACT_UNSET_BUILD(ciid), s);
 		}
 		else
 		{
-			_DeployingStates._ShardStates.Set(contract, nullptr, true);
+			_DeployingStates._ShardStates.Set(rvm::CONTRACT_UNSET_BUILD(ciid), nullptr, true);
 		}
 	}
 	else
-		SimuShard::CommitNewState(version, contract, state);
+		SimuShard::CommitNewState(ciid, state);
 }
 
-void SimuGlobalShard::CommitNewState(rvm::BuildNum version, rvm::ContractScopeId contract, const rvm::ScopeKey* key, uint8_t* state)
+void SimuGlobalShard::CommitNewState(rvm::ContractInvokeId contract, const rvm::ScopeKey* key, uint8_t* state)
 {
 	if(_bDeploying)
 	{
-		ShardStateKey k = { contract, *key };
+		auto csid = rvm::CONTRACT_UNSET_BUILD(contract);
+		ShardStateKey k = { csid, *key };
 
 		if(state)
 		{
 			auto* s = (SimuState*)(state - offsetof(SimuState, Data));
-			s->Version = version;
+			s->Version = rvm::CONTRACT_BUILD(contract);
 
 			_DeployingStates._ShardKeyedStates.Set(k, s);
 		}
@@ -195,52 +222,72 @@ void SimuGlobalShard::CommitNewState(rvm::BuildNum version, rvm::ContractScopeId
 		}
 	}
 	else
-		SimuShard::CommitNewState(version, contract, key, state);
+		SimuShard::CommitNewState(contract, key, state);
 }
 
-bool SimuGlobalShard::AllocateContractIds(const rvm::CompiledContracts* linked)
+bool SimuGlobalShard::AllocateContractIds(const BuildContracts& built)
 {
 	ASSERT(_bDeploying);
+	auto* linked = built._pCompiled;
 
 	rvm::EngineId e = linked->GetEngineId();
 	uint32_t count = (uint32_t)linked->GetCount();
 	for(uint32_t i=0; i<count; i++)
 	{
 		auto* c = linked->GetContract(i);
-		auto name = c->GetName();
+		rt::String full_name = _pSimulator->DAPP_NAME + '.' + c->GetName().Str();
 		
-		rvm::ContractId cid = _Contracts.get(name.Str(), (rvm::ContractId)0);
-		if(cid == (rvm::ContractId)0)
+		rvm::ContractVersionId cvid = _Contracts.get(full_name, rvm::ContractVersionIdInvalid);
+		if(cvid == rvm::ContractVersionIdInvalid)
 		{
-			cid = rvm::_details::CONTRACT_ID_MAKE(_DeployingDatabase._NextContractSN++, _pSimulator->DAPP_ID, e);
-			_DeployingDatabase._Contracts[name.Str()] = cid;
+			rvm::ContractId cid = rvm::CONTRACT_ID_MAKE(_DeployingDatabase._NextContractSN++, _pSimulator->DAPP_ID, e);
+			cvid = rvm::CONTRACT_SET_BUILD(cid, BUILD_NUM_INIT);
+			
+			_DeployingDatabase._Contracts[full_name] = cvid;
 			_DeployingDatabase._ContractBuildNumLatest[cid] = BUILD_NUM_INIT;
-			_DeployingDatabase._ContractEngine[name.Str()] = e;
-			_Contracts[name.Str()] = cid;
+			_DeployingDatabase._ContractEngine[full_name] = e;
+			_Contracts[full_name] = cvid;
 		}
 		else
 		{
-			if (_DeployingDatabase._ContractEngine[name.Str()] != e)
+			if(_DeployingDatabase._ContractEngine[full_name] != e && _ContractEngine[full_name] != e)
 			{
-				_LOG("[PRD] Contract " << name.Str() << " already deployed with another engine")
+				_LOG("[PRD] Contract " << full_name << " already deployed with another engine")
 				return false;
 			}
-			_DeployingDatabase._ContractBuildNumLatest[cid] = _ContractBuildNumLatest.get(cid) + 1;
+
+			rvm::ContractId cid = rvm::CONTRACT_UNSET_BUILD(cvid);
+			rvm::BuildNum ver = _ContractBuildNumLatest.get(cid) + 1;
+			_DeployingDatabase._ContractBuildNumLatest[cid] = ver;
+			_DeployingDatabase._Contracts[full_name] = rvm::CONTRACT_SET_BUILD(cid, ver);
 		}
 	}
 
 	return true;
 }
 
-void SimuGlobalShard::_FinalizeFunctionInfo(const ContractVersionedId& cvid, const rt::String_Ref& func_prefix, const rvm::DeploymentId& deploy_id, const rvm::Interface* c)
+rvm::DAppId	SimuGlobalShard::_GetDAppByName(const rvm::ConstString* dapp_name) const
 {
-	auto* info = _New(ContractInfo);
+	if(dapp_name->Str() == Simulator::Get().DAPP_NAME)
+		return Simulator::Get().DAPP_ID;
 
-	info->Version = cvid.Version;
-	info->DeploymentId = deploy_id;
+	return rvm::DAppIdInvalid;
+}
+
+void SimuGlobalShard::_FinalizeFunctionInfo(const rvm::ContractVersionId& cvid, const rt::String_Ref& func_prefix, const rvm::ContractModuleID& deploy_id, const rvm::Interface* c, const rvm::ConstData& stub)
+{
+	ContractInfo*& info = _DeployingDatabase._ContractInfo[cvid];
+	uint32_t info_len = stub.DataSize + offsetof(ContractsDatabase::ContractInfo, Deployment.Stub);
+	info = (ContractsDatabase::ContractInfo*)_Malloc32AL(BYTE, info_len);
+
+	info->Deployment.Version = rvm::CONTRACT_BUILD(cvid);
+	info->Deployment.Module = deploy_id;
+	info->Deployment.StubSize = stub.DataSize;
+	if (stub.DataSize > 0)
+		memcpy(info->Deployment.Stub, stub.DataPtr, stub.DataSize);
 
 	for(int i=0; i<256; i++)
-		info->ScopeOfOpcode[i] = rvm::Scope::Neutral;
+		info->ScopeOfOpcode[i] = rvm::ScopeInvalid;
 
 	UINT func_co = c->GetFunctionCount();
 	rt::String funcname;
@@ -250,22 +297,18 @@ void SimuGlobalShard::_FinalizeFunctionInfo(const ContractVersionedId& cvid, con
 		info->ScopeOfOpcode[(int)opcode] = c->GetFunctionScope(i);
 		funcname = func_prefix + '.' + c->GetFunctionName(i).Str();
 		auto& fi = _DeployingDatabase._ContractFunctions[funcname].push_back();
-		fi.Contract = cvid.Contract;
+		fi.Contract = rvm::CONTRACT_UNSET_BUILD(cvid);
 		fi.Op = opcode;
-		StreamByString ss(fi.FunctionSignature);
+		rvm::StringStreamImpl ss(fi.FunctionSignature);
 		c->GetFunctionSignature(i, &ss);
 	}
-
-	_SafeDel_ConstPtr(_DeployingDatabase._ContractInfo.replace(cvid, info));
 }
 
-
-bool SimuGlobalShard::FinalizeDeployment(	const rvm::CompiledContracts* deployed, 
-											const rvm::ContractDID* contract_deployment_ids,  // CDID[linked->GetCount()]
-											const rvm::InterfaceDID* const * interface_deployment_ids // IDID[linked->GetCount()][#_of_interface_in_each_contract]
-										)
+bool SimuGlobalShard::CommitDeployment(const BuildContracts& built)
 {
 	ASSERT(_bDeploying);
+	auto* deployed = built._pCompiled;
+	ASSERT(deployed);
 
 	rt::String if_prefix;
 	uint32_t count = deployed->GetCount();
@@ -273,42 +316,27 @@ bool SimuGlobalShard::FinalizeDeployment(	const rvm::CompiledContracts* deployed
 	{
 		auto* c = deployed->GetContract(i);
 		auto name = c->GetName();
+		rt::String full_name = _pSimulator->DAPP_NAME + '.' + name.Str();
+		rvm::ConstString s = { full_name.Begin(), (uint32_t)full_name.GetLength() };
+		rvm::ContractVersionId cvid = _GetContractByName(&s);
+		ASSERT(cvid != rvm::ContractVersionIdInvalid);
 
-		rvm::ContractId cid = _GetContractByName(_pSimulator->DAPP_ID, &name);
-		ASSERT(cid != (rvm::ContractId)0);
-
-		auto version = _GetContractEffectiveBuild(cid);
-		ContractVersionedId cvid = { cid, version };
-
-		_FinalizeFunctionInfo(cvid, name.Str(), contract_deployment_ids[i], c);
-
-		const rvm::InterfaceDID* if_dids = interface_deployment_ids[i];
-		uint32_t if_count = c->GetInterfaceCount();
-		for(uint32_t q=0; q<if_count; q++)
-		{
-			auto* if_info = c->GetInterface(q);
-			cvid.Interface = rvm::_details::INTERFACE_ID_MAKE(c->GetInterfaceSlot(q), cid);
-
-			if_prefix = name.Str() + rt::SS("::") + if_info->GetName().Str();
-			_FinalizeFunctionInfo(cvid, if_prefix, if_dids[q], if_info);
-		}
+		_FinalizeFunctionInfo(cvid, full_name, *c->GetModuleID(), c, built._ContractDeployStub[i].GetRvmConstData());
 	}
 
 	return true;
 }
 
-rvm::ContractId	SimuGlobalShard::_GetContractByName(rvm::DAppId dapp_id, const rvm::ConstString* contract_name) const
+rvm::ContractVersionId SimuGlobalShard::_GetContractByName(const rvm::ConstString* dapp_contract_name) const
 {
-	ASSERT(_pSimulator->DAPP_ID == dapp_id);
-
+	rvm::ContractVersionId r = rvm::ContractVersionIdInvalid;
 	if(_bDeploying)
-	{
-		auto r = _DeployingDatabase._Contracts.get(contract_name->Str(), (rvm::ContractId)0);
-		if(r != (rvm::ContractId)0)
-			return r;
-	}
+		r = _DeployingDatabase._Contracts.get(dapp_contract_name->Str(), rvm::ContractVersionIdInvalid);
 
-	return _Contracts.get(contract_name->Str(), (rvm::ContractId)0);
+	if(r == rvm::ContractVersionIdInvalid)
+		r = _Contracts.get(dapp_contract_name->Str(), rvm::ContractVersionIdInvalid);
+
+	return r;
 }
 
 void SimuGlobalShard::Term()
@@ -328,6 +356,14 @@ void BuildContracts::Init(const rt::String_Ref& dapp, rvm::DAppId dapp_id, rvm::
 	_EngineId = eid;
 	_Stage = STAGE_SOURCE;
 	_DAppName = dapp;
+	_CompileDependency.Empty();
+	_Sources.ShrinkSize(0);
+	_ConstructorArgs.ShrinkSize(0);
+	_Filenames.ShrinkSize(0);
+
+	_ContractModuleIds.ShrinkSize(0);
+	_ResetContractWorkData();
+	_ContractToFilename.clear();
 }
 
 void BuildContracts::Term()
@@ -340,16 +376,29 @@ void BuildContracts::Term()
 
 	_SafeRelease(_pCompiled);
 	_CompileDependency.Empty();
-	_ContractDeploymentIds.ShrinkSize(0);
-	_InterfaceDeploymentIds.ShrinkSize(0);
+	_ContractModuleIds.ShrinkSize(0);
+	_ResetContractWorkData();
 }
 
-void BuildContracts::AddSource(const rt::String_Ref& code, const rt::String_Ref& fn)
+void BuildContracts::AddContractCode(const rt::String_Ref& code, const rt::String_Ref& deploy_arg, const rt::String_Ref& fn)
 {
 	ASSERT(_Stage == STAGE_SOURCE);
 
+	rvm::ConstData data = { (uint8_t*)code.Begin(), (uint32_t)code.GetLength() };
+	rt::String_Ref contract_name = _pEngine->GetContractName(&data).Str();
+
 	_Sources.push_back(code);
 	_Filenames.push_back(fn);
+	_ConstructorArgs.push_back(deploy_arg);
+
+	if(!contract_name.IsEmpty())
+	{
+		_LOG("Source code for contract `"<<contract_name<<"` is loaded from "<<fn);
+	}
+	else
+	{
+		_LOG("Cannot extract contract name from source code file "<<fn);
+	}
 }
 
 void BuildContracts::Log(rvm::LogMessageType type, uint32_t code, uint32_t unitIndex, uint32_t line, uint32_t lineOffset, const rvm::ConstString *message)
@@ -383,7 +432,7 @@ void BuildContracts::Log(rvm::LogMessageType type, uint32_t code, uint32_t unitI
 	);
 }
 
-bool BuildContracts::Compile(const rvm::ChainState* global_state)
+bool BuildContracts::Compile(bool checkDeployArg)
 {
 	uint32_t count = (uint32_t)_Sources.GetSize();
 	if(!count)return false;
@@ -399,7 +448,7 @@ bool BuildContracts::Compile(const rvm::ChainState* global_state)
 
 	auto* codes = (rvm::ConstData*)_alloca(sizeof(rvm::ConstData) * count);
 
-	for (UINT i = 0; i < count; i++)
+	for(uint32_t i = 0; i < count; i++)
 		codes[i] = { (uint8_t*)_Sources[i].Begin(), (uint32_t)_Sources[i].GetLength() };
 
 	_Stage = STAGE_COMPILE;
@@ -410,37 +459,86 @@ bool BuildContracts::Compile(const rvm::ChainState* global_state)
 		cflag |= rvm::CompilationFlag::DisableDebugPrint;
 
 	rvm::ConstString dapp = { _DAppName.Begin(), (uint32_t)_DAppName.GetLength() };
-	if (_pEngine->Compile(global_state, &dapp, count, codes, cflag, &_pCompiled, &_CompileDependency, this) && _pCompiled && _pCompiled->GetCount() == count)
+	if(_pEngine->Compile(&dapp, count, codes, cflag, &_pCompiled, this) && _pCompiled && _pCompiled->GetCount() == count)
 	{
-		for (uint32_t i = 0; i < count; i++)
+		_ResetContractWorkData(count);
+		rt::String filename, sig;
+
+		for(uint32_t i = 0; i < count; i++)
 		{
-			if (_EngineId == rvm::EngineId::SOLIDITY_EVM)
+			auto* contract = _pCompiled->GetContract(i);
+			ASSERT(contract);
+
+			if(_EngineId == rvm::EngineId::SOLIDITY_EVM)
 			{
 				rt::JsonObject sol_json(_Sources[0]);
-				_ContractToFN[sol_json.GetValue("entryContract")] = sol_json.GetValue("entryFile");
+				_ContractToFilename[sol_json.GetValue("entryContract")] = filename = sol_json.GetValue("entryFile");
 			}
 			else
 			{
-				rvm::ConstString contractCS = _pCompiled->GetContract(i)->GetName();
-				rt::String tmp = _Filenames[i];
-				int64_t slashPos = rt::max(tmp.FindCharacterReverse('\\'), tmp.FindCharacterReverse('/'));
-				if (slashPos >= 0)
-				{
-					tmp = tmp.SubStr(slashPos + 1);
-				}
-				_ContractToFN[contractCS.Str()] = tmp;
+				rvm::ConstString contractCS = contract->GetName();
+				_ContractToFilename[contractCS.Str()] = filename = _Filenames[i].GetFileName();
 			}
+
+			auto deploy_arg = _ConstructorArgs[i];
+			rvm::SystemFunctionOpCodes opcodes;
+			contract->GetSystemFunctionOpCodes(&opcodes);
+
+			if (opcodes.GlobalDeploy == rvm::OpCodeInvalid)
+			{
+				if (!deploy_arg.IsEmpty())
+				{
+					_LOG_WARNING("[PRD]: Contract deploy arguments for `" << filename << "` is not expected");
+					goto COMPILE_FAILED;
+				}
+			}
+			else if(checkDeployArg)
+			{
+				uint32_t func_co = contract->GetFunctionCount();
+				for(uint32_t f=0; f<func_co; f++)
+					if(opcodes.GlobalDeploy == contract->GetFunctionOpCode(f))
+					{
+						rvm::StringStreamImpl sig_ss(sig);
+
+						if(contract->GetFunctionSignature(f, &sig_ss))
+						{
+							rvm::RvmDataJsonParser arg_parse(sig, nullptr);
+							std::vector<uint8_t> data;
+							if (deploy_arg.IsEmpty())			// when deploy_arg is not given, regarding it as an empty json
+								deploy_arg = "{}";
+							if(rvm::FunctionArgumentUtil::JsonParseArguments(sig.GetString(), nullptr, deploy_arg, data))
+							{
+								auto* d =  _Malloc8AL(uint8_t, data.size());
+								memcpy(d, data.data(), data.size());
+
+								_ContractDeployArgs[i] = { d, (uint32_t)data.size() };
+								goto GO_NEXT_SOURCE;
+							}
+							else
+							{
+								_LOG_WARNING("[PRD]: Failed to parse Json of contract deploy arguments for `"<<filename<<'`');
+								goto COMPILE_FAILED;
+							}
+						}
+					}
+
+				_LOG_WARNING("[PRD]: Signature of contract deployment function in `"<<filename<<"` is not found");
+				goto COMPILE_FAILED;
+			}
+
+GO_NEXT_SOURCE:
+			continue;
 		}
+
+		_Stage = STAGE_COMPILE;
 		return true;
 	}
 	
+COMPILE_FAILED:
 	_LOG_WARNING("[PRD]: Compile failed");
 	_SafeRelease(_pCompiled);
 
 	_Stage = STAGE_SOURCE;
-	_Sources.ShrinkSize(0);
-	_Filenames.ShrinkSize(0);
-	_CompileDependency.Empty();
 	return false;
 }
 
@@ -454,7 +552,7 @@ bool BuildContracts::Link()
 	ASSERT(!_pCompiled->IsLinked());
 
 	_Stage = STAGE_LINK;
-	_LOG("Linking " << count << " contract(s), target=" << rt::EnumStringify(_EngineId));
+	_LOG("[PRD]: Linking " << count << " contract(s), target=" << rt::EnumStringify(_EngineId));
 
 	ASSERT(_pEngine);
 	if(_pEngine->Link(_pCompiled, this))
@@ -466,7 +564,7 @@ bool BuildContracts::Link()
 	return false;
 }
 
-bool BuildContracts::VerifyDependency(const rvm::ChainState* global_state) const
+bool BuildContracts::VerifyDependency(const rvm::GlobalStates* global_state) const
 {
 	uint32_t count = (uint32_t)_Sources.GetSize();
 	if(!count)return true;
@@ -477,10 +575,23 @@ bool BuildContracts::VerifyDependency(const rvm::ChainState* global_state) const
 	ASSERT(_pEngine);
 
 	auto dep_data = _CompileDependency.GetRvmConstData();
-	return _pEngine->ValidateDependency(global_state, _pCompiled, &dep_data);
+	return _pCompiled->ValidateDependency(global_state);
 }
 
-bool BuildContracts::Deploy(rvm::ExecuteUnit* exec, rvm::ExecutionContext* exec_ctx, uint32_t gas_limit)
+void BuildContracts::_ResetContractWorkData(uint32_t size)
+{
+	for(auto& p : _ContractDeployArgs)
+		_SafeFree8AL_ConstPtr(p.DataPtr);
+
+	_ContractDeployArgs.ChangeSize(size);
+	_ContractDeployArgs.Zero();
+
+	_ContractDeployStub.ChangeSize(size);
+	for(auto& s : _ContractDeployStub)
+		s.Empty();
+}
+
+bool BuildContracts::Deploy(rvm::ExecutionUnit* exec, rvm::ExecutionContext* exec_ctx)
 {
 	uint32_t count = (uint32_t)_Sources.GetSize();
 	if(!count)return false;
@@ -490,262 +601,32 @@ bool BuildContracts::Deploy(rvm::ExecuteUnit* exec, rvm::ExecutionContext* exec_
 	ASSERT(_pCompiled->IsLinked());
 	ASSERT(count == _pCompiled->GetCount());
 
-	_ContractDeploymentIds.SetSize(count);
-	_InterfaceDeploymentIds.SetSize(count);
-	_InterfaceDeploymentIds.Zero();
-
-	for(uint32_t i=0; i<count; i++)
-	{
-		auto* c = _pCompiled->GetContract(i);
-		uint32_t if_count = c->GetInterfaceCount();
-		if(if_count)
-			_InterfaceDeploymentIds[i] = _Malloc8AL(rvm::InterfaceDID, if_count);
-	}
+	_ContractModuleIds.SetSize(count);
+	_ContractDeployStub.SetSize(count);
 
 	_Stage = STAGE_DEPLOY;
+	
+	rvm::DataBuffer** deploy_stub = (rvm::DataBuffer**)alloca(sizeof(rvm::DataBuffer*)*count);
+	for(uint32_t i=0; i<count; i++)
+		deploy_stub[i] = &_ContractDeployStub[i];
 
-	if(exec->Deploy(exec_ctx, gas_limit, _pCompiled, _ContractDeploymentIds, _InterfaceDeploymentIds, this).Code == rvm::InvokeErrorCode::Success)
+	if(exec->DeployContracts(exec_ctx, _pCompiled, deploy_stub, this))
 		return true;
 
-	_ContractDeploymentIds.ShrinkSize(0);
-	_InterfaceDeploymentIds.ShrinkSize(0);
+	_ContractModuleIds.ShrinkSize(0);
 	_Stage = STAGE_LINK;
 	return false;
 }
 
-void getVarNameType(const rt::String_Ref* varArr, uint32_t& idx, rt::String& varName, rt::String& varType, uint32_t size)
+rvm::InvokeResult BuildContracts::InvokeConstructor(rvm::ExecutionUnit* exec, rvm::ExecutionContext* exec_ctx, uint32_t gas_limit)
 {
-	rt::String_Ref curType = varArr[idx++];
-	if (curType == "array" && idx + 2 <= size)
-	{
-		varType = "array (" + varArr[idx++] + ")";
-		varName = varArr[idx++];
-	}
-	else if (curType == "map" && idx + 3 <= size)
-	{
-		varType = "map (" + varArr[idx++] + " : ";
-		varType += varArr[idx++] + ")";
-		varName = varArr[idx++];
-	}
-	else
-	{
-		varType = curType;
-		varName = varArr[idx++];
-	}
+	ASSERT(_Stage == STAGE_DEPLOY);
+	return exec->InitializeContracts(exec_ctx, gas_limit, _pCompiled, _ContractDeployArgs);
 }
 
-void ConvertSigToJson(rt::Json& json, const rt::String& name, const rt::String& sig, bool structSig)
+void BuildContracts::GetContractsInfo(rt::Json& json) const
 {
-	//stateSig example
-	//struct 6 address controller uint32 current_case array chsimu.Ballot.Proposal proposals chsimu.Ballot.BallotResult last_result map int32 chsimu.Ballot.BallotResult test uint32 shardGatherRatio
-	//sturct [number of var] [var #0's member data type] (inner data type if array or map) [var #0's member identifier] [var #1's member data type] [var #1's member identifier] 
-	rt::String_Ref var[1024];
-	uint32_t co = sig.Split<true>(var, sizeofArray(var), " ");
-	if (co < 2)return;
-	int32_t numMember = var[1].ToNumber<int32_t>();
-	for (uint32_t i = 2; i < co; )
-	{
-		if (structSig)
-		{
-			auto s = json.ScopeAppendingElement();
-			json.Object(J(name)=name);
-			auto ss = json.ScopeAppendingKey("layout");
-			json.Array();
-			for (int32_t j = 0; j < numMember; j++)
-			{
-				rt::String varName, varType;
-				getVarNameType(var, i, varName, varType, co);
-				auto sss = json.ScopeAppendingElement();
-				json.Object((J(identifier) = varName, J(dataType) = varType));
-			}
-		}
-		else
-		{
-			for (int32_t j = 0; j < numMember; j++)
-			{
-				rt::String varName, varType;
-				getVarNameType(var, i, varName, varType, co);
-				auto sss = json.ScopeAppendingElement();
-				json.Object((J(name) = varName, J(scope) = name, J(dataType) = varType));
-			}
-		}
-	}
+	rvm::CompiledModules_Jsonify(json, _pCompiled);
 }
 
-void BuildContracts::GetContractsInfo(rt::Json& json, const rvm::ChainState* global_state) const
-{
-	ASSERT(_Stage >= STAGE_COMPILE);
-	ASSERT(_pCompiled);
-	ASSERT(global_state);
-	uint32_t count = _pCompiled->GetCount();
-	for(uint32_t i=0; i<count; i++)
-	{
-		auto contract_scope = json.ScopeAppendingElement();
-		auto* contract = _pCompiled->GetContract(i);
-		auto name = contract->GetName();
-		auto flag = contract->GetFlag();
-		rt::String fn = _ContractToFN.get(name.Str());
-		json.Object((
-			J(contract) = name.Str(),
-			J(source) = fn,
-			J(engine) = rt::EnumStringify(_EngineId),
-			J(hash) = rt::tos::Base32CrockfordLowercaseOnStack<>(*contract->GetIntermediateRepresentationHash()),
-			J(finalized) = (bool)(flag&rvm::ContractFlag::DeployFinalized)
-		));
-
-		{	// interface implemented
-			auto scpdef_scope = json.ScopeAppendingKey("implments");
-			json.Array();
-
-			rvm::InterfaceId ifid[256];
-			uint32_t if_count = contract->GetInterfaceImplemented(ifid, sizeofArray(ifid));
-			for(uint32_t i=0; i<if_count; i++)
-			{
-				auto* if_did = global_state->GetInterfaceDeploymentIdentifier(ifid[i]);
-				const rvm::Interface* ifc;
-				if(if_did && (ifc = _pEngine->GetInterface(if_did)))
-				{
-					json.AppendElement(ifc->GetName().Str());
-				}
-				else
-				{	
-					json.AppendElement(rt::SS("(IID:0x") + rt::tos::HexNum(ifid[i]) + ')');
-				}
-			}
-		}
-
-		ext::fast_map<uint32_t, rt::String> scope_names(0x80000001, 0x80000002);		
-		bool has_scattered_maps = false;
-		uint32_t scope_count = contract->GetScopeCount();
-		{
-			auto stateVar_scope = json.ScopeAppendingKey("stateVariables");
-			json.Array();
-			for (uint32_t s = 0; s < scope_count; s++)
-			{
-				auto scope = contract->GetScope(s);
-				rt::String tmp;
-				StreamByString stateSig(tmp);
-				contract->GetStateSignature(scope, (rvm::StringStream*)&stateSig);
-				rt::String scopeName = contract->GetScopeName(s).Str();
-				ConvertSigToJson(json, scopeName, tmp, false);
-			}
-		}
-
-		{	// scope definitions
-			auto scpdef_scope = json.ScopeAppendingKey("scopes");
-			json.Object();
-
-			// involved scopes
-			uint32_t scope_count = contract->GetScopeCount();
-			for(uint32_t s=0; s<scope_count; s++)
-			{
-				auto scope = contract->GetScope(s);
-				if(rvm::_details::SCOPE_TYPE(scope) == rvm::ScopeType::Contract)
-				{
-					auto scope_name = contract->GetScopeName(s);
-					scope_names[(uint32_t)scope] = scope_name.Str();
-
-					auto flag = contract->GetScopeFlag(s);
-					if(scope <= rvm::Scope::Address && flag == (rvm::ScopeDefinitionFlag)0)
-						continue;
-
-					json.AppendKey(scope_name.Str(), rt::EnumStringify(flag));
-				}
-				else has_scattered_maps = true;
-			}
-		}
-
-		{	// scattered maps
-			auto scpdef_scope = json.ScopeAppendingKey("scatteredMaps");
-			json.Object();
-			if(has_scattered_maps)
-			{
-				uint32_t scope_count = contract->GetScopeCount();
-				for(uint32_t s=0; s<scope_count; s++)
-				{
-					auto scope = contract->GetScope(s);
-					if(rvm::_details::SCOPE_TYPE(scope) > rvm::ScopeType::Contract)
-					{
-						rt::String_Ref prefix = 
-							(rvm::_details::SCOPE_TYPE(scope) > rvm::ScopeType::ScatteredMapOnGlobal)?"Shard":"Global";
-
-						auto scope_name = contract->GetScopeName(s);
-						json.AppendKey(scope_name.Str(), prefix + rt::SS("Map:") + rt::EnumStringify(rvm::_details::SCOPE_KEYSIZETYPE(scope)));
-					}
-				}
-			}
-		}
-
-		{
-			auto struct_scope = json.ScopeAppendingKey("structs");
-			json.Array();
-			uint32_t struct_count = contract->GetStructCount();
-			for (uint32_t i = 0; i < struct_count; i++)
-			{
-				rt::String tmp;
-				StreamByString structSig(tmp);
-				contract->GetStructSignature(i, (rvm::StringStream*)&structSig);
-				rvm::ConstString str = contract->GetStructName(i);
-				rt::String structName(str.Str());
-				ConvertSigToJson(json, structName, tmp, true);
-			}
-		}
-
-		{	// enum
-			auto enum_scope = json.ScopeAppendingKey("enumerables");
-			json.Array();
-			uint32_t enum_count = contract->GetEnumCount();
-			for (uint32_t i = 0; i < enum_count; i++)
-			{
-				auto s = json.ScopeAppendingElement();
-				json.Object((J(name) = contract->GetEnumName(i).Str()));
-				auto enum_scope = json.ScopeAppendingKey("value");
-				rt::String tmp;
-				StreamByString structSig(tmp);
-				contract->GetEnumSignature(i, (rvm::StringStream*)&structSig);
-				rt::String_Ref enumator[1024];
-				uint32_t co = tmp.Split<true>(enumator, sizeofArray(enumator), ",");
-				json.Array();
-				for (uint32_t i = 0; i < co; i++)
-				{
-					json.AppendElement(enumator[i]);
-				}
-			}
-		}
-
-		auto json_if = [&scope_names](const rvm::Interface* ifc, rt::Json& json){
-			uint32_t func_count = ifc->GetFunctionCount();
-			json.Array();
-			for(uint32_t i=0; i<func_count; i++)
-			{
-				auto arr_scope = json.ScopeAppendingElement();
-				auto scope = ifc->GetFunctionScope(i);
-				auto op = ifc->GetFunctionOpCode(i);
-				auto flag = ifc->GetFunctionFlag(i);
-				json.Object(((J(name) = ifc->GetFunctionName(i).Str()), (J(flag) = rt::EnumStringify(flag)), (J(scope) = scope_names[(uint32_t)scope]), (J(opcode) = (int)op)));
-			}
-		};
-
-		{	// interfaces
-			auto if_scope = json.ScopeAppendingKey("interfaces");
-			json.Object();
-			uint32_t if_count = contract->GetInterfaceCount();
-			for(uint32_t i=0; i<if_count; i++)
-			{
-				auto* ifc = contract->GetInterface(i);
-				auto func_scope = json.ScopeAppendingKey(ifc->GetName().Str());
-				json.Object((
-					J(Slot) = (int)contract->GetInterfaceSlot(i)
-				));
-				json_if(ifc, json);
-			}
-		}
-
-		{	// functions
-			auto if_scope = json.ScopeAppendingKey("functions");
-			json_if(contract, json);
-		}
-	}
-}
-
-}
+} // namespace oxd

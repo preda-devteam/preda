@@ -131,12 +131,15 @@ public:
 	std::string m_currentContractNamespace;
 	std::string m_currentContractOutputName;
 	std::string m_currentDoxygenComment;
-	std::map<std::string, std::string> m_contractAliasToFullName;
-	std::map<std::string, std::string> m_contractFullNameToAlias;
-	std::map<std::string, std::string> m_contractFullNameToImportName;
-	std::vector<std::string> m_importedContracts;
-	std::map<std::string, ConcreteTypePtr> m_importedContractsType;
-	std::set<std::string> m_failedImportContracts;
+
+	// e.g. import dapp.contract as c
+	std::map<std::string, std::string> m_contractAliasToFullName;		// c -> dapp.contract
+	std::map<std::string, std::string> m_contractFullNameToAlias;		// dapp.contract -> c
+	std::map<std::string, std::string> m_contractFullNameToImportName;	// dapp.contract -> __imported_0_dapp_contract
+
+	std::vector<std::string> m_importedContracts;						// [dapp.contract, ...]
+	std::map<std::string, ConcreteTypePtr> m_importedContractsType;		// dapp.contract -> ConcreteType of the contract
+	std::set<std::string> m_failedImportContracts;						// [dapp.contract, ...], only those failed import
 
 	int32_t m_globalDeployFunctionExportIdx = -1;
 	int32_t m_shardScaleOutFunctionExportIdx = -1;
@@ -212,7 +215,7 @@ private:
 	void GenerateExportInterface();
 	void VerifyImplementedInterface(const std::vector<PredaParser::InterfaceRefContext*> refs);
 	bool ProcessLocalVariableDeclaration(PredaParser::LocalVariableDeclarationContext *ctx, std::string &outRes);
-	bool ReservedFunctions_OnDeclare(std::string &name, transpiler::FunctionSignature &signature);
+	bool ReservedFunctions_OnDeclare(PredaParser::FunctionDeclarationContext* ctx, std::string &name, transpiler::FunctionSignature &signature);
 	void ReservedFunctions_PostExport(const std::string &name, const transpiler::FunctionSignature &signature, size_t exportIdx);
 	void ReservedFunctions_PostFlagPropagate(const std::string &name, const transpiler::FunctionSignature &signature);
 	size_t ExportFunction(transpiler::FunctionRef functionRef);

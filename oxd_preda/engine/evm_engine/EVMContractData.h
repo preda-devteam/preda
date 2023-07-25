@@ -1,29 +1,29 @@
 #pragma once
+//#define ENABLE_EVM
+#ifdef ENABLE_EVM
 
 #include <vector>
-#ifdef _WIN32
-	#pragma warning(push)
-	#pragma warning(disable:4068 4819)
-#endif
-#include <evmc/evmc.hpp>
-#ifdef _WIN32
-	#pragma warning(pop)
-#endif
+#include <map>
 
+
+#include "evm_abi/ABIEncode.h"
 #include "../../../native/abi/vm_types.h"
 #include "../../../native/abi/vm_interfaces.h"
-
+#include "../preda_engine/ContractData.h"
 
 namespace preda_evm {
 	constexpr rvm::ContractId EVM_CID = rvm::_details::CONTRACT_ID_MAKE(0, (rvm::DAppId)0xafffffff, rvm::EngineId::SOLIDITY_EVM);
 
-	using ContractDID = uint64_t;
+	using ContractModuleID = uint64_t;
 
 	struct ContractCompileData
 	{
 		std::string dapp;
 		std::string name;
 		rvm::HashValue intermediateHash;
+		std::map<std::string, std::vector<ContractFunction>> m_functions;
+		void AddFunction(const ContractFunction& funcInfo);
+		bool ComposeInputData(const rt::JsonObject& args_json, uint64_t& value, std::string& data) const;
 	};
 
 	struct ContractLinkData
@@ -39,23 +39,25 @@ namespace preda_evm {
 	private:
 		ContractCompileData* m_compile_data;
 		ContractDeployData* m_deploy_data;
-		rt::String		m_name;
-		rvm::HashValue  m_hash;
+		rt::String m_name;
+		rt::String m_fullname;
+		rvm::HashValue m_hash;
 	public:
 		ContractDelegate(ContractCompileData* compile_data, ContractDeployData* deploy_data);
 
 		virtual rvm::ConstString		GetName() const override;
+		virtual rvm::ConstString		GetFullName() const override;
 		virtual rvm::ContractFlag		GetFlag() const override;
 
-		virtual const rvm::HashValue* GetIntermediateRepresentationHash() const override;
+		virtual const rvm::ContractModuleID* GetModuleID() const override;
 
-		virtual uint32_t				GetInterfaceImplemented(rvm::InterfaceId* pIID_out, uint32_t OutBufSize) const override;
-		virtual rvm::OpCode				GetInterfaceImplementedOpCode(rvm::InterfaceId i, rvm::OpCode code) const override;
+		virtual uint32_t				GetInterfaceImplementedCount() const override;
+		virtual const rvm::Interface*	GetInterfaceImplemented(uint32_t idx) const override;
+		virtual rvm::OpCode				GetInterfaceImplementedOpCode(uint32_t idx, rvm::OpCode code) const override;  // convert opcode in Interface to opcode in Contract
 		virtual uint32_t				GetScopeCount() const override;
 		virtual rvm::Scope				GetScope(uint32_t idx) const override;
-		virtual rvm::ScopeDefinitionFlag		GetScopeFlag(uint32_t idx) const override;
+		virtual rvm::ScopeFlag		GetScopeFlag(uint32_t idx) const override;
 		virtual rvm::ConstString			GetScopeName(uint32_t idx) const override;
-		virtual rvm::ContractScopeId			GetScopeDefinition(uint32_t idx) const override;
 		virtual bool 					GetStateSignature(rvm::Scope scope, rvm::StringStream* signature_out) const override;
 
 		virtual uint32_t				GetInterfaceCount() const override;
@@ -82,7 +84,7 @@ namespace preda_evm {
 
 	struct ContractDatabaseEntry
 	{
-		ContractDID deployId;
+		ContractModuleID deployId;
 		evmc::address address;
 		ContractCompileData compileData;
 		ContractDeployData deployData;
@@ -100,7 +102,7 @@ namespace preda_evm {
 	};
 
 
-	class CompiledContracts : public rvm::CompiledContracts {
+	class CompiledModules : public rvm::CompiledModules {
 		rt::String m_dAppName;
 		std::vector<ContractCompileData> m_contracts;
 		std::vector<ContractDelegate> m_delegates;
@@ -108,14 +110,13 @@ namespace preda_evm {
 		std::vector<rt::String> m_bytecode;
 		std::vector<rt::String> m_initdata;
 	public:
-		CompiledContracts(const char* dapp_name);
+		CompiledModules(const char* dapp_name);
 
 		const ContractCompileData* GetCompiledData(uint32_t contractIdx) const;
 		void AddContract(ContractCompileData compile_data, rt::String bytecode, rt::String init_data);
 		const rt::String_Ref GetBytecode(uint32_t idx);
 		const rt::String_Ref GetInitData(uint32_t idx);
 		void AttachLinkData(std::vector<ContractLinkData> linkdata);
-
 		rvm::EngineId GetEngineId() const override;
 		rvm::ConstString GetDAppName() const override;
 		uint32_t GetCount() const override;
@@ -137,21 +138,21 @@ namespace preda_evm {
 			return ret;
 		}
 
-		static const ContractDID ContractDIDInvalid = (ContractDID)0;
-		inline constexpr ContractDID RvmCDIDToEVMCDID(const rvm::ContractDID* rvmCDId)
+		static const ContractModuleID ContractDIDInvalid = (ContractModuleID)0;
+		inline constexpr ContractModuleID RvmCDIDToEVMCDID(const rvm::ContractModuleID* rvmCDId)
 		{
-			return rvmCDId ? *(ContractDID*)rvmCDId : ContractDIDInvalid;
+			return rvmCDId ? *(ContractModuleID*)rvmCDId : ContractDIDInvalid;
 		}
-		inline constexpr void EVMCDIDToRvmCDID(ContractDID evmCDId, rvm::ContractDID* rvmCDId)
+		inline constexpr void EVMCDIDToRvmCDID(ContractModuleID evmCDId, rvm::ContractModuleID* rvmCDId)
 		{
 			if (rvmCDId)
 			{
 				rt::Zero(*rvmCDId);
-				*(ContractDID*)rvmCDId = evmCDId;
+				*(ContractModuleID*)rvmCDId = evmCDId;
 			}
 		}
 		// returns rvm::contractIdInvalid if not found
-		static rvm::ContractId GetOnChainContractIdFromContractFullName(const rvm::ChainState* pChainState, const std::string& fullName)
+		static rvm::ContractId GetOnChainContractIdFromContractFullName(const rvm::ChainStates* pChainState, const std::string& fullName)
 		{
 			std::string::size_type dotPos = fullName.find('.');
 			if (dotPos != std::string::npos)
@@ -168,12 +169,13 @@ namespace preda_evm {
 			return rvm::ContractIdInvalid;
 		}
 
-		static const ContractDID GetOnChainPredaContractDIdFromFullName(const rvm::ChainState* pChainState, const std::string& fullName, rvm::BuildNum buildNum = rvm::BuildNumLatest)
+		static const ContractModuleID GetOnChainContractModuleIdFromFullName(const rvm::ChainStates* pChainState, const std::string& fullName, rvm::BuildNum buildNum = rvm::BuildNumLatest)
 		{
 			rvm::ContractId contractId = GetOnChainContractIdFromContractFullName(pChainState, fullName);
-			return RvmCDIDToEVMCDID(pChainState->GetContractDeploymentIdentifier(contractId, buildNum));
+			return RvmCDIDToEVMCDID(pChainState->GetContractModule(contractId, buildNum));
 		}
 	}
 }
 
 
+#endif

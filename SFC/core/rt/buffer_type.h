@@ -184,7 +184,7 @@ public:
 	void			CopyFrom(const BufferOpBase_Ref<STG>& x)
 					{	ASSERT(GetSize() == x.GetSize());
 						auto* p = _ptr();	auto* end = p + _len;
-						auto* y = x._ptr();
+						auto* y = x.Begin();
 						for(; p<end; p++, y++)
 							*p = *y;
 					}
@@ -612,7 +612,7 @@ public: // resizing
 	auto&	operator = (const BufferOpBase &x){ return *this = (const Buffer_Ref<t_Val, t_Index>&)x; }
 	auto&	operator = (const std::initializer_list<t_Val>& x)
 			{	VERIFY(SetSize(x.size()));
-				CopyFrom(x);
+				_SC::CopyFrom(x);
 				return x;
 			}
 
@@ -780,7 +780,7 @@ public: // operations
 				return ret;
 			}
 	t_Val*	insert_n(t_Index index, t_Index count)
-			{	if(reserve(_SC::_len + count))
+			{	if(_SC::reserve(_SC::_len + count))
 				{	memmove(_SC::_ptr()+index+count, _SC::_ptr()+index, (_SC::_len-index)*sizeof(t_Val));
 					_SC::_xt::ctor(_SC::_ptr()+index, _SC::_ptr()+index+count);
 					_SC::_len += count;
@@ -790,14 +790,14 @@ public: // operations
 			}
 	template<typename T>
 	void	insert_n(t_Index index, t_Index count, const T& x)
-			{	VERIFY(reserve(_SC::_len + count));
+			{	VERIFY(_SC::reserve(_SC::_len + count));
 				memmove(_SC::_ptr()+index+count, _SC::_ptr()+index, (_SC::_len-index)*sizeof(t_Val));
 				_SC::_xt::ctor(_SC::_ptr()+index, _SC::_ptr()+index+count, x);
 				_SC::_len += count;
 			}
 	template<typename T>
 	void	insert_n(t_Index index, t_Index count, const T* x)
-			{	VERIFY(reserve(_SC::_len + count));
+			{	VERIFY(_SC::reserve(_SC::_len + count));
 				memmove(_SC::_ptr()+index+count, _SC::_ptr()+index, (_SC::_len-index)*sizeof(t_Val));
 				_SC::_xt::ctor(_SC::_ptr()+index, _SC::_ptr()+index+count, x);
 				_SC::_len += count;
@@ -807,7 +807,7 @@ public:
 	SSIZE_T PushSorted(const T& x)
 	{
 		if(GetSize() == 0 || x<_SC::first()){ push_front(x); return 0; }
-		if(_SC::reserve_size() == _SC::GetSize() && !reserve(_SC::GetSize()*2 + 1))return -1;
+		if(_SC::reserve_size() == _SC::GetSize() && !_SC::reserve(_SC::GetSize()*2 + 1))return -1;
 		_SC::_len++;
 		auto* p = &_SC::Last();
 		for(p--;;p--)
@@ -826,7 +826,7 @@ public:
 			rt::Swap(*_SC::_ptr(), x);
 			return 0;
 		}
-		if(_SC::reserve_size() == _SC::GetSize() && !reserve(_SC::GetSize()*2 + 1))return -1;
+		if(_SC::reserve_size() == _SC::GetSize() && !_SC::reserve(_SC::GetSize()*2 + 1))return -1;
 		_SC::_len++;
 		auto* p = &_SC::Last();
 		for(p--;;p--)

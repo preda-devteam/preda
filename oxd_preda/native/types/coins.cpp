@@ -1,50 +1,14 @@
 #include "coins.h"
 #include "typetraits.h"
-#include "../abi/vm_interfaces.h"
 
 
 namespace rvm
 {
 
-namespace _details
+Coins::Coins(decltype(0) x) : Amount(0)
 {
-void _AppendCoinSymbol(TokenId id, rt::String& append)
-{
-	const ChainState* p = _details::__ThreadLocalExecutionStatePtr();
-	if(p)
-	{
-		auto symbol = p->GetTokenSymbol(id).Str();
-		if(!symbol.IsEmpty())
-		{
-			append += symbol;
-			return;
-		}
-	}
-
-	append += '(';
-	append += rt::tos::Number((uint32_t)id);
-	append += ')';
-}
-} // namespace _details
-
-bool CoinsMutable::FromString(const rt::String_Ref& str)
-{
-	const ChainState* p = _details::__ThreadLocalExecutionStatePtr();
-	if(!p)return false;
-
-	auto off = str.FindCharacter(':');
-	TokenId id;
-
-	auto ss = str.SubStr(off+1);
-	ConstString symbol = { ss.Begin(), (uint32_t)ss.GetLength() };
-
-	if(off > 0 && (id = p->GetTokenBySymbol(&symbol)) != TokenIdInvalid)
-	{
-		CoinId = id;
-		return Amount.FromString(str.SubStr(0, off));
-	}
-
-	return false;
+	ASSERT(x == 0);
+	CoinId = TokenIdInvalid;
 }
 
 void Coins::Withdraw(CoinsMutable& get, CoinsMutable& residue) const	// residue = this - get
@@ -56,6 +20,59 @@ void Coins::Withdraw(CoinsMutable& get, CoinsMutable& residue) const	// residue 
 	ASSERT(residue.Amount.IsNonNegative());
 	residue.CoinId = CoinId;
 	get.CoinId = CoinId;
+}
+
+void Coins::Jsonify(rt::Json &append) const 
+{
+	if(CoinId == TokenIdInvalid)
+	{
+		append.Number(0);
+	}
+	else
+	{
+		auto& s = append.GetInternalString();
+		s += '"';
+		Amount.ToString(s);
+		s += ':';
+		s += GetSymbol();
+		s += '"';
+	}
+}
+
+void CoinsMutable::_AlignCoinId(CoinsMutable &x)
+{
+	if(x.CoinId != TokenIdInvalid)
+	{
+		ASSERT(x.CoinId == CoinId);
+	}
+	else
+		x.CoinId = CoinId;
+}
+
+bool CoinsMutable::FromString(const rt::String_Ref& str)
+{
+	if(str == "0")
+	{
+		Empty();
+		return true;
+	}
+	else
+	{
+		rt::String_Ref seg[3];
+		if(	str.Split(seg, 3, ':') == 2 && 
+			!seg[0].IsEmpty() && 
+			seg[1].GetLength() >= rvm::TokenNameSizeMin && seg[1].GetLength() <= rvm::TokenNameSizeMax
+		)
+		{
+			Amount.FromString(seg[0]);
+			rt::Zero(CoinId);
+			seg[1].CopyTo((char*)&CoinId);
+
+			return true;
+		}
+	}
+
+	return false;
 }
 
 BigNumMutable& CoinsMutable::GetModifiableAmount()	// CoinId will be set to zero
@@ -149,30 +166,43 @@ void CoinsMutable::Deposit(const Coins& a)
 	Amount += a.Amount;
 }
 
-namespace _details
+NonFungibleToken::NonFungibleToken(decltype(0) x)
 {
-
-void SetCoinId(CoinsMutable& cm, TokenId coin_id)
-{
-	ASSERT(coin_id < TokenIdInvalid);
-	*((TokenId*)&cm) = coin_id;
+	ASSERT(x == 0);
+	NonFungible = TokenIdInvalid;
 }
 
-void SetCoins(Coins& cm, TokenId coin_id, const BigNumMutable& a)
+NonFungibleTokenRanged::NonFungibleTokenRanged(decltype(0) x)
 {
-	ASSERT(coin_id < TokenIdInvalid);
-	struct __coin: public Coins
-	{	
-		void set(TokenId coin_id, const BigNumMutable& a)
-		{
-			typedef _details::_Embed<BigNum, BigNumMutable> BigNumType;
-			CoinId = coin_id;
-			BigNumType::Set((LPBYTE)&Amount, a);
-		}
-	};
-
-	((__coin*)&cm)->set(coin_id, a);
+	ASSERT(x == 0);
+	NonFungibleStart = TokenIdInvalid;
+	Count = 0;
 }
 
-} // namespace _details
+//namespace _details
+//{
+//
+//void SetCoinId(CoinsMutable& cm, TokenId coin_id)
+//{
+//	ASSERT(coin_id < TokenIdInvalid);
+//	*((TokenId*)&cm) = coin_id;
+//}
+//
+//void SetCoins(Coins& cm, TokenId coin_id, const BigNumMutable& a)
+//{
+//	ASSERT(coin_id < TokenIdInvalid);
+//	struct __coin: public Coins
+//	{	
+//		void set(TokenId coin_id, const BigNumMutable& a)
+//		{
+//			typedef _details::_Embed<BigNum, BigNumMutable> BigNumType;
+//			CoinId = coin_id;
+//			BigNumType::Set((LPBYTE)&Amount, a);
+//		}
+//	};
+//
+//	((__coin*)&cm)->set(coin_id, a);
+//}
+//
+//} // namespace _details
 } // namespace rvm

@@ -9,8 +9,10 @@ class RvmContractDelegate : public rvm::Contract
 {
 private:
 	rt::String		m_name;
+	rt::String		m_fullname;
 	uint32_t		m_flag;
 	rvm::HashValue	m_hash;
+	rvm::ContractModuleID m_moduleId;
 
 	struct Function
 	{
@@ -28,34 +30,38 @@ private:
 	rvm::OpCode m_periodicOpCode = rvm::OpCode(0);
 	rvm::OpCode m_addressPeriodicOpCode = rvm::OpCode(0);
 
-	ContractCompileData* m_pContractCompiledData = nullptr;
-	ContractDeployData* m_pDeployData = nullptr;
+	const ContractCompileData* m_pContractCompiledData = nullptr;
 
 	struct ScopeDesc
 	{
 		rvm::Scope scope;
-		std::underlying_type_t<rvm::ScopeDefinitionFlag> flags;
+		std::underlying_type_t<rvm::ScopeFlag> flags;
 		std::string name;
-		rvm::ContractScopeId originalScopeId;
 	};
 	std::vector<ScopeDesc> m_scopes;
 
 public:
-	RvmContractDelegate(ContractCompileData* pContractCompiledData, ContractDeployData* pDeployData);
+	RvmContractDelegate(const ContractCompileData* pContractCompiledData);
 
 	//virtual rvm::ConstString GetSuppliedAssets() const override;
 
 	virtual rvm::ConstString		GetName() const override;
+	virtual rvm::ConstString		GetFullName() const override;
 	virtual rvm::ContractFlag		GetFlag() const override;
 
-	virtual const rvm::HashValue* GetIntermediateRepresentationHash() const override;
+	virtual const rvm::ContractModuleID* GetModuleID() const override;
 
-	virtual uint32_t				GetInterfaceImplemented(rvm::InterfaceId* pIID_out, uint32_t OutBufSize) const override
+	virtual uint32_t				GetInterfaceImplementedCount() const override
 	{
 		// TODO
 		return 0;
 	}
-	virtual rvm::OpCode				GetInterfaceImplementedOpCode(rvm::InterfaceId i, rvm::OpCode code) const override
+	virtual const rvm::Interface*	GetInterfaceImplemented(uint32_t idx) const override
+	{
+		// TODO
+		return nullptr;
+	}
+	virtual rvm::OpCode				GetInterfaceImplementedOpCode(uint32_t idx, rvm::OpCode code) const override
 	{
 		// TODO
 		return rvm::OpCodeInvalid;
@@ -77,17 +83,11 @@ public:
 		static const char builtInScopeNames[][100] = { "global", "shard", "address" };
 		return rvm::ConstString{ builtInScopeNames[idx], uint32_t(strlen(builtInScopeNames[idx])) };
 	}
-	virtual rvm::ScopeDefinitionFlag	GetScopeFlag(uint32_t idx) const override
+	virtual rvm::ScopeFlag	GetScopeFlag(uint32_t idx) const override
 	{
-		return rvm::ScopeDefinitionFlag(m_scopes[idx].flags);
+		return rvm::ScopeFlag(m_scopes[idx].flags);
 	}
 
-	virtual rvm::ContractScopeId	GetScopeDefinition(uint32_t idx) const override
-	{
-		return m_scopes[idx].originalScopeId;
-		// TODO use macro to replace -1
-		return rvm::_details::CONTRACT_SET_SCOPE(m_pDeployData ? m_pDeployData->contractId : rvm::ContractId(-1), GetScope(idx));
-	}
 	virtual bool					GetStateSignature(rvm::Scope scope, rvm::StringStream* signature_out) const override
 	{
 		int idx = int(_details::RvmScopeToPredaScope(scope));

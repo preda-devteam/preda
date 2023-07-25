@@ -1325,7 +1325,7 @@ HANDLE LoadDynamicLibrary(LPCSTR fn)
 LPVOID GetDynamicLibrarySymbol(HANDLE dll, LPCSTR fn)
 {
 #if defined(PLATFORM_WIN)
-	return ::GetProcAddress((HMODULE)dll, fn);
+	return (LPVOID)::GetProcAddress((HMODULE)dll, fn);
 #else
 	return ::dlsym((void*)dll, fn);
 #endif
@@ -1599,9 +1599,9 @@ INT os::LoadRegKeyInt(HKEY root, LPCWSTR regkey, LPCWSTR value, INT default_val)
 	HKEY key = NULL;
 	DWORD type = REG_DWORD;
 	DWORD len = sizeof(DWORD);
-	bool ret =
-		(ERROR_SUCCESS == ::RegOpenKeyExW(root, regkey, 0, KEY_READ, &key)) &&
-		(ERROR_SUCCESS == ::RegQueryValueExW(key, value, NULL, &type, (LPBYTE)&default_val, &len));
+	
+	if(ERROR_SUCCESS == ::RegOpenKeyExW(root, regkey, 0, KEY_READ, &key))
+		::RegQueryValueExW(key, value, NULL, &type, (LPBYTE)&default_val, &len);
 	
 	if(key)::RegCloseKey(key);
 	return default_val;
@@ -1632,9 +1632,8 @@ bool os::SaveRegKeyInt(HKEY root, LPCWSTR regkey, LPCWSTR value_name, INT val)
 void os::DeleteRegKeyValue(HKEY root, LPCWSTR regkey, LPCWSTR value_name)
 {
 	HKEY key = NULL;
-	bool ret =
-		(ERROR_SUCCESS == ::RegOpenKeyExW(root, regkey, 0, KEY_WRITE, &key)) &&
-		(ERROR_SUCCESS == ::RegDeleteValueW(key, value_name));
+	if(ERROR_SUCCESS == ::RegOpenKeyExW(root, regkey, 0, KEY_WRITE, &key))
+		::RegDeleteValueW(key, value_name);
 	
 	if(key)::RegCloseKey(key);
 }

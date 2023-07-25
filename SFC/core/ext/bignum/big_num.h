@@ -44,6 +44,10 @@
 #include "../../rt/string_type.h"
 #include "../../rt/buffer_type.h"
 
+namespace rt
+{
+class Json;
+}
 
 namespace ext
 {
@@ -166,7 +170,7 @@ public:
 #pragma pack(push, 1)
 struct BN_Dyn
 {
-	friend class BigNumMutable;
+	friend class ext::BigNumMutable;
 
 	rt::BufferEx<BN_BLK>	_Data;
 	bool					_Sign;
@@ -204,7 +208,7 @@ struct BN_Dyn
 template<int BLK_LEN = sizeof(ULONGLONG)/sizeof(BN_BLK)>
 struct BN_Fix
 {
-	friend class BigNumMutable;
+	friend class ext::BigNumMutable;
 
 	BYTE		_Sign_Len; ///< base 2^32
 	BN_BLK		_Data[BLK_LEN]; ///< size = _Len
@@ -230,10 +234,6 @@ struct BN_Fix
 
 } // namespace _details
 
-/** \defgroup Typedefs_BigNum Typedefs_BigNum
- * @ingroup bigNum
- *  @{
- */
 typedef _details::BN_Ref	BigNumRef;
 
 #pragma pack(push, 1)
@@ -295,6 +295,9 @@ struct BigNumImmutable: public STORE_CLS
 	bool		operator == (const BigNumRef& x) const { return _details::BN_Equal(*this, x); }
 	bool		operator != (const BigNumRef& x) const { return !_details::BN_Equal(*this, x); }
 	bool		operator > (ULONGLONG x) const { return !IsNegative() && (STORE_CLS::GetLength()>1 || (STORE_CLS::GetLength()==1 && STORE_CLS::Data()[0] >x)); }
+	bool		operator >= (ULONGLONG x) const { return !IsNegative() && (STORE_CLS::GetLength()>1 || (STORE_CLS::GetLength()==1 && STORE_CLS::Data()[0] >=x)); }
+	bool		operator < (ULONGLONG x) const { return IsNegative() || STORE_CLS::GetLength()>1 || (STORE_CLS::GetLength()==1 && STORE_CLS::Data()[0] <x); }
+	bool		operator <= (ULONGLONG x) const { return IsNegative() || STORE_CLS::GetLength()>1 || (STORE_CLS::GetLength()==1 && STORE_CLS::Data()[0] <=x); }
 
 	template<class t_Ostream>
 	friend t_Ostream& operator<<(t_Ostream& Ostream, const BigNumImmutable& x)
@@ -328,9 +331,8 @@ struct BigNumImmutable: public STORE_CLS
 	double		ToDouble() const { return BN_2_double(*this); }
 	float		ToFloat() const { return BN_2_float(*this); }
 	BigNumRough	ToRough() const { BigNumRough ret; BN_2_rough(*this, &ret); return ret; }
-	/** @brief to string only append
-	 */
 	rt::String& ToString(rt::String& out, int base = 10) const { BN_ToString(*this, out, base); return out; }
+	void		Jsonify(rt::Json& json) const { auto& s = (rt::String&)json; s+='"'; ToString((rt::String&)json); s+='"'; }
 	bool		IsZero() const { return BN_IsZero(*this); }
 };
 #pragma pack(pop)
@@ -452,6 +454,7 @@ public:
 	const BigNumRough&     operator = (const BigNumRough& x);
 
 	bool FromString(const rt::String_Ref& s);
+	bool JsonParse(const rt::String_Ref& s){ return FromString(s.TrimQuotes()); }
 	void FlipSign();
 
 	void Add(const BigNumRef& a, const BigNumRef& b){ _details::BN_Add(a, b, *this); } ///< this = a + b
@@ -505,7 +508,4 @@ public:
 };
 
 typedef BigNumMutable	_BN;
-/** @}*/
-/** @}*/
-} // namespace oxd
-/** @}*/
+} // namespace ext

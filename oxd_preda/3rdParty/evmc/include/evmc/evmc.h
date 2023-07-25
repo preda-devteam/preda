@@ -1,4 +1,4 @@
-/**
+﻿/**
  * EVMC: Ethereum Client-VM Connector API
  *
  * @copyright

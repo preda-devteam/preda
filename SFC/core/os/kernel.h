@@ -988,7 +988,7 @@ private:
 };
 
 
-extern SIZE_T	Base64EncodeLength(SIZE_T len);
+inline constexpr SIZE_T	Base64EncodeLength(SIZE_T len){ return (len+2)/3*4; }
 extern SIZE_T	Base64DecodeLength(LPCSTR pBase64, SIZE_T len);
 extern void		Base64Encode(LPSTR pBase64Out,LPCVOID pData, SIZE_T data_len); ///< assuming the data is well formated
 extern bool		Base64Decode(LPVOID pDataOut,SIZE_T* pDataOutLen,LPCSTR pBase64, SIZE_T str_len); ///< false if partial data decoded due to illegal data (*pDataOutLen) might be smaller than Base64DecodeLength returned
@@ -996,8 +996,8 @@ extern bool		Base64Decode(LPVOID pDataOut,SIZE_T* pDataOutLen,LPCSTR pBase64, SI
 extern bool		Base64Encode(const rt::String_Ref&in, rt::String& out);
 extern bool		Base64Decode(const rt::String_Ref&in, rt::String& out);
 
-extern SIZE_T	Base16EncodeLength(SIZE_T len);
-extern SIZE_T	Base16DecodeLength(SIZE_T len);
+inline constexpr SIZE_T	Base16EncodeLength(SIZE_T len){ return len*2; }
+inline constexpr SIZE_T	Base16DecodeLength(SIZE_T len){ return len/2; }
 extern void		Base16Encode(LPSTR pBase16Out,LPCVOID pData, SIZE_T data_len);
 extern bool		Base16Decode(LPVOID pDataOut,SIZE_T data_len,LPCSTR pBase16, SIZE_T str_len);
 
@@ -1011,7 +1011,7 @@ extern UINT		UrlDecode(LPCSTR encoded_url, UINT encoded_url_len, LPSTR url);  //
 extern void		UrlDecode(const rt::String_Ref& encoded_url, rt::String& url);
 
 // Base32 Encoding
-extern SIZE_T	Base32EncodeLength(SIZE_T len);
+inline constexpr SIZE_T	Base32EncodeLength(SIZE_T len){ return (len*8+4)/5; }
 extern SIZE_T	Base32DecodeLength(SIZE_T len);
 // Base32 Extended HEX (0-9A-V)
 extern bool		Base32Decode(LPVOID pDataOut,SIZE_T data_len,LPCSTR pBase32, SIZE_T str_len);  ///< for both upper/lowercase

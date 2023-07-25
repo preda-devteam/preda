@@ -57,7 +57,7 @@ public:
 	void AddRelayToNoneFunctionError(const std::string &identifierName);
 	void AddRelayShardsToNonShardFunctionError(const std::string &identifierName);
 	void AddRelayToNoneRelayFunctionError(const std::string &identifierName);
-	void AddMoveOnlyParamOfTxnFunctionError();
+	void AddMoveOnlyParamOfTxnFunctionOrConstructorError();
 	void AddContinueOutsideLoopError();
 	void AddBreakOutsideLoopError();
 	void AddIllegalUseOfContractTypeError();
@@ -118,7 +118,11 @@ public:
 	void AddInvalidScopeError(const std::string& scopeName);
 	void AssigningMemberVarToConstVarError(const std::string& identifierName);
 	void AddInvalidRelayTargetTypeError(const std::string& targetType);
-	void InvalidConstMemberVarType();
+	void AddInvalidConstMemberVarTypeError();
+	void AddNonDeployableTypeError(const std::string& expressionText);
+	void AddMultipleConstructorError();
+	void AddDeployInNonGlobalError();
+	void AddUseCurrentContractTypeError();
 
 	void AddSyntaxError(uint32_t line, uint32_t pos, const std::string &msg);
 	void AddInternalError(uint32_t line, uint32_t pos, const std::string &msg);
