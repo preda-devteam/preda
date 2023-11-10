@@ -1,0 +1,51 @@
+random.reseed
+allocate.address 1024
+chain.gaslimit 256
+
+chain.deploy @1 Token.prd
+
+log.highlight Airdrop test
+log Perparing test transactions ($~count$)
+
+state.set address.Token @all { balance:"10000000000000" }
+
+Token.transfer_n*$~count$ @random { recipients: [ \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }, \
+	{ to: "$@random$", amount: "100" }, { to: "$@random$", amount: "200" }, { to: "$@random$", amount: "150" }, { to: "$@random$", amount: "50" }  \
+]}
+
+chain.info
+log Executing
+
+stopwatch.restart
+chain.run
+stopwatch.report
+
+chain.info
+
+viz.profiling
+
+
