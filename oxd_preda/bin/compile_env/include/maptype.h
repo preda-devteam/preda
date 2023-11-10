@@ -29,9 +29,9 @@ namespace prlrt {
 		{
 			//transpiler should have already prevented this, here just in case.
 			if (!key_type::is_fixed_size::value)
-				throw preda_exception("map key type is not of fixed size in " + std::string(__FUNCTION__), prlrt::ExceptionType::InvalidMapKeyType);
+				preda_exception::throw_exception("map key type is not of fixed size in " + std::string(__FUNCTION__), prlrt::ExceptionType::InvalidMapKeyType);
 			if (!key_type::is_value_type::value)
-				throw preda_exception("map key type is not value type in " + std::string(__FUNCTION__), prlrt::ExceptionType::InvalidMapKeyType);
+				preda_exception::throw_exception("map key type is not value type in " + std::string(__FUNCTION__), prlrt::ExceptionType::InvalidMapKeyType);
 		}
 
 		index_type length() const
@@ -81,7 +81,7 @@ namespace prlrt {
 			auto res = m.insert(std::make_pair(key, element_type()));
 			if (!res.second)
 			{
-				throw preda_exception("map insertion failure in " + std::string(__FUNCTION__), prlrt::ExceptionType::MapInsertFailure);
+				preda_exception::throw_exception("map insertion failure in " + std::string(__FUNCTION__), prlrt::ExceptionType::MapInsertFailure);
 			}
 
 			return res.first->second;
@@ -91,7 +91,7 @@ namespace prlrt {
 		{
 			const element_type *ret = get_element_internal(key);
 			if (ret == nullptr)
-				throw preda_exception("accessing a non-existing key in const map in" + std::string(__FUNCTION__), prlrt::ExceptionType::ConstMapAccessNonExistingKey);
+				preda_exception::throw_exception("accessing a non-existing key in const map in" + std::string(__FUNCTION__), prlrt::ExceptionType::ConstMapAccessNonExistingKey);
 
 			return *ret;
 		}
@@ -122,16 +122,16 @@ namespace prlrt {
 				: ((serialize_size_type*)(mapped_element_data))[index - 1];
 
 			if (element_buffer_start_offset > element_buffer_end_offset || element_buffer_end_offset > mapped_element_data_size)
-				throw preda_exception("deserialization error in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
+				preda_exception::throw_exception("deserialization error in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
 
 			uint8_t *element_buffer_start = mapped_element_data + element_buffer_start_offset;
 			serialize_size_type element_size = element_buffer_end_offset - element_buffer_start_offset;
 
 			element_type element;
 			if (!element.map_from_serialized_data(element_buffer_start, element_size, false))
-				throw preda_exception("deserialization error in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
+				preda_exception::throw_exception("deserialization error in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
 			if (element_size != 0)
-				throw preda_exception("deserialization error (element buffer not fully consumed) in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
+				preda_exception::throw_exception("deserialization error (element buffer not fully consumed) in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
 
 			mapped_data_element_cache.insert(std::make_pair(index, element));
 
@@ -274,11 +274,11 @@ namespace prlrt {
 			{
 				key_type key;
 				if (!key.map_from_serialized_data(read_ptr, read_buffer_size, bDeep))
-					throw preda_exception("deserialization error in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
+					preda_exception::throw_exception("deserialization error in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
 				mapped_data_key_to_element_index.emplace(key, index);
 			}
 			if (read_buffer_size != 0)
-				throw preda_exception("deserialization error (key buffer not fully consumed) in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
+				preda_exception::throw_exception("deserialization error (key buffer not fully consumed) in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
 
 			if (bDeep)
 			{

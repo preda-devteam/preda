@@ -52,14 +52,36 @@ protected:
 protected:
 	///////////////////////////////////////////////////////
 	// From rvm::BlockchainRuntime
-	virtual rvm::ConstString			GetCoreDAppName() const override { return {"core", 4}; }
-	virtual rvm::ContractRepository*	GetContractRepository() override { return nullptr; }
+	virtual rvm::ConstString			GetCoreDAppName() const override
+	{
+		return {"core", 4};
+	}
+	virtual rvm::ContractRepository*	GetContractRepository() override
+	{
+		return nullptr;
+	}
 	virtual void						DebugPrint(rvm::DebugMessageType type, const rvm::ConstString* string, const rvm::ExecutionState* ctx_opt, const rvm::Contract* contract_opt, int32_t line) override;
 
-	virtual rvm::DAppId					GetDAppByName(const rvm::ConstString* dapp_name) const { return _pGlobalShard->GetDAppByName(dapp_name); }
-	virtual rvm::ContractVersionId		GetContractByName(const rvm::ConstString* dapp_period_contract_name) const { return _pGlobalShard->GetContractByName(dapp_period_contract_name); }
-	virtual rvm::BuildNum				GetContractEffectiveBuild(rvm::ContractId contract) const { return _pGlobalShard->GetContractEffectiveBuild(contract); }
-	virtual const rvm::DeployedContract*GetContractDeployed(rvm::ContractVersionId contract) const { return _pGlobalShard->GetContractDeployed(contract); }
+	virtual rvm::DAppId					GetDAppByName(const rvm::ConstString* dapp_name) const override
+	{
+		return _pGlobalShard->GetDAppByName(dapp_name);
+	}
+	virtual rvm::ContractVersionId		GetContractByName(const rvm::ConstString* dapp_period_contract_name) const override
+	{
+		return _pGlobalShard->GetContractByName(dapp_period_contract_name);
+	}
+	virtual rvm::BuildNum				GetContractEffectiveBuild(rvm::ContractId contract) const override 
+	{
+		return _pGlobalShard->GetContractEffectiveBuild(contract);
+	}
+	virtual const rvm::DeployedContract*GetContractDeployed(rvm::ContractVersionId contract) const override
+	{
+		return _pGlobalShard->GetContractDeployed(contract);
+	}
+	virtual bool						IsTokenMintAllowed(rvm::TokenId tid, rvm::ContractId contract) const override
+	{
+		return _pGlobalShard->IsTokenMintAllowed(tid, contract);
+	}
 
 protected:
 	// Scripting

@@ -1231,8 +1231,7 @@ bool ExpressionParser::GenerateDebugPrintArguments(PredaParser::FunctionCallArgu
 {
 	std::vector<PredaParser::ExpressionContext *> argCtxs = ctx->expression();
 
-	outSynthesizedArgumentsString = std::to_string((uint32_t)ctx->start->getLine()) + ", ";
-	bool bFirstArg = true;
+	outSynthesizedArgumentsString = std::to_string((uint32_t)ctx->start->getLine());
 	for (size_t i = 0; i < argCtxs.size(); i++)
 	{
 		ExpressionResult arg;
@@ -1243,11 +1242,7 @@ bool ExpressionParser::GenerateDebugPrintArguments(PredaParser::FunctionCallArgu
 		if (arg.type.baseConcreteType == nullptr)
 			continue;
 
-		if (!bFirstArg)
-			outSynthesizedArgumentsString += ", ";
-		else
-			bFirstArg = false;
-		outSynthesizedArgumentsString += "\"" + arg.type.baseConcreteType->exportName + "\", " + arg.text;
+		outSynthesizedArgumentsString += ", \"" + arg.type.baseConcreteType->exportName + "\", " + arg.text;
 	}
 
 	return true;

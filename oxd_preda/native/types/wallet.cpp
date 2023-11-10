@@ -10,26 +10,13 @@ const BigNum& CoinsWallet::GetAmount(TokenId aid) const
 	return n ? *n : BigNum::Zero();
 }
 
-bool CoinsWallet::Withdraw(TokenId aid, CoinsMutable& get, CoinsWalletMutable& residue, bool allow_overflow) const	// residue = this - get
+bool CoinsWallet::Withdraw(TokenId aid, CoinsMutable& get, CoinsWalletMutable& residue) const	// residue = this - get
 {
 	ASSERT(get.IsZero());
 
 	auto& org = GetAmount(aid);
 	if(org < get.GetAmount())
-	{
-		if(allow_overflow)
-		{
-			get.GetModifiableAmount() = org;
-			get.SetId(aid);
-
-			residue.Assign(*this);
-			residue.Remove(aid);
-
-			return true;
-		}
-		else
-			return false;
-	}
+		return false;
 
 	BigNumMutable res_amount;
 	res_amount.Sub(org, get.GetAmount());
@@ -47,6 +34,22 @@ bool CoinsWallet::Withdraw(TokenId aid, CoinsMutable& get, CoinsWalletMutable& r
 }
 
 void CoinsWalletMutable::Deposit(const Coins& x)
+{
+	if(!x.IsZero())
+	{
+		auto* exi = Get(x.GetId());
+		if(exi)
+		{
+			BigNumMutable res_amount;
+			res_amount.Add(*exi, x.GetAmount());
+			Set(x.GetId(), res_amount);
+		}
+		else
+			Set(x.GetId(), x.GetAmount());
+	}
+}
+
+void CoinsWalletMutable::Deposit(CoinsMutable &x)
 {
 	if(!x.IsZero())
 	{

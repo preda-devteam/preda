@@ -259,7 +259,7 @@ struct Date:public ::rt::tos::S_<>
 	}
 };
 
-template<SIZE_T LEN = 65, bool uppercase = true>
+template<SIZE_T LEN = 65, bool uppercase = true, bool keep_leading_zero = false>
 struct HexNum:public ::rt::tos::S_<1,LEN>
 {
 	template<typename T>
@@ -268,10 +268,11 @@ struct HexNum:public ::rt::tos::S_<1,LEN>
 	{	
 		const char char_base = uppercase?'A':'a';
 		typedef ::rt::tos::S_<1,LEN> _SC;
-		ASSERT(len < (int)sizeofArray( _SC::_string)/2);
+		ASSERT(len * 2 < (int)sizeofArray( _SC::_string));
 		LPSTR p =  _SC::_string;
 		int i=0;
-		for(;i<len-1 && ((LPCBYTE)pbyte)[len - i - 1] == 0; i++);
+		if constexpr (!keep_leading_zero)
+			for(;i<len-1 && ((LPCBYTE)pbyte)[len - i - 1] == 0; i++);
 		for(;i<len;i++,p+=2)
 		{
 			BYTE v = ((LPCBYTE)pbyte)[len - i - 1];
@@ -294,7 +295,7 @@ struct Binary:public ::rt::tos::S_<1,LEN>
 	{	
 		const char char_base = uppercase?'A':'a';
 		typedef ::rt::tos::S_<1,LEN> _SC;
-		ASSERT(len < (int)sizeofArray( _SC::_string)/2);
+		ASSERT(len * 2 < (int)sizeofArray( _SC::_string));
 		LPSTR p =  _SC::_string;
 		for(int i=0;i<len;i++,p+=2)
 		{
@@ -315,7 +316,7 @@ struct BinaryCString:public ::rt::tos::S_<1,LEN>
 	INLFUNC BinaryCString(LPCVOID pbyte, int len)
 	{	
 		typedef ::rt::tos::S_<1,LEN> _SC;
-		ASSERT(len < (int)sizeofArray( _SC::_string)/2);
+		ASSERT(len * 2 < (int)sizeofArray( _SC::_string));
 		LPSTR p =  _SC::_string;
 		for(int i=0;i<len;i++,p+=4)
 		{

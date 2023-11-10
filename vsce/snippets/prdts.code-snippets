@@ -33,7 +33,7 @@
   },
   "chain deploy": {
     "prefix": "chain:deploy",
-    "body": ["chain.deploy ${0:contract}.prd"],
+    "body": ["chain.deploy @0 ${0:contract}.prd"],
     "description": "deploy contract"
   },
   "visualize all block": {

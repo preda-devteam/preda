@@ -19,7 +19,7 @@ export function trimEndSlash(url: string) {
 
 export function toShard(value: string | number, order: string, withUnit = true) {
   const unit = withUnit ? '#' : '';
-  return unit + (String(value) === '65535' ? 'g' : String(value).replace('#', '')) + ((value.toString()).match('g') ? '' : ('/' + Number(order || 0) ** 2))
+  return unit + (String(value) === '65535' ? 'g' : String(value).replace('#', '')) + ((value.toString()).match('g') ? '' : ('/' + 2 ** Number(order || 0)))
 }
 export const toUTCTime = (time: number | string | undefined) => {
   if (!time) {

@@ -782,6 +782,7 @@ rvm::ConstString CContractDatabase::GetContractName(const rvm::ConstData* source
 bool CContractDatabase::_Compile(IContractFullNameToModuleIdLookupTable* lookup, const rvm::ConstString* dapp_name, uint32_t contract_count, const rvm::ConstData* deploy_data_array, rvm::CompilationFlag flag, rvm::CompiledModules** compiled_output, rvm::LogMessageOutput* log_msg_output)
 {
 	EnterCSBlock(m_barrier);
+	m_cancel.Reset();
 
 	std::vector<ContractCompileData> allCompileDdata;
 	CContractSymbolDatabaseForTranspiler symbolDatabase(this, allCompileDdata, m_pRuntimeAPI, lookup);
@@ -931,7 +932,7 @@ bool CContractDatabase::_Compile(IContractFullNameToModuleIdLookupTable* lookup,
 
 	bool bSuccess = true;
 
-	for (uint32_t compileIdx = 0; compileIdx < uint32_t(compileOrder.size()); compileIdx++)
+	for (uint32_t compileIdx = 0; compileIdx < uint32_t(compileOrder.size()) && !m_cancel.IsSignaled(); compileIdx++)
 	{
 		uint32_t contractIdx = compileOrder[compileIdx];
 
@@ -1035,6 +1036,7 @@ bool CContractDatabase::_Compile(IContractFullNameToModuleIdLookupTable* lookup,
 	}
 
 	// generate dependency data by collecting all dependent external contracts and their module id
+	if (bSuccess)
 	{
 		const std::map<std::string, const ContractDatabaseEntry*>& externalDependencies = symbolDatabase.GetContractEntryCache();
 		if (externalDependencies.size())
@@ -1053,15 +1055,17 @@ bool CContractDatabase::_Compile(IContractFullNameToModuleIdLookupTable* lookup,
 	}
 
 
-	if (compiled_output)
+	if (compiled_output && !m_cancel.IsSignaled())
+	{
 		*compiled_output = compiled_contracts;
+	}
 	else
 	{
 		compiled_contracts->Release();
 		compiled_contracts = nullptr;
 	}
 
-	return bSuccess;
+	return m_cancel.IsSignaled() ? false : bSuccess;
 }
 
 bool CContractDatabase::Compile(const rvm::ConstString* dapp_name, uint32_t contract_count, const rvm::ConstData* deploy_data_array, rvm::CompilationFlag flag, rvm::CompiledModules** compiled_output, rvm::LogMessageOutput* log_msg_output)
@@ -1444,7 +1448,8 @@ bool CContractDatabase::LinkContract(const std::string &source_code, const std::
 		os::LaunchProcess processLauncher;
 		std::string configFilePath = m_modulePath + "../compile_env/config.txt";
 		os::File config_File;
-		//in order to compile with msvc, create a config.txt file under compile_env dir with an absolute path to vcvars64.bat
+		// in order to compile with msvc, create a config.txt file under compile_env dir and write it with the absolute path to vcvars64.bat
+		// for example : C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat
 		if (!config_File.Open(configFilePath.c_str()))
 		{
 			if (m_runtime_mode == RuntimeMode::NATIVE)
@@ -1455,7 +1460,16 @@ bool CContractDatabase::LinkContract(const std::string &source_code, const std::
 					out_log.AddMessage(0, 0, 0, ("Failed to execute " + cmdLine).c_str());
 					return false;
 				}
-				processLauncher.WaitForEnding();
+				while (processLauncher.IsRunning()) 
+				{
+					if (m_cancel.IsSignaled()) {
+						processLauncher.Terminate();
+						return false;
+					}
+					else {
+						processLauncher.WaitForEnding(100);
+					}
+				}
 				if (processLauncher.GetExitCode() != 0)
 				{
 					out_log.AddMessage(0, 0, 0, processLauncher.GetOutput());
@@ -1473,7 +1487,16 @@ bool CContractDatabase::LinkContract(const std::string &source_code, const std::
 					out_log.AddMessage(0, 0, 0, ("Failed to execute " + cmdLine).c_str());
 					return false;
 				}
-				processLauncher.WaitForEnding();
+				while (processLauncher.IsRunning())
+				{
+					if (m_cancel.IsSignaled()) {
+						processLauncher.Terminate();
+						return false;
+					}
+					else {
+						processLauncher.WaitForEnding(100);
+					}
+				}
 				if (processLauncher.GetExitCode() != 0)
 				{
 					out_log.AddMessage(0, 0, 0, processLauncher.GetOutput());
@@ -1523,7 +1546,16 @@ bool CContractDatabase::LinkContract(const std::string &source_code, const std::
 				out_log.AddMessage(0, 0, 0, ("Failed to execute " + cmdLine).c_str());
 				return false;
 			}
-			processLauncher.WaitForEnding();
+			while (processLauncher.IsRunning())
+			{
+				if (m_cancel.IsSignaled()) {
+					processLauncher.Terminate();
+					return false;
+				}
+				else {
+					processLauncher.WaitForEnding(100);
+				}
+			}
 			if (processLauncher.GetExitCode() != 0)
 			{
 				out_log.AddMessage(0, 0, 0, processLauncher.GetOutput());
@@ -1551,6 +1583,10 @@ bool CContractDatabase::LinkContract(const std::string &source_code, const std::
 		srcFile.Close();
 	}
 
+	if (m_cancel.IsSignaled()) {
+		return false;
+	}
+
 	{
 		out_link_data.binaryPathFileName = contractBinPathFileName;
 		out_link_data.srcPathFileName = contractSrcPathFileName;
@@ -1562,10 +1598,10 @@ bool CContractDatabase::LinkContract(const std::string &source_code, const std::
 
 void CContractDatabase::CancelCurrentBuildingTask()
 {
-	// TODO
+	m_cancel.Set();
 }
 
-bool CContractDatabase::Deploy(const rvm::GlobalStates* chain_state, rvm::CompiledModules* linked, rvm::DataBuffer** out_stub, rvm::LogMessageOutput* log_msg_output)
+bool CContractDatabase::Deploy(const rvm::GlobalStates* chain_state, rvm::CompiledModules* linked, const rvm::ContractVersionId* target_cvids, rvm::DataBuffer** out_stub, rvm::LogMessageOutput* log_msg_output)
 {
 	PredaCompiledContracts* pCompiledContracts = (PredaCompiledContracts*)linked;
 	assert(pCompiledContracts->IsLinked());
@@ -1574,10 +1610,17 @@ bool CContractDatabase::Deploy(const rvm::GlobalStates* chain_state, rvm::Compil
 	std::vector<rvm::ContractVersionId> contractIds(numContracts);
 	for (uint32_t i = 0; i < numContracts; i++)
 	{
-		const ContractCompileData* pCompiledData = pCompiledContracts->GetCompiledData(i);
-		contractIds[i] = _details::GetOnChainContractIdFromContractFullName(chain_state, pCompiledData->dapp + "." + pCompiledData->name);
-		if (contractIds[i] == rvm::ContractVersionIdInvalid)
-			return false;
+		if (target_cvids)
+		{
+			contractIds[i] = target_cvids[i];
+		}
+		else
+		{
+			const ContractCompileData* pCompiledData = pCompiledContracts->GetCompiledData(i);
+			contractIds[i] = _details::GetOnChainContractIdFromContractFullName(chain_state, pCompiledData->dapp + "." + pCompiledData->name);
+			if (contractIds[i] == rvm::ContractVersionIdInvalid)
+				return false;
+		}
 	}
 
 	EnterCSBlock(m_barrier);
@@ -1588,9 +1631,10 @@ bool CContractDatabase::Deploy(const rvm::GlobalStates* chain_state, rvm::Compil
 	std::vector<ContractDatabaseEntry> entries(contracts_count);
 
 	for (uint32_t contractIdx = 0; contractIdx < contracts_count; contractIdx++)
-	{
 		entries[contractIdx].compileData = *pCompiledContracts->GetCompiledData(contractIdx);
 
+	for (uint32_t contractIdx = 0; contractIdx < contracts_count; contractIdx++)
+	{
 		// it could happen that the module id is already used, in which case there's no need to rename the files
 		if (m_contracts.find(entries[contractIdx].compileData.moduleId) == m_contracts.end())
 		{
@@ -1661,7 +1705,7 @@ bool CContractDatabase::Deploy(const rvm::GlobalStates* chain_state, rvm::Compil
 			rvm::ContractVersionId importedContractId = rvm::ContractVersionIdInvalid;
 
 			// first look in the contracts that are being deployed
-			for (uint32_t i = 0; i < contractIdx; i++)
+			for (uint32_t i = 0; i < contracts_count; i++)
 			{
 				if (entries[i].compileData.dapp + "." + entries[i].compileData.name == importedContractName)
 				{

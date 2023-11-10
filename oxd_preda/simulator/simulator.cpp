@@ -299,7 +299,6 @@ bool Simulator::Compile(rvm::EngineId e, rt::Buffer<rt::String>& sources, rt::Bu
 	}
 
 	rt::Json json;
-	json.Array();
 	build.GetContractsInfo(json);
 	_LOG(rt::JsonBeautified(json));
 
@@ -448,14 +447,17 @@ bool Simulator::Deploy(ExecutionUnit& exec_units, const rt::String_Ref* fns, con
 		int succ_count = 0;
 		if (solidity.IsCompiled())
 		{
+			auto section2 = _ScriptVizJson.ScopeMergingArray();
 			solidity.GetContractsInfo(_ScriptVizJson); succ_count++;
 		}
 		if (preda_wasm.IsCompiled())
 		{
+			auto section2 = _ScriptVizJson.ScopeMergingArray();
 			preda_wasm.GetContractsInfo(_ScriptVizJson); succ_count++;
 		}
 		if (preda_native.IsCompiled())
 		{
+			auto section2 = _ScriptVizJson.ScopeMergingArray();
 			preda_native.GetContractsInfo(_ScriptVizJson); succ_count++;
 		}
 	}
@@ -1008,6 +1010,8 @@ bool Simulator::_ExecAddrStateLog(const CmdParse& cmd, rt::Json& json)
 	rt::String_Ref segs[2];
 	auto co = cmd.Args.Split(segs, 2, ' ');
 	rt::String contract = co > 1 ? rt::String_Ref(segs[1].Begin(), cmd.Args.End()) : rt::String();
+	if (contract.FindCharacter('.') == -1)
+		contract = DAPP_NAME + '.' + contract;
 	rt::String target = segs[0];
 	if(!_ProcessTargetRequest(target, GetLineNum(), false))
 	{
@@ -1310,6 +1314,11 @@ rvm::InvokeResult Simulator::DeployFromStatement(const rt::String_Ref& deploySta
 		rt::String_Ref remain(p, end), filename;
 		auto seg_end = remain.FindCharacter(sep);
 		bool has_argument = false;
+		if (seg_end == 0)
+		{
+			p++;
+			continue;
+		}
 		if (seg_end < 0)
 			seg_end = remain.GetLength();
 		else

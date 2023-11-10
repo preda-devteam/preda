@@ -48,7 +48,7 @@ typedef const Address ConstAddress;
 static_assert(sizeof(Address) == 36);
 
 // 6-bit
-enum class ScopeKeySize : uint8_t
+enum class ScopeKeySized : uint8_t
 {
 	// non-Enumerable
 	Default = 0,	// actual scope is defined on scope_slot
@@ -75,7 +75,7 @@ enum class ScopeKeySize : uint8_t
 	IsEnumerable = 0x20u
 };
 
-static const ScopeKeySize ScopeKeySizeInvalid = ScopeKeySize::Bitmask;
+static const ScopeKeySized ScopeKeySizeInvalid = ScopeKeySized::Bitmask;
 
 struct ScopeKey
 {
@@ -90,30 +90,45 @@ inline constexpr uint32_t	SCOPEKEY_SHARD_DWORD(const uint8_t* p)
 								else if constexpr (SZ == 2)return *(uint16_t*)d;
 								else if constexpr (SZ == 3)return (*(uint32_t*)d) & 0xffffffU;
 								else if constexpr (SZ == 4)return *d;
-								else if constexpr (SZ == 36)return d[0] ^ d[4] ^ d[7]; // TBD: remove when code is stable
+								else if constexpr (SZ == 36)return d[0] ^ d[4] ^ d[7]; // TBD: remove when code is stable, was for compatibility of Monoxide
 								else return d[0] ^ d[SZ/8] ^ d[SZ/4 - 1];
 							}
 inline constexpr uint32_t	SCOPEKEY_SHARD_DWORD(const ScopeKey& k)
-							{	const uint32_t* d = (const uint32_t*)k.Data;
-								if(k.Size == 36)return d[0] ^ d[4] ^ d[7];  // TBD: remove when code is stable
+							{	if(k.Size < 4 || k.Data == nullptr)return 0;
+								const uint32_t* d = (const uint32_t*)k.Data;
+								if(k.Size == 36)return d[0] ^ d[4] ^ d[7];  // TBD: remove when code is stable, was for compatibility of Monoxide
 								return d[0] ^ d[k.Size/8] ^ d[k.Size/4 - 1];
 							}
 inline uint32_t				SCOPEKEY_SHARD_BITMASK(uint32_t shard_order){ return ~(((uint32_t)(-1))<<shard_order); }
 inline uint32_t				SCOPEKEY_SHARD_BRANCH_BIT(uint32_t shard_order){ return shard_order?(1U<<(shard_order-1)):0; } // 0 for base, otherwise for up
-inline constexpr int		SCOPEKEY_SIZE(ScopeKeySize t)
-							{	switch((ScopeKeySize)(uint16_t(ScopeKeySize::BaseTypeBitmask)& uint16_t(t)))
-								{	case ScopeKeySize::UInt32: return 4;
-									case ScopeKeySize::UInt64: return 8;
-									case ScopeKeySize::UInt96: return 12;
-									case ScopeKeySize::UInt128: return 16;
-									case ScopeKeySize::UInt160: return 20;
-									case ScopeKeySize::UInt256: return 32;
-									case ScopeKeySize::Address: return 36;
-									case ScopeKeySize::UInt512: return 64;
+inline constexpr int		SCOPEKEY_SIZE(ScopeKeySized t)
+							{	switch((ScopeKeySized)(uint16_t(ScopeKeySized::BaseTypeBitmask)& uint16_t(t)))
+								{	case ScopeKeySized::UInt32: return 4;
+									case ScopeKeySized::UInt64: return 8;
+									case ScopeKeySized::UInt96: return 12;
+									case ScopeKeySized::UInt128: return 16;
+									case ScopeKeySized::UInt160: return 20;
+									case ScopeKeySized::UInt256: return 32;
+									case ScopeKeySized::Address: return 36;
+									case ScopeKeySized::UInt512: return 64;
 									default: return -1;
 								}
 							}
-inline constexpr bool		SCOPEKEYSIZE_SHOULD_REFER(ScopeKeySize t){ return t==ScopeKeySize::Default || ((int)t&(int)ScopeKeySize::BaseTypeBitmask) >= (int)ScopeKeySize::UInt160; }
+inline constexpr auto		SCOPEKEYTYPED_BYSIZE(int s)
+							{	switch(s)
+								{	case 4:  return ScopeKeySized::UInt32;
+									case 8:  return ScopeKeySized::UInt64;
+									case 12: return ScopeKeySized::UInt96;
+									case 16: return ScopeKeySized::UInt128;
+									case 20: return ScopeKeySized::UInt160;
+									case 32: return ScopeKeySized::UInt256;
+									case 36: return ScopeKeySized::Address;
+									case 64: return ScopeKeySized::UInt512;
+									default: return ScopeKeySizeInvalid;
+								}
+							}
+
+inline constexpr bool		SCOPEKEYSIZE_SHOULD_REFER(ScopeKeySized t){ return t==ScopeKeySized::Default || ((int)t&(int)ScopeKeySized::BaseTypeBitmask) >= (int)ScopeKeySized::UInt160; }
 
 static const uint32_t		ADDRESS_DWORD_SIZE = sizeof(Address)/sizeof(uint32_t);
 static const uint32_t		ADDRESS_BASE32_LEN = (sizeof(Address)*8 + 4)/5; // 58

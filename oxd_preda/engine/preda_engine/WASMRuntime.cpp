@@ -341,6 +341,14 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 		})) {
 		return {};
 	}
+	if (!linker.func_wrap("env", "predaInterfaceIsImplemented",
+		[&engine](wasmtime::Caller caller, uint64_t contractId, int64_t interfaceContractImportSlot, uint32_t interfaceSlot) -> uint32_t {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			return engine.runtimeInterface().InterfaceIsImplemented(contractId,
+				interfaceContractImportSlot, interfaceSlot);
+		})) {
+		return {};
+	}
 	if (!linker.func_wrap("env", "predaDeployCall",
 		[&engine](wasmtime::Caller caller, int64_t templateContractImportSlot, WasmPtrT ptrs, uint32_t numPtrs) -> uint64_t {
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());

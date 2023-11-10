@@ -98,12 +98,12 @@ namespace prlrt {
 		__prlt_address(const char *rhs)
 		{
 			if (!PREDA_CALL(InitAddressFromLiteral, this, rhs))
-				throw preda_exception("init address with invalid literal", prlrt::ExceptionType::InitAddressWithInvalidLiteral);
+				preda_exception::throw_exception("init address with invalid literal", prlrt::ExceptionType::InitAddressWithInvalidLiteral);
 		}
 		__prlt_address(const __prlt_string &rhs)
 		{
 			if (!PREDA_CALL(StringToAddress, this, (const char*)rhs.ptr->str.c_str(), uint32_t(rhs.ptr->str.length())))
-				throw preda_exception("invalid string to address conversion", prlrt::ExceptionType::InvalidStringToAddressConversion);
+				preda_exception::throw_exception("invalid string to address conversion", prlrt::ExceptionType::InvalidStringToAddressConversion);
 		}
 		__prlt_bool __prli_is_user()
 		{
@@ -163,7 +163,7 @@ namespace prlrt {
 		__prlt_hash(const char *rhs)
 		{
 			if (!PREDA_CALL(InitHashFromLiteral, this, rhs))
-				throw preda_exception("init hash with invalid literal", prlrt::ExceptionType::InitHashWithInvalidLiteral);
+				preda_exception::throw_exception("init hash with invalid literal", prlrt::ExceptionType::InitHashWithInvalidLiteral);
 		}
 		__prlt_hash(const __prlt_string &rhs)
 		{

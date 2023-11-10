@@ -14,7 +14,7 @@ namespace prlrt {
 		void test_length_overflow()
 		{
 			if (length_type(str.length()) != str.length())
-				throw preda_exception("string length overflow " + std::string(__FUNCTION__), prlrt::ExceptionType::StringLengthOverflow);
+				preda_exception::throw_exception("string length overflow " + std::string(__FUNCTION__), prlrt::ExceptionType::StringLengthOverflow);
 		}
 
 		string_impl()

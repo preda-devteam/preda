@@ -12,7 +12,7 @@ namespace prlrt {
 		const void *p[sizeof...(Args) + 1] = { &args..., &ret };
 		uint32_t crossCallRes = PREDA_CALL(InterfaceCall, contractId, interfaceContractImportSlot, interfaceSlot, funcIdx, p, sizeof...(Args) + 1);
 		if (crossCallRes != 0)
-			throw preda_exception("interface call error", prlrt::ExceptionType(crossCallRes >> 8));
+			preda_exception::throw_exception("interface call error", prlrt::ExceptionType(crossCallRes >> 8));
 		return ret;
 	}
 
@@ -22,7 +22,14 @@ namespace prlrt {
 		const void *p[sizeof...(Args) + 1] = { &args..., nullptr };		// here "+ 1" is necessary, otherwise when args... is empty, we are defining an empty array and get a compile error
 		uint32_t crossCallRes = PREDA_CALL(InterfaceCall, contractId, interfaceContractImportSlot, interfaceSlot, funcIdx, p, sizeof...(Args));
 		if (crossCallRes != 0)
-			throw preda_exception("interface call error", prlrt::ExceptionType(crossCallRes >> 8));
+			preda_exception::throw_exception("interface call error", prlrt::ExceptionType(crossCallRes >> 8));
+	}
+
+	bool interface_is_implemented(uint64_t contractId, int64_t interfaceContractImportSlot, uint32_t interfaceSlot)
+	{
+		if (contractId == 0)
+			return false;
+		return PREDA_CALL(InterfaceIsImplemented, contractId, interfaceContractImportSlot, interfaceSlot);
 	}
 
 	struct interface_struct {

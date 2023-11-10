@@ -102,13 +102,19 @@ RvmContractDelegate::RvmContractDelegate(const ContractCompileData* pContractCom
 	}
 
 	// only count scopes that have state or function, do no report the others
-	static constexpr const char scopeTypeNames[int(transpiler::ScopeType::Num)][20] = { "none", "global", "shard", "address", "uint16", "uint32", "uint64", "uint256", "uint512" };
+	static constexpr const char scopeTypeNames[int(transpiler::ScopeType::Num)][20] = { "none", "global", "shard", "address", "uint32", "uint64", "uint96", "uint128", "uint160", "uint256", "uint512" };
 	for (int i = 0; i < int(transpiler::ScopeType::Num); i++)
 		if (scopeFlags[i] != 0)
 		{
 			rvm::Scope rvmScope = _details::PredaScopeToRvmScope(transpiler::ScopeType(i));
 			m_scopes.push_back({ rvmScope, scopeFlags[i], scopeTypeNames[i] });
 		}
+
+	m_implementedInterfaces.reserve(pContractCompiledData->implementedInterfaces.size());
+	for (uint32_t i = 0; i < pContractCompiledData->implementedInterfaces.size(); i++)
+	{
+		m_implementedInterfaces.push_back(std::make_shared<ImplementedInterface>(i, this));
+	}
 }
 
 rvm::ConstString RvmContractDelegate::GetName() const
@@ -178,11 +184,61 @@ bool RvmContractDelegate::GetFunctionSignature(uint32_t idx, rvm::StringStream* 
 	return true;
 }
 
-
 void RvmContractDelegate::GetSystemFunctionOpCodes(rvm::SystemFunctionOpCodes* out) const
 {
 	constexpr rvm::OpCode invalidOpCode = rvm::OpCode(std::numeric_limits<std::underlying_type_t<rvm::OpCode>>::max());
 	out->ShardScaleOut = (m_flag & uint32_t(rvm::ContractFlag::HasShardScaleOut)) != 0 ? m_onScaleOutOpCode : invalidOpCode;
 	out->ShardDeploy = (m_flag & uint32_t(rvm::ContractFlag::HasShardDeploy)) != 0 ? m_shardDeployOpCode : invalidOpCode;
 	out->GlobalDeploy = (m_flag & uint32_t(rvm::ContractFlag::HasGlobalDeploy)) != 0 ? m_onDeployOpCode : invalidOpCode;
+}
+
+RvmContractDelegate::ImplementedInterface::ImplementedInterface(uint32_t inimplIdx, const RvmContractDelegate* inContractDelegate)
+	: implIdx(inimplIdx), contractDelegate(inContractDelegate), impl(contractDelegate->m_pContractCompiledData->implementedInterfaces[implIdx])
+{
+}
+
+rvm::ConstString RvmContractDelegate::ImplementedInterface::GetName() const
+{
+	std::string::size_type lastDotPos = impl.name.find_last_of('.');
+	if (lastDotPos == std::string::npos)
+	{
+		return { nullptr, 0 };
+	}
+
+	return { impl.name.c_str() + lastDotPos + 1, uint32_t(impl.name.length() - lastDotPos - 1) };
+}
+
+rvm::ConstString RvmContractDelegate::ImplementedInterface::GetFullName() const
+{
+	return { impl.name.c_str(), uint32_t(impl.name.length()) };
+}
+
+uint32_t RvmContractDelegate::ImplementedInterface::GetFunctionCount() const
+{
+	return uint32_t(impl.functionIds.size());
+}
+
+rvm::ConstString RvmContractDelegate::ImplementedInterface::GetFunctionName(uint32_t idx) const
+{
+	return contractDelegate->GetFunctionName(impl.functionIds[idx]);
+}
+
+rvm::FunctionFlag RvmContractDelegate::ImplementedInterface::GetFunctionFlag(uint32_t idx) const
+{
+	return contractDelegate->GetFunctionFlag(impl.functionIds[idx]);
+}
+
+rvm::Scope RvmContractDelegate::ImplementedInterface::GetFunctionScope(uint32_t idx) const
+{
+	return contractDelegate->GetFunctionScope(impl.functionIds[idx]);
+}
+
+rvm::OpCode RvmContractDelegate::ImplementedInterface::GetFunctionOpCode(uint32_t idx) const
+{
+	return contractDelegate->GetFunctionOpCode(impl.functionIds[idx]);
+}
+
+bool RvmContractDelegate::ImplementedInterface::GetFunctionSignature(uint32_t idx, rvm::StringStream* signature_out) const
+{
+	return contractDelegate->GetFunctionSignature(impl.functionIds[idx], signature_out);
 }

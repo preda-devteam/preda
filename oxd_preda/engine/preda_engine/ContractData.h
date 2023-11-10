@@ -123,19 +123,19 @@ namespace _details {
 			return transpiler::ScopeType::Shard;
 		case rvm::Scope::Address:
 			return transpiler::ScopeType::Address;
-		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt32, 0):
+		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt32, 0):
 			return transpiler::ScopeType::Uint32;
-		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt64, 0):
+		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt64, 0):
 			return transpiler::ScopeType::Uint64;
-		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt96, 0):
+		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt96, 0):
 			return transpiler::ScopeType::Uint96;
-		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt128, 0):
+		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt128, 0):
 			return transpiler::ScopeType::Uint128;
-		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt160, 0):
+		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt160, 0):
 			return transpiler::ScopeType::Uint160;
-		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt256, 0):
+		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt256, 0):
 			return transpiler::ScopeType::Uint256;
-		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt512, 0):
+		case rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt512, 0):
 			return transpiler::ScopeType::Uint512;
 		default:
 			return transpiler::ScopeType::None;
@@ -153,19 +153,19 @@ namespace _details {
 		case transpiler::ScopeType::Address:
 			return rvm::Scope::Address;
 		case transpiler::ScopeType::Uint32:
-			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt32, 0);
+			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt32, 0);
 		case transpiler::ScopeType::Uint64:
-			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt64, 0);
+			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt64, 0);
 		case transpiler::ScopeType::Uint96:
-			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt96, 0);
+			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt96, 0);
 		case transpiler::ScopeType::Uint128:
-			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt128, 0);
+			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt128, 0);
 		case transpiler::ScopeType::Uint160:
-			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt160, 0);
+			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt160, 0);
 		case transpiler::ScopeType::Uint256:
-			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt256, 0);
+			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt256, 0);
 		case transpiler::ScopeType::Uint512:
-			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySize::UInt512, 0);
+			return rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt512, 0);
 		default:
 			return rvm::Scope::_Bitmask;
 		}

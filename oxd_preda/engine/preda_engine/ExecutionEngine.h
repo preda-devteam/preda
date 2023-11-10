@@ -30,11 +30,11 @@ private:
 	CContractDatabase *m_pDB = nullptr;
 	CRuntimeInterface m_runtimeInterface;
 
-	// Pointer to current wasm runtime on stack, holds wasmtime::Store, wasmtime::Memory and main module symbols.
-	// We do not preserve a WASMRuntime in CExecutionEngine since it may leak memory for a long running program.
-	// Wasmtime doesn't support exception at the moment, the vm will just abort after a c++ exception is thrown,
-	// leaving memory in the linear memory leaked.
-	WASMRuntime* m_wasm_runtime = nullptr;
+	// The wasm runtime is wrapper of wasmtime engine, holds wasmtime::Store, wasmtime::Memory and main module symbols.
+	// It is created once only when the ExecutionEngine is constructed.
+	// However, Wasmtime doesn't support exception at present, the vm will just abort after a c++ exception is thrown, leaving memory in the linear memory leaked.
+	// We could handle this by recreate the wasmtime regularly or when encounting an exception in the future.
+	std::optional<WASMRuntime> m_wasm_runtime;
 
 	// The base linker to store wrapped host functions, since calling `func_wrap` costs a lot of time.
 	// We are (ab)using the feature `allow_shadowing` to share linker across different WASMRuntime.
@@ -42,6 +42,11 @@ private:
 	// But it doesn't check that strictly in the source code.
 	std::optional<wasmtime::Linker> m_base_linker;
 
+	// This data sturcture used for cross contract call, such as A call B and then B call A.
+	// However, as we keep the wesmtime engine, the number of wastime::instance is limited to 10000 currently. 
+	// In addition, we haven't found a way to release the wastime::instance at present, it is auto realeased as the wastime engine destroys. 
+	// Thus, we keep this structure instead of clearing it every invoke to solve the limited instance issue.
+	// The limited instance issue might be solved by regularlly recreating the wastime engine or enlarging the wastime::Store later on.
 	std::map<rvm::ContractModuleID, std::unique_ptr<ContractModuleLoaded>, _details::ModuleIdCompare> m_loadedContractModule;
 
 	// the intermediate instances are contracts that are already loaded on the current call chain.
@@ -69,12 +74,8 @@ public:
 		return m_runtimeInterface;
 	}
 
-	void SetWASMRuntime(WASMRuntime* rt) {
-		m_wasm_runtime = rt;
-	}
-
 	WASMRuntime *wasm_runtime() {
-		return m_wasm_runtime;
+		return &m_wasm_runtime.value();
 	}
 
 	std::optional<wasmtime::Linker> &base_linker() {
@@ -85,7 +86,7 @@ public:
 	virtual ~CExecutionEngine() {}
 
 	virtual rvm::InvokeResult Invoke(rvm::ExecutionContext *executionContext, uint32_t gas_limit, rvm::ContractInvokeId contract, rvm::OpCode opCode, const rvm::ConstData* args_serialized) override;
-	virtual bool DeployContracts(rvm::ExecutionContext* exec, rvm::CompiledModules* linked, rvm::DataBuffer** deploy_stub, rvm::LogMessageOutput* log_msg_output) override;
+	virtual bool DeployContracts(rvm::ExecutionContext* exec, rvm::CompiledModules* linked, const rvm::ContractVersionId* target_cvids, rvm::DataBuffer** deploy_stub, rvm::LogMessageOutput* log_msg_output) override;
 	virtual rvm::InvokeResult InitializeContracts(rvm::ExecutionContext* executionContext, uint32_t gas_limit, rvm::CompiledModules* linked, const rvm::ConstData* ctor_args) override;
 
 	virtual void Release() override

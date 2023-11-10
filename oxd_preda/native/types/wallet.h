@@ -31,7 +31,7 @@ public:
 	auto		GetAmount(TokenId aid) const -> const BigNum&;
 	bool		IsEmpty() const { return _SC::IsEmpty(); }
 	void		Jsonify(rt::Json &append) const { _SC::Jsonify(append); }
-	bool		Withdraw(TokenId aid, CoinsMutable &get, CoinsWalletMutable &residue, bool allow_overflow = false) const; // residue = this - get
+	bool		Withdraw(TokenId aid, CoinsMutable &get, CoinsWalletMutable &residue) const; // residue = this - get
 
 	UINT		GetEmbeddedSize() const { return _SC::GetEmbeddedSize(); }
 	static UINT GetEmbeddedSize(const CoinsWallet &c) { return _SC::GetEmbeddedSize((_SC &)c); }
@@ -56,6 +56,7 @@ public:
 	auto Assign(const CoinsWallet &x) -> CoinsWalletMutable&;
 	bool IsEmpty() const { return _SC::IsEmpty(); }
 	void Deposit(const Coins &x); // this += x
+	void Deposit(CoinsMutable &x); // this += x, and x will be zeroed
 	bool JsonParse(const rt::String_Ref& str){ return false; /*_SC::JsonParse(str);*/ }  // TBD
 };
 

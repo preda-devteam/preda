@@ -59,6 +59,12 @@ const rvm::DeployedContract* SimuShard::GetContractDeployed(rvm::ContractVersion
 	return _pGlobalShard->_GetContractDeployed(contract);
 }
 
+bool SimuShard::IsTokenMintAllowed(rvm::TokenId tid, rvm::ContractId contract) const
+{
+	// mint right control is not implemented yet. Always allowing
+	return true;
+}
+
 const rvm::HashValue* SimuShard::GetTxnHash(rvm::HashValue* hash_out) const
 {
 	return &_pTxn->Hash;
@@ -76,6 +82,15 @@ rvm::ScopeKey SimuShard::GetScopeTarget() const
 		return { nullptr, 0 };
 
 	return { (uint8_t*)&_pTxn->Target, _pTxn->Target.target_size };
+}
+
+rvm::ConstAddress* SimuShard::GetInitiator() const 
+{
+	ASSERT(_pTxn);
+	if(_pTxn->IsRelay())return &_pTxn->Initiator;
+	if(_pTxn->Target.target_size == sizeof(rvm::Address))return &_pTxn->Target.addr;
+
+	return nullptr;
 }
 
 rvm::ConstStateData SimuShard::GetState(rvm::ContractScopeId contract, const rvm::ScopeKey* key) const
@@ -213,39 +228,39 @@ bool SimuShard::EmitRelayToScope(rvm::ContractInvokeId ciid, const rvm::ScopeKey
 {
 	auto* txn = _CreateRelayTxn(ciid, opcode, args_serialized);
 	ASSERT(txn->Contract == ciid);
-	rvm::ScopeKeySize kst = rvm::SCOPE_KEYSIZETYPE(rvm::CONTRACT_SCOPE(ciid));
+	rvm::ScopeKeySized kst = rvm::SCOPE_KEYSIZETYPE(rvm::CONTRACT_SCOPE(ciid));
 
 	switch(kst)
 	{
-	case rvm::ScopeKeySize::Address:
+	case rvm::ScopeKeySized::Address:
 		ASSERT(key->Size == sizeof(rvm::Address));
 		txn->Target = ScopeTarget(*(rvm::Address*)key->Data);
 		break;
-	case rvm::ScopeKeySize::UInt32:
+	case rvm::ScopeKeySized::UInt32:
 		ASSERT(key->Size == sizeof(uint32_t));
 		txn->Target = ScopeTarget(*(uint32_t*)key->Data);
 		break;
-	case rvm::ScopeKeySize::UInt64:
+	case rvm::ScopeKeySized::UInt64:
 		ASSERT(key->Size == sizeof(uint64_t));
 		txn->Target = ScopeTarget(*(uint64_t*)key->Data);
 		break;
-	case rvm::ScopeKeySize::UInt96:
+	case rvm::ScopeKeySized::UInt96:
 		ASSERT(key->Size == sizeof(rvm::UInt96));
 		txn->Target = ScopeTarget(*(rvm::UInt96*)key->Data);
 		break;
-	case rvm::ScopeKeySize::UInt128:
+	case rvm::ScopeKeySized::UInt128:
 		ASSERT(key->Size == sizeof(rvm::UInt128));
 		txn->Target = ScopeTarget(*(rvm::UInt128*)key->Data);
 		break;
-	case rvm::ScopeKeySize::UInt160:
+	case rvm::ScopeKeySized::UInt160:
 		ASSERT(key->Size == sizeof(rvm::UInt160));
 		txn->Target = ScopeTarget(*(rvm::UInt160*)key->Data);
 		break;
-	case rvm::ScopeKeySize::UInt256:
+	case rvm::ScopeKeySized::UInt256:
 		ASSERT(key->Size == sizeof(rvm::UInt256));
 		txn->Target = ScopeTarget(*(rvm::UInt256*)key->Data);
 		break;
-	case rvm::ScopeKeySize::UInt512:
+	case rvm::ScopeKeySized::UInt512:
 		ASSERT(key->Size == sizeof(rvm::UInt512));
 		txn->Target = ScopeTarget(*(rvm::UInt512*)key->Data);
 		break;
@@ -547,7 +562,10 @@ void SimuShard::_BlockCreationRoutine()
 				ret = _pSimulator->DeployFromStatement(deployArgs);
 			}
 
-			if (ret.Code != rvm::InvokeErrorCode::Success)
+			if(IsGlobal())
+				_pGlobalShard->_OnGlobalTransactionExecuted(ret.Code == rvm::InvokeErrorCode::Success);
+
+			if(ret.Code != rvm::InvokeErrorCode::Success)
 			{
 				if ((int)ret.SubCodeLow > 0)
 				{

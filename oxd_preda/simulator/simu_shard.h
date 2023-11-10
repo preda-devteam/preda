@@ -50,7 +50,7 @@ class SimuShard: protected rvm::ExecutionContext
 			   , protected ShardStates
 {
 protected:
-	ExecutionUnit					_ExecUnits;
+	ExecutionUnit				_ExecUnits;
 	Simulator*					_pSimulator = nullptr;
 	SimuGlobalShard*			_pGlobalShard = nullptr;
 
@@ -97,6 +97,7 @@ protected:
 	virtual rvm::ContractVersionId			GetContractByName(const rvm::ConstString* dapp_contract_name) const override;
 	virtual rvm::BuildNum					GetContractEffectiveBuild(rvm::ContractId contract) const override;
 	virtual const rvm::DeployedContract*	GetContractDeployed(rvm::ContractVersionId) const override;
+	virtual bool							IsTokenMintAllowed(rvm::TokenId tid, rvm::ContractId contract) const override;
 
 	virtual rvm::ConstAddress*		GetBlockCreator() const override;
 	virtual uint64_t				GetBlockHeight() const override { return _BlockHeight; }
@@ -129,7 +130,7 @@ protected:
 	virtual uint32_t				GetOriginatedShardIndex() const override { ASSERT(_pTxn && _pTxn->IsRelay()); return _pTxn->OriginateShardIndex; }
 	virtual uint32_t				GetOriginatedShardOrder() const override { ASSERT(_pTxn && _pTxn->IsRelay()); return _pTxn->OriginateShardOrder; }
 	virtual uint64_t				GetOriginatedBlockHeight() const override { ASSERT(_pTxn && _pTxn->IsRelay()); return _pTxn->OriginateHeight; }
-	virtual rvm::ConstAddress*		GetInitiator() const override { ASSERT(_pTxn && _pTxn->IsRelay()); return &_pTxn->Initiator; }
+	virtual rvm::ConstAddress*		GetInitiator() const override;
 
 	/////////////////////////////////////////////////////
 	// From rvm::ExecutionContext
@@ -143,13 +144,16 @@ protected:
 	virtual bool					EmitRelayToGlobal(rvm::ContractInvokeId cid, rvm::OpCode opcode, const rvm::ConstData* args_serialized, uint32_t gas_redistribution_weight) override;
 	virtual bool					EmitBroadcastToShards(rvm::ContractInvokeId cid, rvm::OpCode opcode, const rvm::ConstData* args_serialized, uint32_t gas_redistribution_weight) override;
 
-	virtual rvm::ContractVersionId	DeployUnnamedContract(rvm::DAppId dapp_id, rvm::EngineId engine_id, const rvm::ContractModuleID* module_id) override { ASSERT(0); return rvm::ContractVersionIdInvalid; } // for global shard only
+	virtual rvm::ContractVersionId	DeployUnnamedContract(rvm::ContractVersionId deploy_initiator, uint64_t initiator_dappname, const rvm::DeployedContract* origin_deploy) override { ASSERT(0); return rvm::ContractVersionIdInvalid; } // for global shard only
 	virtual rvm::ExecuteResult		Invoke(uint32_t gas_limit, rvm::ContractInvokeId contract, rvm::OpCode opcode, const rvm::ConstData* args_serialized) override; // return pointer will be invalid after next call of `Invoke` or `SetReturnValue`
 
 	// set return value of current function being invoking
 	virtual void					SetReturnValue(const rvm::ConstData* args_serialized) override;
 	virtual uint8_t*				SetReturnValueClaim(uint32_t size_estimated) override { _ReturnVal.SetSize(size_estimated); return _ReturnVal.Begin(); }
 	virtual void					SetReturnValueFinalize(uint32_t size_finalized) override { ASSERT(size_finalized<=_ReturnVal.GetSize()); _ReturnVal.ShrinkSize(size_finalized); }
+	virtual bool					CoreWalletWithdraw(rvm::TokenId tid, const rvm::BigNum* amount) override { ASSERT(0); return false; }
+	virtual void					CoreWalletDeposit(rvm::TokenId tid, const rvm::BigNum* amount) override { ASSERT(0); }
+
 
 public:
 	SimuShard(Simulator* simu, uint64_t time_base, uint32_t shard_order, uint32_t shard_index, SimuGlobalShard* global); // normal shard

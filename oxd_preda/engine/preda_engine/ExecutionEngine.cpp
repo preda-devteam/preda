@@ -12,26 +12,24 @@
 struct AutoReleaseExecutionIntermediateData
 {
 	CExecutionEngine *_p;
-	std::optional<WASMRuntime> m_wasm_rt;
 	AutoReleaseExecutionIntermediateData(CExecutionEngine *p)
-		: _p(p),
-		m_wasm_rt(
-			p->contractDatabase()->m_runtime_mode == RuntimeMode::WASM || p->contractDatabase()->m_runtime_mode == RuntimeMode::CWASM ?
-			WASMRuntime::CreateRuntime(*p, p->contractDatabase()->wasm_engine(), p->contractDatabase()->wasm_main_module()) :
-			std::optional<WASMRuntime>{})
-	{
-		_p->SetWASMRuntime(m_wasm_rt.has_value() ? &m_wasm_rt.value() : nullptr);
-	}
+		: _p(p)
+	{}
 
 	~AutoReleaseExecutionIntermediateData()
 	{
 		_p->ReleaseExecutionIntermediateData();
-		_p->SetWASMRuntime(nullptr);
 	}
 };
 
 CExecutionEngine::CExecutionEngine(CContractDatabase *pDB)
-	: m_pDB(pDB), m_runtimeInterface(pDB), m_base_linker(
+	: m_pDB(pDB), m_runtimeInterface(pDB), 
+	m_wasm_runtime(
+		pDB->m_runtime_mode == RuntimeMode::WASM || pDB->m_runtime_mode == RuntimeMode::CWASM ?
+		WASMRuntime::CreateRuntime(*this, pDB->wasm_engine(), pDB->wasm_main_module()) :
+		std::optional<WASMRuntime>{}
+	),
+	m_base_linker(
 		pDB->m_runtime_mode == RuntimeMode::WASM || pDB->m_runtime_mode == RuntimeMode::CWASM ?
 		WASMRuntime::CreateBaseLinker(*this) :
 		std::optional<wasmtime::Linker>{}
@@ -50,7 +48,6 @@ void CExecutionEngine::ReleaseExecutionIntermediateData()
 		itor.second->DestroyContractInstance();
 	m_runtimeInterface.TurnOhphanTokenReportOnOff(true);
 	m_intermediateContractInstances.clear();
-	m_loadedContractModule.clear();
 	m_runtimeInterface.ClearStateModifiedFlags();
 	m_runtimeInterface.ClearContractStack();
 	m_runtimeInterface.ClearBigInt();
@@ -81,7 +78,9 @@ ContractRuntimeInstance* CExecutionEngine::CreateContractInstance(const rvm::Con
 			ContractModule* mod = m_pDB->GetContractModule(moduleId);
 			if (mod)
 			{
-				loaded_mod = m_loadedContractModule.emplace(moduleId, mod->LoadToEngine(*this)).first->second.get();
+				if (m_loadedContractModule.find(moduleId) == m_loadedContractModule.end())
+					m_loadedContractModule.emplace(moduleId, mod->LoadToEngine(*this));
+				loaded_mod = m_loadedContractModule.find(moduleId)->second.get();
 			}
 		}
 	}
@@ -109,17 +108,19 @@ bool CExecutionEngine::MapNeededContractContext(rvm::ExecutionContext *execution
 	uint32_t functionScopeType = calledFunctionFlag & uint32_t(transpiler::FunctionFlags::ScopeTypeMask);
 	neededContextLevel = _details::PredaScopeToRuntimeContextType(transpiler::ScopeType(functionScopeType));
 
+	constexpr uint8_t shardLevel = uint8_t(prlrt::ContractContextType::Shard);
+
+	// if mapping a custom scope, it should be impossible that another custom scope was already mapped
+	assert(!(uint8_t(pInstance->currentMappedContractContextLevel) > shardLevel && uint8_t(neededContextLevel) > shardLevel && pInstance->currentMappedContractContextLevel != neededContextLevel));
+
 	// everything needed already mapped
-	if (pInstance->currentMappedContractContextLevel == neededContextLevel)
+	if (pInstance->currentMappedContractContextLevel >= neededContextLevel)
 		return true;
-	
-	// if there are already some context mapped, it has to be none / global / shard, i.e. it should be impossible for it to be another custom scope
-	assert(uint8_t(pInstance->currentMappedContractContextLevel) <= uint8_t(prlrt::ContractContextType::Shard));
 
 	// collect the needed contexts
 	std::vector<uint8_t> neededContexts(1, uint8_t(neededContextLevel));	// first the context of the function
 	// then global / shard if not already mapped
-	for (uint8_t i = uint8_t(pInstance->currentMappedContractContextLevel) + 1; i < std::min(uint8_t(uint8_t(prlrt::ContractContextType::Shard) + 1), uint8_t(neededContextLevel)); i++)
+	for (uint8_t i = uint8_t(pInstance->currentMappedContractContextLevel) + 1; i < std::min(uint8_t(shardLevel + 1), uint8_t(neededContextLevel)); i++)
 		neededContexts.push_back(i);
 
 	for (int i = 0; i < (int)neededContexts.size(); i++)
@@ -202,7 +203,7 @@ rvm::InvokeResult CExecutionEngine::Invoke(rvm::ExecutionContext *executionConte
 	const rvm::DeployedContract* deployedContract = executionContext->GetContractDeployed(cvId);
 	uint32_t internalRet = Invoke_Internal(executionContext, cvId, deployedContract, opCode, args_serialized, gas_limit);
 
-	ret.GasBurnt = 1;
+	ret.GasBurnt = rvm::RVM_GAS_BURNT_DEFAULT;
 	ret.SubCodeHigh = internalRet & 0xff;
 	switch (ExecutionResult(ret.SubCodeHigh))
 	{
@@ -241,6 +242,12 @@ rvm::InvokeResult CExecutionEngine::Invoke(rvm::ExecutionContext *executionConte
 			ret.Code = rvm::InvokeErrorCode::InternalError;
 			return ret;
 		case prlrt::ExecutionError::SerializeOutUnknownContextClass:
+			ret.Code = rvm::InvokeErrorCode::InternalError;
+			return ret;
+		case prlrt::ExecutionError::WASMTrapError:
+			ret.Code = rvm::InvokeErrorCode::InternalError;
+			return ret;
+		default:
 			ret.Code = rvm::InvokeErrorCode::InternalError;
 			return ret;
 		}
@@ -377,13 +384,15 @@ uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionConte
 	return ret;
 }
 
-bool CExecutionEngine::DeployContracts(rvm::ExecutionContext* exec, rvm::CompiledModules* linked, rvm::DataBuffer** deploy_stub, rvm::LogMessageOutput* log_msg_output)
+bool CExecutionEngine::DeployContracts(rvm::ExecutionContext* exec, rvm::CompiledModules* linked, const rvm::ContractVersionId* target_cvids, rvm::DataBuffer** deploy_stub, rvm::LogMessageOutput* log_msg_output)
 {
-	return m_pDB->Deploy(exec, linked, deploy_stub, log_msg_output);
+	return m_pDB->Deploy(exec, linked, target_cvids, deploy_stub, log_msg_output);
 }
 
 rvm::InvokeResult CExecutionEngine::InitializeContracts(rvm::ExecutionContext* executionContext, uint32_t gas_limit, rvm::CompiledModules* linked, const rvm::ConstData* ctor_args)
 {
+	//if(gas_limit < rvm::RVM_GAS_BURNT_DEFAULT)return { 0, 0, rvm::InvokeErrorCode::InsufficientGas, 0 };
+
 	PredaCompiledContracts* pCompiledContracts = (PredaCompiledContracts*)linked;
 	assert(pCompiledContracts->IsLinked());
 
@@ -412,6 +421,7 @@ rvm::InvokeResult CExecutionEngine::InitializeContracts(rvm::ExecutionContext* e
 		}
 	}
 
+	//return { 0, 0, rvm::InvokeErrorCode::Success, rvm::RVM_GAS_BURNT_DEFAULT };
 	return { 0, 0, rvm::InvokeErrorCode::Success, 0 };
 }
 

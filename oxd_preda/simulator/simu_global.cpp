@@ -116,6 +116,12 @@ void SimuGlobalShard::DeployEnd(bool commit)
 	_bDeploying = false;
 }
 
+void SimuGlobalShard::_OnGlobalTransactionExecuted(bool succeess)
+{
+	if(_bDeploying)
+		DeployEnd(succeess);
+}
+
 ContractsDatabase::ContractInfo* ContractsDatabase::ContractInfo::Clone() const
 {
 	uint32_t len =  GetSize();
@@ -125,25 +131,31 @@ ContractsDatabase::ContractInfo* ContractsDatabase::ContractInfo::Clone() const
 	return ret;
 }
 
-rvm::ContractVersionId SimuGlobalShard::DeployUnnamedContract(rvm::DAppId dapp_id, rvm::EngineId engine_id, const rvm::ContractModuleID* module_id)
+rvm::ContractVersionId SimuGlobalShard::DeployUnnamedContract(rvm::ContractVersionId deploy_initiator, uint64_t initiator_dappname, const rvm::DeployedContract* origin_deploy)
 {
-	ASSERT(module_id);
+	ASSERT(origin_deploy);
 	ASSERT(_pTxn);
 	if(!_bDeploying)
-	{	// DeployBegin
+	{	// DeployBegin, unnamed deployment can be invoked more than once in a single transaction execution
 		_bDeploying = true;
 		_DeployingDatabase.Reset(*this);
 	}
 
-	auto* info = _DeployingDatabase.FindContractInfo(*module_id);
-	if(!info)info = FindContractInfo(*module_id);
+	auto* info = _DeployingDatabase.FindContractInfo(origin_deploy->Module);
+	if(!info)info = FindContractInfo(origin_deploy->Module);
 	if(info)
 	{
-		rvm::ContractVersionId cid = rvm::CONTRACT_ID_MAKE(_DeployingDatabase._NextContractSN++, dapp_id, engine_id, BUILD_NUM_INIT);
+		rvm::ContractVersionId cid = rvm::CONTRACT_ID_MAKE(
+											_DeployingDatabase._NextContractSN++, 
+											rvm::CONTRACT_DAPP(deploy_initiator),
+											rvm::CONTRACT_ENGINE(deploy_initiator),
+											BUILD_NUM_INIT
+		);
 
 		auto& new_info = _DeployingDatabase._ContractInfo[cid];
 		new_info = info->Clone();
 		new_info->Deployment.Version = BUILD_NUM_INIT;
+		new_info->Deployment.Height = _BlockHeight;
 
 		_DeployingDatabase._ContractBuildNumLatest[rvm::CONTRACT_UNSET_BUILD(cid)] = rvm::CONTRACT_BUILD(cid);
 
@@ -610,7 +622,7 @@ bool BuildContracts::Deploy(rvm::ExecutionUnit* exec, rvm::ExecutionContext* exe
 	for(uint32_t i=0; i<count; i++)
 		deploy_stub[i] = &_ContractDeployStub[i];
 
-	if(exec->DeployContracts(exec_ctx, _pCompiled, deploy_stub, this))
+	if(exec->DeployContracts(exec_ctx, _pCompiled, nullptr, deploy_stub, this))
 		return true;
 
 	_ContractModuleIds.ShrinkSize(0);

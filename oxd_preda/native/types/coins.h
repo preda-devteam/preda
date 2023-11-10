@@ -61,7 +61,7 @@ class CoinsMutable
 protected:
 	TokenId			CoinId; // what coin it is
 	BigNumMutable	Amount; // MOVE semantics, never be copied
-	void			_AlignCoinId(CoinsMutable &x);
+	void			_AlignCoinId(CoinsMutable &x) const;
 
 public:
 	void	Empty() { CoinId = TokenIdInvalid; Amount.SetZero(); }

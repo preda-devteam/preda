@@ -20,13 +20,14 @@ static const	BuildNum		BuildNumInvalid = (BuildNum)0u;
 enum class		OpCode			:uint8_t{};		// starts from 0
 static const	OpCode			OpCodeInvalid	= (OpCode)0xffU;
 
+static const	uint16_t		ContractSerialNumInvalid = 0;  // 12b
 static const	uint16_t		ContractSerialNumMax = 0xfff;  // 12b
 static const	uint16_t		ContractSerialNumNamedMax = 0x3ff; // 1024
 static const	uint16_t		ContractSerialNumUnnamedBase = 0x400; // 1024
 
 static const	uint32_t		DAppNameSizeMax = 8;
 static const	uint32_t		DAppNameSizeMin = 4;
-static const	uint32_t		DAppContractNameSizeMax = 160/8 - 2;  // max size for dapp_name.contract_name
+static const	uint32_t		DAppContractNameSizeMax = 256/8 - 2;  // max size for length_of(dapp_name) +  length_of(contract_name)
 static const	uint32_t		FunctionNameSizeMax = 32;
 static const	uint32_t		ScopeNameSizeMax = 32;
 static const	uint32_t		TokenNameSizeMax = 8;
@@ -64,7 +65,7 @@ static const uint32_t		SCOPE_KTSSLT_BITS		= SCOPE_SLOT_BITS + SCOPE_KEYTYPESIZE_
 static const uint32_t		SCOPE_BITS				= SCOPE_KTSSLT_BITS + SCOPE_TYPE_BITS;
 }
 
-enum class Scope: uint16_t // 12bits: Low [SlotIndex:4bits][ScopeKeySize:6bits][ScopeType:2bits] High
+enum class Scope: uint16_t // 12bits: Low [SlotIndex:4bits][ScopeKeySized:6bits][ScopeType:2bits] High
 {	// three special scopes, which occupies slot #0,1,2 of address-typed scope in contract (ScopeType::Contract)
 	Global	= 0,
 	Shard	= 1,
@@ -79,13 +80,13 @@ static const Scope ScopeInvalid = (Scope)((1u<<_details::SCOPE_BITS)-1);
 
 inline constexpr ScopeType			SCOPE_TYPE(Scope x){ return (ScopeType)(((int)x>>_details::SCOPE_KTSSLT_BITS)&(int)ScopeType::_Bitmask); }
 inline constexpr uint8_t			SCOPE_SLOT(Scope x){ return (int)x>=3?(int)x&((1<<_details::SCOPE_SLOT_BITS)-1):0; }
-inline constexpr ScopeKeySize		SCOPE_KEYSIZETYPE(Scope x){ return (int)x>=2?(ScopeKeySize)(((int)x>>_details::SCOPE_SLOT_BITS) & (int)ScopeKeySize::Bitmask):ScopeKeySizeInvalid; }
+inline constexpr ScopeKeySized		SCOPE_KEYSIZETYPE(Scope x){ return (int)x>=2?(ScopeKeySized)(((int)x>>_details::SCOPE_SLOT_BITS) & (int)ScopeKeySized::Bitmask):ScopeKeySizeInvalid; }
 
 inline constexpr bool				SCOPE_IS_SCATTERED_MAP(Scope x){ return (int)SCOPE_TYPE(x)>=(int)ScopeType::ScatteredMapOnGlobal;	}
-inline constexpr bool				SCOPE_IS_ENUMERABLE(Scope x){ return (int)SCOPE_KEYSIZETYPE(x) >= (int)ScopeKeySize::IsEnumerable; }
+inline constexpr bool				SCOPE_IS_ENUMERABLE(Scope x){ return (int)SCOPE_KEYSIZETYPE(x) >= (int)ScopeKeySized::IsEnumerable; }
 inline constexpr bool				SCOPE_IS_CLONESCALE(Scope x){ return SCOPE_TYPE(x) == ScopeType::ScatteredMapOnShard_CloneScale; }
 inline constexpr bool				SCOPE_IS_SPLITSCALE(Scope x){ return SCOPE_TYPE(x) == ScopeType::ScatteredMapOnShard_SplitScale; }
-inline constexpr Scope				SCOPE_MAKE(ScopeType t, ScopeKeySize kst, int slot_idx = 0)
+inline constexpr Scope				SCOPE_MAKE(ScopeType t, ScopeKeySized kst, int slot_idx = 0)
 									{	return ((int)t || (int)kst || slot_idx>=2)?
 													(Scope)(((int)t<<_details::SCOPE_KTSSLT_BITS)|((int)kst<<_details::SCOPE_SLOT_BITS)|slot_idx)
 													:ScopeInvalid;
@@ -103,7 +104,8 @@ inline constexpr bool				SCOPE_VERIFY_KEY_SIZE(Scope x, int size)
 //					   [Low -------------------------------------------------- 64b ------------------------------------------------------------ High]
 // ContractId:         [----------------- 20b ----------------][     SerialNum:12b    ][ 4b ][                      DAppId:28b                      ]
 // ContractVersionId:  [   Build:8b   ][--------- 12b --------][     SerialNum:12b    ][ 4b ][                      DAppId:28b                      ]
-// ContractScopeId:    [   Build:8b   ][       Scope:12b      ][     SerialNum:12b    ][ 4b ][                      DAppId:28b                      ]
+// ContractScopeId:    [----- 8b -----][       Scope:12b      ][     SerialNum:12b    ][ 4b ][                      DAppId:28b                      ]
+// ContractInvokeId:   [   Build:8b   ][       Scope:12b      ][     SerialNum:12b    ][ 4b ][                      DAppId:28b                      ]
 // InterfaceId:        [----- 8b -----][   InterfaceSlot:12b  ][     SerialNum:12b    ][ 4b ][                      DAppId:28b                      ]
 //                                                                                    EngineId
 
@@ -197,7 +199,7 @@ inline constexpr InterfaceId		INTERFACE_ID_MAKE(uint32_t sn, DAppId dapp, Engine
 template<typename T> inline constexpr bool		CONTRACT_IS_UNNAMED(T x){ return ((uint32_t)x&_details::SERIALNUM_BITMASK) >= ContractSerialNumUnnamedBase; }
 template<typename T> inline constexpr Scope		CONTRACT_SCOPE(T x){ return ((Scope)(((uint64_t)x>>_details::CONTRACT_SCOPE_BITSHIFT) & _details::SCOPE_BITMASK)); }
 template<typename T> inline constexpr ScopeType	CONTRACT_SCOPE_TYPE(T x){ return SCOPE_TYPE(CONTRACT_SCOPE(x)); }
-template<typename T> inline constexpr auto		CONTRACT_SCOPE_BASEKEYSIZE(T x){ return (ScopeKeySize)((int)SCOPE_KEYSIZETYPE(CONTRACT_SCOPE(x))&(int)ScopeKeySize::BaseTypeBitmask); }
+template<typename T> inline constexpr auto		CONTRACT_SCOPE_BASEKEYSIZE(T x){ return (ScopeKeySized)((int)SCOPE_KEYSIZETYPE(CONTRACT_SCOPE(x))&(int)ScopeKeySized::BaseTypeBitmask); }
 template<typename T> inline constexpr DAppId	CONTRACT_DAPP(T x){ return ((DAppId)((uint64_t)x>>_details::CONTRACT_DAPP_BITSHIFT)); }
 template<typename T> inline constexpr uint16_t	CONTRACT_SERIALNUM(T x){ return ((uint32_t)x>>_details::CONTRACT_SERIALNUM_BITSHIFT)&_details::SERIALNUM_BITMASK; }
 template<typename T> inline constexpr BuildNum	CONTRACT_BUILD(T x){ return ((BuildNum)((uint64_t)x>>_details::CONTRACT_BUILD_BITSHIFT)&_details::BUILD_BITMASK); }
@@ -356,8 +358,8 @@ enum class InvokeErrorCode : uint8_t
 {
 	Success = 0, // Execution success, otherwise any committed states and generated relay txns will be discarded.
 	Unspecified, // error code is not specified
-	InsufficientFunds, // insufficient funds for gas payment.
-	InsufficientGasRequired, // Gas supplied < minimum requirement of the gas, which is determined without execution
+	InsufficientFunds, // insufficient funds for withdraw
+	InsufficientGas, // Gas supplied < minimum requirement of the gas, which is determined without execution
 	RunOutOfGas, // Gas runs out before execution of the the contract function is completed
 	AssertionFailed, // explicit assertion defined in contract code
 	ExceptionThrown, // exception trigger implicitly like divide-by-zero, thrown from underlying libraries
@@ -473,7 +475,7 @@ STRINGIFY_ENUM_BEGIN(InvokeErrorCode, rvm)
 	STRINGIFY_ENUM(Success)
 	STRINGIFY_ENUM(Unspecified)
 	STRINGIFY_ENUM(InsufficientFunds)
-	STRINGIFY_ENUM(InsufficientGasRequired)
+	STRINGIFY_ENUM(InsufficientGas)
 	STRINGIFY_ENUM(RunOutOfGas)
 	STRINGIFY_ENUM(AssertionFailed)
 	STRINGIFY_ENUM(ExceptionThrown)
@@ -508,7 +510,7 @@ STRINGIFY_ENUM_BEGIN(ScopeType, rvm)
 	STRINGIFY_ENUM(ScatteredMapOnShard_SplitScale)
 STRINGIFY_ENUM_END(ScopeType, rvm)
 
-STRINGIFY_ENUM_BEGIN(ScopeKeySize, rvm)
+STRINGIFY_ENUM_BEGIN(ScopeKeySized, rvm)
 	STRINGIFY_ENUM(Address)
 	STRINGIFY_ENUM(UInt32)
 	STRINGIFY_ENUM(UInt64)
@@ -525,7 +527,7 @@ STRINGIFY_ENUM_BEGIN(ScopeKeySize, rvm)
 	STRINGIFY_ENUM(UInt160Enumerable)
 	STRINGIFY_ENUM(UInt256Enumerable)
 	STRINGIFY_ENUM(UInt512Enumerable)
-STRINGIFY_ENUM_END(ScopeKeySize, rvm)
+STRINGIFY_ENUM_END(ScopeKeySized, rvm)
 
 STRINGIFY_ENUM_BEGIN(ScopeFlag, rvm)
 	STRINGIFY_ENUM_BIT(Foreign)

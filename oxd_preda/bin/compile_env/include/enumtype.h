@@ -33,7 +33,7 @@ namespace prlrt {
 		{
 			if (enum_base_type(v) >= numEntry)
 			{
-				throw preda_exception("enum value overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::EnumValueOverflow);
+				preda_exception::throw_exception("enum value overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::EnumValueOverflow);
 			}
 		}
 		enum_wrapper(const enum_wrapper<T_Enum, numEntry> &rhs)
@@ -41,7 +41,7 @@ namespace prlrt {
 		{
 			if (enum_base_type(v) >= numEntry)
 			{
-				throw preda_exception("enum value overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::EnumValueOverflow);
+				preda_exception::throw_exception("enum value overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::EnumValueOverflow);
 			}
 		}
 
@@ -84,7 +84,7 @@ namespace prlrt {
 			v = (implementation_type)(*(enum_base_type*)buffer);
 			if (enum_base_type(v) >= numEntry)
 			{
-				throw preda_exception("enum value overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::EnumValueOverflow);
+				preda_exception::throw_exception("enum value overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::EnumValueOverflow);
 			}
 			buffer += serialize_size_type(sizeof(enum_base_type));
 			bufferSize -= serialize_size_type(sizeof(enum_base_type));

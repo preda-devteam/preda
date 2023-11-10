@@ -293,6 +293,13 @@ ConcreteTypePtr PredaRealListener::ImportContractSymbols(transpiler::IContractSy
 					std::vector<transpiler::DefinedIdentifierPtr>(),
 					uint32_t(transpiler::FunctionFlags::IsConst)
 				), true) != nullptr;
+
+				// __valid()
+				res = res & interfaceType->DefineMemberFunction("__valid", transpiler::FunctionSignature(
+					transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInBoolType(), true, false),
+					std::vector<transpiler::DefinedIdentifierPtr>(),
+					uint32_t(transpiler::FunctionFlags::IsConst)
+				), true) != nullptr;
 			}
 
 			codeSerializer.AddLine("struct " + interfaceType->outputFullName.substr(interfaceType->outputFullName.rfind("::") + 2) + " : public prlrt::interface_struct {");
@@ -357,6 +364,8 @@ ConcreteTypePtr PredaRealListener::ImportContractSymbols(transpiler::IContractSy
 
 				GenerateCodeForInterfaceFunction(codeSerializer, int64_t(contractImportSlot), interfaceIdx, pDefinedFunction->outputName, functionSignature, functionIdx);
 			}
+
+			codeSerializer.AddLine("__prlt_bool __prli___valid() { return prlrt::interface_is_implemented(contract_id, " + std::to_string(contractImportSlot) + ", " + std::to_string(interfaceIdx) + "); }");
 
 			codeSerializer.PopIndent();
 			codeSerializer.AddLine("};");
@@ -461,7 +470,7 @@ ConcreteTypePtr PredaRealListener::ImportContractSymbols(transpiler::IContractSy
 						line += "const ";
 					line += functionSignature.parameters[i]->qualifiedType.baseConcreteType->outputFullName + " &" + functionSignature.parameters[i]->outputName;
 				}
-				line += ") {";
+				line += ") const {";
 				codeSerializer.AddLine(line);
 				codeSerializer.PushIndent();
 			}
@@ -1655,6 +1664,14 @@ void PredaRealListener::DefineInterface(PredaParser::InterfaceDefinitionContext*
 		), true);
 	}
 
+	// __valid()
+	{
+		transpiler::DefinedIdentifierPtr pDefinedFunction = interfaceType->DefineMemberFunction("__valid", transpiler::FunctionSignature(
+			transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInBoolType(), true, false),
+			std::vector<transpiler::DefinedIdentifierPtr>(),
+			uint32_t(transpiler::FunctionFlags::IsConst)
+		), true);
+	}
 
 	std::vector<PredaParser::FunctionDeclarationContext*> functionDeclarations = ctx->functionDeclaration();
 	for (uint32_t i = 0; i < uint32_t(functionDeclarations.size()); i++)
@@ -2101,6 +2118,7 @@ void PredaRealListener::enterContractDefinition(PredaParser::ContractDefinitionC
 
 			GenerateCodeForInterfaceFunction(codeSerializer, -1, interfaceIdx, pDefinedFunction->outputName, functionSignature, uint32_t(i));
 		}
+		codeSerializer.AddLine("__prlt_bool __prli___valid() { return prlrt::interface_is_implemented(contract_id, -1, " + std::to_string(interfaceIdx) + "); }");
 		codeSerializer.PopIndent();
 		codeSerializer.AddLine("};");
 	}
@@ -2199,6 +2217,32 @@ void PredaRealListener::enterContractDefinition(PredaParser::ContractDefinitionC
 			return;
 		}
 		codeSerializer.AddLine(m_transpilerCtx.GetBuiltInTokenType()->outputFullName + " __prli___mint(__prlt_bigint amount) { return prlrt::mint(contract_id, amount); }");
+	}
+
+	// __burn()
+	{
+		transpiler::DefinedIdentifierPtr pDefinedFunction = contractType->DefineMemberFunction("__burn", transpiler::FunctionSignature(
+			transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInBoolType(), false, false),
+			{ transpiler::Allocator::New<transpiler::DefinedIdentifier>(m_transpilerCtx.GetBuiltInTokenType(), true, true, "burn_token", 0) },
+			uint32_t(transpiler::FunctionFlags::IsConst)
+		), false);
+		if (pDefinedFunction == nullptr)
+		{
+			m_errorPortal.AddInternalError(ctx->identifier()->start, "Cannot define built-in function __burn() for contract. Probably compiler bug.");
+			return;
+		}
+		codeSerializer.AddLine(m_transpilerCtx.GetBuiltInBoolType()->outputFullName + " __prli___burn(__prlt_token burn_token) {");
+		codeSerializer.PushIndent();
+		codeSerializer.AddLine("if(burn_token.__prli_get_id() == contract_id){");
+		codeSerializer.PushIndent();
+		codeSerializer.AddLine("prlrt::burn(burn_token);");
+		codeSerializer.AddLine("return __prlt_bool(true);");
+		codeSerializer.PopIndent();
+		codeSerializer.AddLine("}");
+		codeSerializer.AddLine("return __prlt_bool(false);");
+		codeSerializer.PopIndent();
+		codeSerializer.AddLine("}");
+
 	}
 
 	TraverseAllFunctions();

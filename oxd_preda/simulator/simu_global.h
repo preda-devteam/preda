@@ -113,6 +113,7 @@ protected:
 	bool								_bDeploying;
 	ContractsDatabase					_DeployingDatabase;
 	ShardStates							_DeployingStates;
+	void								_OnGlobalTransactionExecuted(bool succeess);
 
 protected:
 	rvm::DAppId							_GetDAppByName(const rvm::ConstString* dapp_name) const;
@@ -135,7 +136,7 @@ protected:
 	// From ExecutionContext
 	virtual void						CommitNewState(rvm::ContractInvokeId contract, uint8_t* state_memory) override;
 	virtual void						CommitNewState(rvm::ContractInvokeId contract, const rvm::ScopeKey* key, uint8_t* state_memory) override;
-	virtual rvm::ContractVersionId		DeployUnnamedContract(rvm::DAppId dapp_id, rvm::EngineId engine_id, const rvm::ContractModuleID* module_id) override;
+	virtual rvm::ContractVersionId		DeployUnnamedContract(rvm::ContractVersionId deploy_initiator, uint64_t initiator_dappname, const rvm::DeployedContract* origin_deploy) override;
 
 public:
 	bool		IsDeploying() const { return _bDeploying; }

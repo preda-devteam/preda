@@ -272,7 +272,7 @@
     "declaration-scope": {
       "patterns": [
         {
-          "match": "\\s@(?:(shard)|(global)|(address))\\s",
+          "match": "\\s@(?:(shard)|(global)|(address)|(uint\\d+))\\s",
           "name": "storage.type.modifier.preda"
         }
       ]

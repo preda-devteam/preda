@@ -108,33 +108,33 @@ void SimuTxn::Jsonify(rvm::RvmEngine* engine, rt::Json& append, rvm::InvokeResul
 	if (rvm::Scope scope = GetScope(); scope != rvm::Scope::Global && scope != rvm::Scope::Shard)
 	{
 		static const rt::SS szTarget("Target");
-		rvm::ScopeKeySize kst = rvm::SCOPE_KEYSIZETYPE(scope);
+		rvm::ScopeKeySized kst = rvm::SCOPE_KEYSIZETYPE(scope);
 		switch (kst)
 		{
-		case rvm::ScopeKeySize::Address:
+		case rvm::ScopeKeySized::Address:
 			append.AppendKeyWithString(szTarget, oxd::SecureAddress::String(Target.addr));
 			if (TargetIndex >= 0)
 				append.AppendKeyWithString("AddressIndex", rt::SS() + ('@') + TargetIndex);
 			break;
-		case rvm::ScopeKeySize::UInt32:
+		case rvm::ScopeKeySized::UInt32:
 			append.AppendKeyWithString(szTarget, rt::tos::Number(Target.u32) + "u32");
 			break;
-		case rvm::ScopeKeySize::UInt64:
+		case rvm::ScopeKeySized::UInt64:
 			append.AppendKeyWithString(szTarget, rt::tos::Number(Target.u64) + "u64");
 			break;
-		case rvm::ScopeKeySize::UInt96:
+		case rvm::ScopeKeySized::UInt96:
 			append.AppendKeyWithString(szTarget, (*(ttmath::UInt<96 / 32>*) & Target.u96).ToString() + "u96");
 			break;
-		case rvm::ScopeKeySize::UInt128:
+		case rvm::ScopeKeySized::UInt128:
 			append.AppendKeyWithString(szTarget, (*(ttmath::UInt<128 / 32>*) & Target.u256).ToString() + "u128");
 			break;
-		case rvm::ScopeKeySize::UInt160:
+		case rvm::ScopeKeySized::UInt160:
 			append.AppendKeyWithString(szTarget, (*(ttmath::UInt<160 / 32>*) & Target.u256).ToString() + "u160");
 			break;
-		case rvm::ScopeKeySize::UInt256:
+		case rvm::ScopeKeySized::UInt256:
 			append.AppendKeyWithString(szTarget, (*(ttmath::UInt<256 / 32>*) & Target.u256).ToString() + "u256");
 			break;
-		case rvm::ScopeKeySize::UInt512:
+		case rvm::ScopeKeySized::UInt512:
 			append.AppendKeyWithString(szTarget, (*(ttmath::UInt<512 / 32>*) & Target.u512).ToString() + "u512");
 			break;
 		default:

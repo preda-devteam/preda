@@ -108,7 +108,7 @@ class ArrayMutableOp;
 				return true;
 			}
 			return ArrayOp<ARRAY, VAL>::_BinarySearch(*x, 
-						[x, this, mode](UINT mid) -> bool { return false; }, // duplicated
+						[](UINT mid) -> bool { return false; }, // duplicated
 						[x, this, mode](UINT f, UINT l) -> bool {
 							auto& v = Get(f);
 							if(v == *x){ return false; }
@@ -161,7 +161,7 @@ class ArrayMutableOp;
 				return true;
 			}
 			return ArrayOp<ARRAY, VAL>::_BinarySearch(x, 
-						[&x, this](UINT mid) -> bool { return false; }, // duplicated
+						[](UINT mid) -> bool { return false; }, // duplicated
 						[&x, this](UINT f, UINT l) -> bool {
 							auto& v = Get(f);
 							if(v == x){ return false; }
@@ -409,7 +409,7 @@ public:
 	void			ForEach(FUNC&& v) const
 					{	if(_BaseImported){ for(auto& ptr : _NewItems)v(ptr.v); }
 						else
-						{	LPCBYTE base_items = _pBase->_Items();
+						{
 							for(UINT i=0; i<_BaseCount; i++)
 							{	auto off = _pBase->_OffsetTable()[i];
 								v(off!=OFFBITMASK?(const VAL*)&_pBase->_Items()[off]:nullptr);

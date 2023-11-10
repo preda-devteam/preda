@@ -892,7 +892,7 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 			if(!JsonParse(data, memberBuffer))
 				return false;
 			outBuffer.insert(outBuffer.end(), memberBuffer.begin(), memberBuffer.end());
-			((uint32_t*)&outBuffer[0])[i + 1] = (uint32_t)outBuffer.size() - (numMember + 1) * 4;
+			((uint32_t*)&outBuffer[0])[i + 1] = (uint32_t)outBuffer.size() - 4;
 
 			m_typeStrStream >> memberName;
 		}
@@ -1073,7 +1073,7 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 	else if(curType == "string")
 	{
 		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_STRING)
-			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting string.");
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting a string.");
 		if(jsonStr.GetLength() >= 65535)
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonStringTooLong, "String exceeding maximum length of 65535.");
 		outBuffer.resize(jsonStr.GetLength() + 2);
@@ -1116,7 +1116,7 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 				outBuffer.insert(outBuffer.end(), elementBuffer.begin(), elementBuffer.end());
 
 				if(!bIsFixedElementSize)
-					*(uint32_t *)(&outBuffer[i * 4 + 4]) = (uint32_t)outBuffer.size();
+					*(uint32_t *)(&outBuffer[i * 4 + 4]) = (uint32_t)outBuffer.size() - 4;
 			}
 		}
 
@@ -1230,7 +1230,7 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 	else if(curType == "blob")
 	{
 		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_STRING)
-			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting string.");
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting a string.");
 
 		outBuffer.resize(sizeof(::rvm::Blob));
 		if(!::rvm::RvmTypeJsonParse(*(::rvm::Blob*)&outBuffer[0], jsonStr))
@@ -1241,7 +1241,7 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 	else if(curType == "hash")
 	{
 		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_STRING)
-			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting string.");
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting a string.");
 
 		outBuffer.resize(sizeof(::rvm::HashValue));
 		if(!::rvm::RvmTypeJsonParse(*(::rvm::HashValue*)&outBuffer[0], jsonStr))
@@ -1252,7 +1252,7 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 	else if(curType == "address")
 	{
 		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_STRING)
-			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting string.");
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting a string.");
 
 		outBuffer.resize(sizeof(::rvm::Address));
 		if(!::rvm::RvmTypeJsonParse(*(::rvm::Address *)&outBuffer[0], jsonStr))
@@ -1263,7 +1263,7 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 	else if(curType == "data")
 	{
 		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_STRING)
-			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting string.");
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting a string.");
 
 		::rvm::DataMutable data;
 		if(!::rvm::RvmTypeJsonParse(data, jsonStr))
@@ -1279,7 +1279,7 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 	else if(curType == "bigint")
 	{
 		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_STRING)
-			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting string.");
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting a string.");
 
 		::rvm::BigNumMutable bigint;
 		if(!::rvm::RvmTypeJsonParse(bigint, jsonStr))
@@ -1297,7 +1297,7 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 	else if(curType == "token")
 	{
 		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_OBJECT)
-			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting object.");
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting an object.");
 
 		rt::JsonObject jsonObj(jsonStr);
 
@@ -1329,7 +1329,7 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 	else if(curType == "enum")
 	{
 		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_STRING)
-			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting string.");
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting a string.");
 		std::string enumTypeName;
 		if(!(m_typeStrStream >> enumTypeName))
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::TypeStreamFormatError, "Internal error. Type stream has invalid format.");
@@ -1345,7 +1345,7 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 	}
 	else if(curType == "vault") {
 		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_ARRAY)
-			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting array of Ranges.");
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting an array of Ranges.");
 		::rvm::NonFungibleVaultMutable idSet;
 		if(!::rvm::RvmTypeJsonParse(idSet, jsonStr))
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::BigintParseError, "Bigint parse error.");

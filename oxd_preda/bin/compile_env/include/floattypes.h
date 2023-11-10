@@ -119,7 +119,7 @@ struct ____float{
 	}
 	this_type operator/(const this_type &rhs) const{
 		if(rhs.isZero()){
-			throw preda_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
+			preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 		}
 		internal_type result;
 		____floatType::float_div(_fStruct, rhs._fStruct, result);

@@ -11,7 +11,7 @@ static const rt::SS sz_InvalidAddress("<address:invalid>");
 static const rt::SS sz_NullAddressShort("<:null>");
 static const rt::SS sz_InvalidAddressShort("<:invalid>");
 static const rt::CharacterSet_AlphabetDigits	DelegatedNameCharset("_-!#$@&^*()[]{}\\/<>|,;?~");
-static const rt::CharacterSet_AlphabetDigits	DAppNameCharset("_-#@");
+static const rt::CharacterSet_AlphabetDigits	DAppNameCharset("_");
 static const rt::CharacterSet_UpperCase			TokenNameCharset("-#");
 
 void SecureAddress::UnseededRandom(SecSuiteId ssid)
@@ -124,6 +124,16 @@ bool SecureAddress::FromString(const rt::String_Ref& str)
 			return SetDelegatedAsDApp(seg[0]);
 		case SEC_SUITE_DELEGATED_TOKEN:
 			return SetDelegatedAsToken(seg[0]);
+		case SEC_SUITE_CONTRACT:
+			{
+				uint64_t x;
+				if(seg[0].StartsWith("0x") && seg[0].TrimLeft(2).ToNumber<uint64_t, 16>(x))
+				{
+					SetAsContract(x);
+					return true;
+				}
+				else return false;
+			}
 		}
 
 		if(SecDataBlock<36>::FromString(seg[0]) && IsValid())
@@ -275,12 +285,19 @@ uint32_t SecureAddress::String::GetStringifyLength(const SecureAddress& addr, bo
 		if(shorten)
 		{
 			auto ssid = addr.GetSecuritySuiteId();
-			if(ssid > SEC_SUITE_DELEGATED_HASH && ssid < SEC_SUITE_DELEGATED_MAX)
+			if (ssid > SEC_SUITE_DELEGATED_HASH && ssid < SEC_SUITE_DELEGATED_MAX)
 				return addr.GetDelegatedString().GetLength() + 2;
+			else if (ssid == SEC_SUITE_CONTRACT)
+				return 18; //"0x" + uint64_t in hex
 			else
 				return 10; //"<xxx..xxx>"
 		}
 		else
+			if (ss == SEC_SUITE_CONTRACT)
+			{
+				return SecuritySuite::IdToString(SEC_SUITE_CONTRACT).GetLength() + 1 + 18; //"0x" + uint64_t in hex + ':' + suite id string
+			}
+			else
 			return	SecuritySuite::IdToString(ss).GetLength() + 1 + 
 					(
 						(ss > SEC_SUITE_DELEGATED_HASH && ss < SEC_SUITE_DELEGATED_MAX)?
@@ -317,6 +334,11 @@ uint32_t SecureAddress::String::Stringify(const SecureAddress& addr, char* buf, 
 
 				return (rt::SS() + '<' + str + '>').CopyTo(buf);
 			}
+			else if(ss == SEC_SUITE_CONTRACT)
+			{
+				auto cid = *(uint64_t*)&addr;
+				return (rt::SS("0x") + rt::tos::HexNum(cid)).CopyTo(buf);
+			}
 			else
 			{
 				ASSERT(9 <= buf_size);
@@ -338,6 +360,11 @@ uint32_t SecureAddress::String::Stringify(const SecureAddress& addr, char* buf, 
 				auto str = addr.GetDelegatedString();
 				ASSERT(name.GetLength() + 1 + str.GetLength() <= buf_size);
 				return (str + ':' + name).CopyTo(buf);
+			}
+			else if(ss == SEC_SUITE_CONTRACT)
+			{
+				auto cid = *(uint64_t*)&addr;
+				return (rt::SS("0x") + rt::tos::HexNum<17, true, true>(cid) + ':' + name).CopyTo(buf);
 			}
 			else
 			{

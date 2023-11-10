@@ -29,7 +29,7 @@ namespace prlrt {
 		{
 			if (index < index_type(0) || index >= length())
 			{
-				throw preda_exception("out of range in " + std::string(__FUNCTION__), prlrt::ExceptionType::OutOfRange);
+				preda_exception::throw_exception("out of range in " + std::string(__FUNCTION__), prlrt::ExceptionType::OutOfRange);
 			}
 			if (index >= num_valid_entry_in_mapped_data)
 				return v[index - num_valid_entry_in_mapped_data];	// depends on both vectorType (for .get()) and vectorType (for [])
@@ -41,7 +41,7 @@ namespace prlrt {
 		{
 			if (index < index_type(0) || index >= length())
 			{
-				throw preda_exception("out of range in " + std::string(__FUNCTION__), prlrt::ExceptionType::OutOfRange);
+				preda_exception::throw_exception("out of range in " + std::string(__FUNCTION__), prlrt::ExceptionType::OutOfRange);
 			}
 			if (index >= num_valid_entry_in_mapped_data)
 				return v[index - num_valid_entry_in_mapped_data];	// depends on both vectorType (for .get()) and vectorType (for [])
@@ -71,20 +71,20 @@ namespace prlrt {
 
 			serialize_size_type element_buffer_end_offset = ((serialize_size_type*)(mapped_data + serialize_size_type(sizeof(index_type))))[index];
 			serialize_size_type element_buffer_start_offset = index == 0 ?
-				serialize_size_type(sizeof(index_type) + num_entry_in_mapped_data * sizeof(serialize_size_type))
+				serialize_size_type(num_entry_in_mapped_data * sizeof(serialize_size_type))
 				: ((serialize_size_type*)(mapped_data + serialize_size_type(sizeof(index_type))))[index - 1];
 
 			if (element_buffer_start_offset > element_buffer_end_offset || element_buffer_end_offset > mapped_data_size)
-				throw preda_exception("deserialization error in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
+				preda_exception::throw_exception("deserialization error in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
 
-			uint8_t *element_buffer_start = mapped_data + element_buffer_start_offset;
+			uint8_t *element_buffer_start = mapped_data + serialize_size_type(sizeof(index_type)) + element_buffer_start_offset;
 			serialize_size_type element_size = element_buffer_end_offset - element_buffer_start_offset;
 
 			element_type element;
 			if (!element.map_from_serialized_data(element_buffer_start, element_size, false))
-				throw preda_exception("deserialization error in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
+				preda_exception::throw_exception("deserialization error in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
 			if (element_size != 0)
-				throw preda_exception("deserialization error (element buffer not fully consumed) in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
+				preda_exception::throw_exception("deserialization error (element buffer not fully consumed) in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
 
 			mapped_data_element_cache.insert(std::make_pair(index, element));
 
@@ -109,7 +109,7 @@ namespace prlrt {
 		{
 			if (length() == index_type(0))
 			{
-				throw preda_exception("pop an empty array in " + std::string(__FUNCTION__), prlrt::ExceptionType::PopEmptyArray);
+				preda_exception::throw_exception("pop an empty array in " + std::string(__FUNCTION__), prlrt::ExceptionType::PopEmptyArray);
 			}
 
 			if (v.size() > 0)
@@ -184,12 +184,12 @@ namespace prlrt {
 			serialize_size_type header_size = serialize_size_type(ptr - buffer);
 
 			// offsets
-			serialize_size_type elementStorageOffset = header_size + serialize_size_type(sizeof(serialize_size_type) * length());		// elements storage begins after header and array of offsets
+			serialize_size_type elementStorageOffset = serialize_size_type(sizeof(serialize_size_type) * length());		// elements storage begins after header and array of offsets
 			for (index_type i = 0; i < length(); i++)
 			{
 				serialize_size_type cur_element_size = (*this)[i].get_serialize_size();		// This must be done before serialize_out(), some types (e.g. note) will change data when serializing out
 				//data
-				(*this)[i].serialize_out(buffer + elementStorageOffset, for_debug);
+				(*this)[i].serialize_out(buffer + header_size + elementStorageOffset, for_debug);
 				//offset
 				elementStorageOffset += cur_element_size;
 				*((serialize_size_type*)ptr) = elementStorageOffset;
@@ -221,7 +221,7 @@ namespace prlrt {
 			{
 				if (bufferSize < serialize_size_type(sizeof(index_type) + num_valid_entry_in_mapped_data * sizeof(serialize_size_type)))
 					return false;
-				expectedSize = num_valid_entry_in_mapped_data > 0 ? ((serialize_size_type*)(mapped_data + serialize_size_type(sizeof(index_type))))[num_valid_entry_in_mapped_data - 1] : sizeof(index_type);
+				expectedSize = num_valid_entry_in_mapped_data > 0 ? ((serialize_size_type*)(mapped_data + serialize_size_type(sizeof(index_type))))[num_valid_entry_in_mapped_data - 1] + sizeof(index_type) : sizeof(index_type);
 			}
 
 			if (bufferSize < expectedSize)

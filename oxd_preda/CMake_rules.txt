@@ -1,0 +1,63 @@
+function(win_sdk_rule target)
+  if(MSVC)
+    # Retrieve the necessary environment variables from the vcvars config
+    # include("${CMAKE_CURRENT_LIST_DIR}/path/to/vcvars.cmake")  # Path to your vcvars file
+    string(REPLACE "\\" "/" VC_TOOLS_DIR ${CMAKE_VS_PLATFORM_TOOLSET})
+    set(vcvars_INCLUDE "${VC_TOOLS_DIR}/Include")
+    set(vcvars_LIB "${VC_TOOLS_DIR}/Lib")
+
+    if(vcvars_INCLUDE)
+      target_include_directories(${target} PRIVATE ${vcvars_INCLUDE})
+      #target_include_directories(${target} SYSTEM PRIVATE ${vcvars_INCLUDE})
+      set_target_properties(${target} PROPERTIES InheritWarningLevel TRUE)
+    endif()
+
+    target_link_libraries(${target} PRIVATE
+      kernel32 user32 gdi32 winspool comdlg32 advapi32 shell32 ole32
+      oleaut32 uuid odbc32 odbccp32 comctl32 setupapi shlwapi
+    )
+
+    foreach(flags
+      CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE
+      CMAKE_C_FLAGS_MINSIZEREL CMAKE_C_FLAGS_RELWITHDEBINFO
+      CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE
+      CMAKE_CXX_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_RELWITHDEBINFO
+    )
+      if(${${flags}} MATCHES "/MD")
+        string(REGEX REPLACE "/MD" "/MT" ${${flags}} "${${flags}}")
+      endif()
+    endforeach()
+
+    if(NOT MINGW)
+      target_link_libraries(${target} PRIVATE strsafe)
+    endif()
+  endif()
+endfunction()
+
+function(linux_link_ipp_rule target)
+  target_link_libraries(${target} PRIVATE
+    pthread dl X11 ippdc ippac90lgc ippcc90lgc ippcc ippch90lgc ippch ippcp
+    ippcv90lgc ippcv ippdc90lgc ippdi90lgc ippe ippgen90lgc ippi90lgc
+    ippi ippj90lgc ippm90lgc ippr90lgc ipps90lgc ippsc90lgc ippvc90lgc
+    ipps ippvm ippcore
+  )
+endfunction()
+
+function(mac_link_rule target)
+  target_link_libraries(${target} PRIVATE
+    "-framework CoreGraphics"
+    "-framework CoreFoundation"
+    "-framework IOKit"
+    "-framework ApplicationServices"
+    "-framework Security"
+    "-framework Foundation"
+  )
+endfunction()
+
+
+if(CMAKE_HOST_SYSTEM_NAME MATCHES "Windows")
+  add_definitions(-DUNICODE -D_UNICODE)
+  enable_language(ASM_MASM)
+elseif(CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
+  set(CMAKE_OSX_DEPLOYMENT_TARGET 10.14)
+endif()

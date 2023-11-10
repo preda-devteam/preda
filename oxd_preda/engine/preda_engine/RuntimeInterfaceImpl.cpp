@@ -340,25 +340,43 @@ uint32_t CRuntimeInterface::CrossCall(uint64_t cvId, int64_t templateContractImp
 
 uint32_t CRuntimeInterface::InterfaceCall(uint64_t cvId, int64_t interfaceContractImportSlot, uint32_t interfaceSlot, uint32_t funcIdx, const void** ptrs, uint32_t numPtrs)
 {
+	const ContractImplementedInterface* implementedInterface = GetImplementedInterfaceFromContract(cvId, interfaceContractImportSlot, interfaceSlot);
+	if (implementedInterface == nullptr)
+		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallContractNotFound) << 8);
+
+	if (funcIdx >= uint32_t(implementedInterface->functionIds.size()))
+		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallFunctionNotFound) << 8);
+
+	uint32_t opCode = implementedInterface->functionIds[funcIdx];
+	return m_pExecutionEngine->InvokeContractCall(m_pExecutionContext, rvm::ContractVersionId(cvId), opCode, ptrs, numPtrs);
+}
+
+bool CRuntimeInterface::InterfaceIsImplemented(uint64_t cvId, int64_t interfaceContractImportSlot, uint32_t interfaceSlot)
+{
+	return GetImplementedInterfaceFromContract(cvId, interfaceContractImportSlot, interfaceSlot) != nullptr;
+}
+
+const ContractImplementedInterface* CRuntimeInterface::GetImplementedInterfaceFromContract(uint64_t cvId, int64_t interfaceContractImportSlot, uint32_t interfaceSlot)
+{
 	static_assert(sizeof(cvId) == sizeof(rvm::ContractVersionId));
 
 	if (interfaceContractImportSlot < -1 || interfaceContractImportSlot >= int64_t(m_contractStack.back().numImportedContracts))
-		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallContractNotFound) << 8);
+		return nullptr;
 
 	rvm::ContractVersionId interfaceCvId = interfaceContractImportSlot == -1 ? m_contractStack.back().cvId : m_contractStack.back().importedCvIds[interfaceContractImportSlot];
 
-	const rvm::DeployedContract *contract = m_pChainState->GetContractDeployed(rvm::ContractVersionId(cvId));
+	const rvm::DeployedContract* contract = m_pChainState->GetContractDeployed(rvm::ContractVersionId(cvId));
 	if (contract == nullptr)
-		return uint32_t(ExecutionResult::ContractNotFound);
+		return nullptr;
 	const rvm::ContractModuleID* moduleId = &contract->Module;
 
 	const ContractDatabaseEntry* pEntry = m_pDB->FindContractEntry(*moduleId);
 	if (!pEntry)
-		return uint32_t(ExecutionResult::ContractNotFound);
+		return nullptr;
 
 	const rvm::DeployedContract* interfaceContract = m_pChainState->GetContractDeployed(interfaceCvId);
 	if (interfaceContract == nullptr)
-		return uint32_t(ExecutionResult::InvalidFunctionId);
+		return nullptr;
 	const rvm::ContractModuleID* interfaceModuleId = &interfaceContract->Module;
 
 	for (uint32_t i = 0; i < uint32_t(pEntry->compileData.implementedInterfaces.size()); i++)
@@ -366,17 +384,10 @@ uint32_t CRuntimeInterface::InterfaceCall(uint64_t cvId, int64_t interfaceContra
 		const ContractImplementedInterface& implementedInterface = pEntry->compileData.implementedInterfaces[i];
 		// compare slot index first because it's faster
 		if (implementedInterface.interfaceDefSlot == interfaceSlot && memcmp(&implementedInterface.interfaceDefContractModuleId, interfaceModuleId, sizeof(rvm::ContractModuleID)) == 0)
-		{
-			if (funcIdx < uint32_t(implementedInterface.functionIds.size()))
-			{
-				uint32_t opCode = implementedInterface.functionIds[funcIdx];
-				return m_pExecutionEngine->InvokeContractCall(m_pExecutionContext, rvm::ContractVersionId(cvId), opCode, ptrs, numPtrs);
-			}
-			return uint32_t(ExecutionResult::InvalidFunctionId);
-		}
+			return &implementedInterface;
 	}
 
-	return uint32_t(ExecutionResult::InvalidFunctionId);
+	return nullptr;
 }
 
 uint64_t CRuntimeInterface::DeployCall(int64_t templateContractImportSlot, const void** ptrs, uint32_t numPtrs)
@@ -384,18 +395,27 @@ uint64_t CRuntimeInterface::DeployCall(int64_t templateContractImportSlot, const
 	static_assert((uint64_t)rvm::ContractVersionIdInvalid == 0, "rvm::::ContractVersionIdInvalid value changed, need to update deploy_call() in preda runtime");
 
 	rvm::ContractVersionId stackTopCvId = m_contractStack.back().cvId;
-	rvm::DAppId dappId = rvm::CONTRACT_DAPP(stackTopCvId);			// The new contract's dapp must be the same as the dapp of the caller, which is top of the call stack
 
 	if (templateContractImportSlot < -1 || templateContractImportSlot >= int64_t(m_contractStack.back().numImportedContracts))
 		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallContractNotFound) << 8);
+
 	rvm::ContractVersionId templateCvId = templateContractImportSlot == -1 ? m_contractStack.back().cvId : m_contractStack.back().importedCvIds[templateContractImportSlot];
-	rvm::EngineId engineId = rvm::CONTRACT_ENGINE(templateCvId);
-	const rvm::DeployedContract* templateContract = m_pChainState->GetContractDeployed(rvm::ContractVersionId(templateCvId));
+	const rvm::DeployedContract* templateContract = m_pChainState->GetContractDeployed(templateCvId);
 	if (!templateContract)
 		return (uint64_t)rvm::ContractVersionIdInvalid;
-	const rvm::ContractModuleID* pModuleId = &templateContract->Module;
 
-	rvm::ContractVersionId newCvId = m_pExecutionContext->DeployUnnamedContract(dappId, engineId, pModuleId);
+	const rvm::ContractModuleID* pModuleId = &templateContract->Module;
+	uint64_t dappname_i = templateContract->DAppName;
+	if(templateCvId != stackTopCvId)
+	{
+		const rvm::DeployedContract* initiator = m_pChainState->GetContractDeployed(stackTopCvId);
+		if(!initiator)
+			return (uint64_t)rvm::ContractVersionIdInvalid;
+
+		dappname_i = initiator->DAppName;
+	}
+
+	rvm::ContractVersionId newCvId = m_pExecutionContext->DeployUnnamedContract(stackTopCvId, dappname_i, templateContract);
 
 	const ContractDatabaseEntry* pContractEntry = m_pDB->FindContractEntry(*pModuleId);
 	if (!pContractEntry)
@@ -802,9 +822,10 @@ void CRuntimeInterface::Transaction_GetSender(uint8_t* out)
 		((oxd::SecureAddress*)out)->SetAsContract(uint64_t(m_contractStack[m_contractStack.size() - 2].cvId));
 	else
 	{
-		if (Transaction_GetSignerCount() > 0)
+		rvm::ConstAddress* initiator = m_pExecutionContext->GetInitiator();
+		if (initiator != nullptr)
 		{
-			*(rvm::Address*)out = *m_pExecutionContext->GetSigner(0);
+			*(rvm::Address*)out = *initiator;
 		}
 		else
 			((oxd::SecureAddress*)out)->Zero();

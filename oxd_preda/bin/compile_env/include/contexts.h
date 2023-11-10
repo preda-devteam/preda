@@ -69,7 +69,7 @@ namespace prlrt {
 		__prlt_array<__prlt_address> __prli_get_signers()
 		{
 			if (__prli_get_type() != transaction_type::__prli_normal_type && __prli_get_type() != transaction_type::__prli_system_type)
-				throw preda_exception("get_signer not available", prlrt::ExceptionType::AccessUnavailableContextFunction);
+				preda_exception::throw_exception("get_signer not available", prlrt::ExceptionType::AccessUnavailableContextFunction);
 			__prlt_array<__prlt_address> ret;
 			uint32_t numSigner = PREDA_CALL(Transaction_GetSignerCount, );
 			for (uint32_t i = 0; i < numSigner; i++) {
@@ -96,19 +96,19 @@ namespace prlrt {
 		__prlt_uint32 __prli_get_originated_shard_index()
 		{
 			if (__prli_get_type() != transaction_type::__prli_relay_type)
-				throw preda_exception("get_originated_shard_index not available", prlrt::ExceptionType::AccessUnavailableContextFunction);
+				preda_exception::throw_exception("get_originated_shard_index not available", prlrt::ExceptionType::AccessUnavailableContextFunction);
 			return PREDA_CALL(Transaction_GetOriginatedShardIndex, );
 		}
 		__prlt_uint32 __prli_get_originated_shard_order()
 		{
 			if (__prli_get_type() != transaction_type::__prli_relay_type)
-				throw preda_exception("get_originated_shard_order not available", prlrt::ExceptionType::AccessUnavailableContextFunction);
+				preda_exception::throw_exception("get_originated_shard_order not available", prlrt::ExceptionType::AccessUnavailableContextFunction);
 			return PREDA_CALL(Transaction_GetOriginatedShardOrder, );
 		}
 		__prlt_address __prli_get_initiator_address()
 		{
 			if (__prli_get_type() != transaction_type::__prli_relay_type)
-				throw preda_exception("get_originated_address not available", prlrt::ExceptionType::AccessUnavailableContextFunction);
+				preda_exception::throw_exception("get_originated_address not available", prlrt::ExceptionType::AccessUnavailableContextFunction);
 			__prlt_address value;
 			PREDA_CALL(Transaction_GetInitiatorAddress, (uint8_t*)&value);
 			return value;
@@ -173,7 +173,7 @@ namespace prlrt {
 			if (!condition._v)
 			{
 				PREDA_CALL(DebugAssertionFailure, line._v);
-				throw preda_exception("assertion failure", prlrt::ExceptionType::AssertionFailure);
+				preda_exception::throw_exception("assertion failure", prlrt::ExceptionType::AssertionFailure);
 			}
 		}
 
@@ -182,7 +182,7 @@ namespace prlrt {
 			if (!condition._v)
 			{
 				PREDA_CALL(DebugAssertionFailureMessage, line._v, message.ptr->str.c_str(), (uint32_t)message.ptr->str.length());
-				throw preda_exception("assertion failure", prlrt::ExceptionType::AssertionFailure);
+				preda_exception::throw_exception("assertion failure", prlrt::ExceptionType::AssertionFailure);
 			}
 		}
 

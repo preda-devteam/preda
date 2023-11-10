@@ -4,24 +4,41 @@
 
 ## Table of content
 
-- [Background](#background)
-- [Build PREDA](#build-preda)
+- [PREDA: A General Programming Language for Parallel Execution of Smart Contract Transactions](#preda-a-general-programming-language-for-parallel-execution-of-smart-contract-transactions)
+  - [Table of content](#table-of-content)
+  - [Background](#background)
+  - [Build PREDA](#build-preda)
     - [Init git submodule](#init-git-submodule)
-    - [Install Xmake](#install-xmake)
+    - [Install cmake](#install-cmake)
     - [Build](#build)
-        - [Windows](#windows)
-        - [Linux](#linux)
-        - [MacOS](#macos)
-- [Package PREDA](#package-preda)
+      - [Windows](#windows)
+      - [Linux](#linux)
+      - [MacOS](#macos)
+  - [Package PREDA](#package-preda)
     - [Install package tools](#install-package-tools)
     - [Package preda-toolchain](#package-preda-toolchain)
-
-- [How to use preda-toolchain](#how-to-use-preda-toolchain)
+    - [Delete cache files](#delete-cache-files)
+      - [Windows](#windows-1)
+      - [Linux/Mac](#linuxmac)
+  - [How to use preda-toolchain](#how-to-use-preda-toolchain)
     - [Simple Example](#simple-example)
     - [More tutorials](#more-tutorials)
-
-- [Trouble Shooting](#trouble-shooting)
-- [Acknowledgements](#acknowledgements)
+  - [Acknowledgements](#acknowledgements)
+    - [Intel Integrated Performance Primitives](#intel-integrated-performance-primitives)
+    - [7-Zip](#7-zip)
+    - [TTMath Bignum Library](#ttmath-bignum-library)
+    - [Botan: Crypto and TLS for Modern C++](#botan-crypto-and-tls-for-modern-c)
+    - [moodycamel::ConcurrentQueue](#moodycamelconcurrentqueue)
+    - [C++ Mathematical Expression Toolkit Library](#c-mathematical-expression-toolkit-library)
+    - [RocksDB](#rocksdb)
+    - [sparsehash](#sparsehash)
+    - [zlib](#zlib)
+    - [libsodium](#libsodium)
+    - [ANTLR](#antlr)
+    - [dayjs](#dayjs)
+    - [ejs](#ejs)
+    - [fs-extra](#fs-extra)
+    - [mustache](#mustache)
 
 ## Background
 
@@ -35,36 +52,74 @@ Sharding blockchains allow payment transactions to be executed in parallel by mu
 git submodule update --init
 ```
 
-### Install Xmake
+### Install cmake
 
-check <https://xmake.io/#/guide/installation> for more detail
+- cmake_minimum_required: 3.18.6+
+- See <https://cmake.org/cmake/help/latest/command/install.html#install> for more detail
 
 ### Build
 
 #### Windows
 
 - install visual studio 2019
+
 - install windows sdk
-- at the root of this repo execute:
-    - `xmake f -m debug`
-    - `xmake`
+
+- set the compile parameters:
+
+    ```cmake
+    cmake -S ./ -B ./build -G "Visual Studio 16 2019" -DDOWNLOAD_IPP=ON -DDOWNLOAD_3RDPARTY=ON -DBUNDLE_OPS=ON
+    ```
+
+- compile:
+
+    ```cmake
+    cmake --build ./build --config Release
+    ```
 
 #### Linux
 
-- install dependencies(for ubuntu you can run `sudo apt install p7zip-full pkg-config cmake libx11-dev uuid-dev libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev libzstd-dev g++-9 gcc-9`)
-- at the root of this repo execute:
-    - `xmake f -m debug`
-    - `xmake`
+- install dependencies:
+
+    ```bash
+    sudo apt install p7zip-full pkg-config cmake libx11-dev uuid-dev libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev libzstd-dev g++-9 gcc-9
+    ```
+
+- set the compile parameters:
+  
+    ```cmake
+    cmake -S ./ -B ./build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DDOWNLOAD_IPP=ON -DDOWNLOAD_3RDPARTY=ON -DBUNDLE_OPS=ON
+    ```
+    
+- compile:
+
+    ```cmake
+    cmake --build ./build
+    ```
 
 #### MacOS
 
-- install 7zip(`brew install p7zip`)
-- install xcode and clang
-- at the root of this repo execute:
-    - `xmake f -m debug`
-    - `xmake`
+- install 7zip
 
-you can find the artifact under the - `build/PREDA` folder
+    ```bash
+    brew install p7zip
+    ```
+
+- install xcode and clang
+
+- set the compile parameters:
+  
+    ```cmake
+    cmake -S ./ -B ./build -G "Xcode" -DDOWNLOAD_IPP=ON -DDOWNLOAD_3RDPARTY=ON -DBUNDLE_OPS=ON
+    ```
+    
+- compile:
+  
+    ```cmake
+    cmake --build ./build --config Release
+    ```
+
+
 
 ## Package PREDA
 
@@ -78,7 +133,39 @@ you can find the artifact under the - `build/PREDA` folder
 
 ### Package preda-toolchain
 
-at the root of this repo execute `xmake p`, then you can find the package under the - `bundle` folder.
+you can find the package under the  `bundle` folder with the following  command while `-DBUNDLE_OPS=ON` 
+
+```cmake
+cmake --build ./build --target bundle_package
+```
+
+### Delete cache files
+
+#### Windows
+
+```cmake
+cmake --build ./build --target clean
+```
+
+ or
+
+```bat
+del .\build
+del %USERPROFILE%\.cmake
+```
+
+#### Linux/Mac
+
+```cmake
+cmake --build ./build --target clean
+```
+
+or
+
+```bash
+rm -rf ./build
+rm -rf ~/.cmake
+```
 
 ## How to use preda-toolchain
 
@@ -86,12 +173,12 @@ you can run the preda-toolchain after build it or install the preda-toolchain pa
 
 ### Simple Example
 
-you can find the preda-toolchain at the `build/PREDA` folder after you build it. 
+you can find the preda-toolchain at the `bundle/PREDA/bin` folder after you build it. 
 
 ```bash
-➜ cd build/PREDA/bin
-➜ pwd                   
-~/preda_repo/build/PREDA/bin
+➜ cd bundle/PREDA/bin
+➜ pwd                 
+./bundle/PREDA/bin
 ➜ ./chsimu ../examples/Ballot.prdts -count:100
 ...
 ...
@@ -107,18 +194,6 @@ Total Txn:0/112
 ### More tutorials
 
 Learn more about how to use it through the documentation at `docs`.
-
-## Trouble Shooting
-
-### why I delete whole directory and clone, compile again, it said that missing "ippccmt.lib"
-
-delete cache files:
-
-Windows: `preda-repo/.xmake` ，`preda-repo/build`，`%localappdata%/.xmake` 
-
-Linux/Mac:`preda-repo/.xmake` ，`preda-repo/build`，`~/.xmake` 
-
-then re-run `xmake`
 
 ## Acknowledgements
 

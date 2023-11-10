@@ -47,8 +47,28 @@ auto& _RVM_REQUIRED(T&& x, const char* file, const char* func, uint32_t line)
 {
 	if(x){}
 	else
-	{	InvokeException e = { file, func , line, REXC_ASSERTION_FAILED };
+	{	
+#ifdef PLATFORM_DEBUG_BUILD
+		InvokeException e = { file, func , line, REXC_ASSERTION_FAILED };
+#else
+		InvokeException e = { REXC_ASSERTION_FAILED };
+#endif
 		throw &e;
+	}
+	return x;
+}
+template<typename T>
+auto& _RVM_REQUIRED(T&& x)
+{
+	if (x) {}
+	else
+	{
+#ifdef PLATFORM_DEBUG_BUILD
+		InvokeException e = { "EMPTY", "EMPTY", 0, REXC_ASSERTION_FAILED };
+#else
+		InvokeException e = { REXC_ASSERTION_FAILED };
+#endif
+		throw& e;
 	}
 	return x;
 }
@@ -56,13 +76,14 @@ auto& _RVM_REQUIRED(T&& x, const char* file, const char* func, uint32_t line)
 } // namespace rvm
 
 
-#define RVM_REQUIRED(x)		::rvm::_details::_RVM_REQUIRED((x), __FILE__, __FUNCTION__ , (uint32_t)__LINE__)
 
 #ifdef PLATFORM_DEBUG_BUILD
+#define RVM_REQUIRED(x)		::rvm::_details::_RVM_REQUIRED((x), __FILE__, __FUNCTION__ , (uint32_t)__LINE__)
 #define RVM_THROW(res)	{ static const ::rvm::InvokeException e = { __FILE__, __FUNCTION__ , (UINT)__LINE__, res }; throw &e; }	
 #define RVM_ASSERT(x)	{ RVM_REQUIRED(x); }
 #else
-#define RVM_THROW(res)	{	static const InvokeException e = { res }; throw &e; }
+#define RVM_REQUIRED(x)		::rvm::_details::_RVM_REQUIRED((x))
+#define RVM_THROW(res)	{	static const ::rvm::InvokeException e = { res }; throw &e; }
 #define RVM_ASSERT(x)	{}
 #endif
 

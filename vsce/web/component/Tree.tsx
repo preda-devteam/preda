@@ -119,7 +119,7 @@ const Tree = ({ data, name }: TreeData) => {
                 reactDom.render(
                   <Tooltip placement={'top'} trigger="hover" overlay={
                     <ReactJson
-                      src={args}
+                      src={JSON.parse(JSON.stringify(args))}
                       style={{ background: "none" }}
                       displayObjectSize={false}
                       enableClipboard={false}

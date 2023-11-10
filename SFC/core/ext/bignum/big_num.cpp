@@ -12,7 +12,9 @@ namespace ext
 
 ULONGLONG BigNumRough::operator = (ULONGLONG n)
 {
-	int a = (int)log2(n);
+	int a = 0;
+	if(n != 0)
+		a = (int)log2(n);
 	if(a>MANTISSA_BITS)
 	{
 		Exponent = a - MANTISSA_BITS;
@@ -477,10 +479,8 @@ void BN_AbsAdd(const BN_Unsigned& b, ext::BigNumMutable& ret)
 		carry = BN_Increase<true>(ret.SubVal(b.Len, ret.GetLength() - b.Len), ret.SubVal(b.Len, ret.GetLength() - b.Len));
 		if(carry)ret.AppendLast() = 1;
 	}
-	else
-	{
-		ret.TrimLeadingZero();
-	}
+
+	ret.TrimLeadingZero();
 }
 
 void BN_AbsSub(const BN_Unsigned& a, const BN_Unsigned& b, ext::BigNumMutable& ret)

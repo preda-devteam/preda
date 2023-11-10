@@ -126,12 +126,12 @@ namespace preda_evm {
         static constexpr uint8_t ContractIdPrefix = 'i';
 
 
-        static constexpr rvm::Scope StorageScope = rvm::_details::SCOPE_MAKE(rvm::ScopeType::ScatteredMapOnGlobal, rvm::ScopeKeySize::VaryingSize, 0);
-        static constexpr rvm::Scope BalanceScope = rvm::_details::SCOPE_MAKE(rvm::ScopeType::ScatteredMapOnGlobal, rvm::ScopeKeySize::VaryingSize, 1);
-        static constexpr rvm::Scope CodeScope = rvm::_details::SCOPE_MAKE(rvm::ScopeType::ScatteredMapOnGlobal, rvm::ScopeKeySize::VaryingSize, 1);
-        static constexpr rvm::Scope CodeHashScope = rvm::_details::SCOPE_MAKE(rvm::ScopeType::ScatteredMapOnGlobal, rvm::ScopeKeySize::VaryingSize, 1);
-        static constexpr rvm::Scope NonceScope = rvm::_details::SCOPE_MAKE(rvm::ScopeType::ScatteredMapOnGlobal, rvm::ScopeKeySize::VaryingSize, 1);
-        static constexpr rvm::Scope ContractIdScope = rvm::_details::SCOPE_MAKE(rvm::ScopeType::ScatteredMapOnGlobal, rvm::ScopeKeySize::VaryingSize, 1);
+        static constexpr rvm::Scope StorageScope = rvm::_details::SCOPE_MAKE(rvm::ScopeType::ScatteredMapOnGlobal, rvm::ScopeKeySized::VaryingSize, 0);
+        static constexpr rvm::Scope BalanceScope = rvm::_details::SCOPE_MAKE(rvm::ScopeType::ScatteredMapOnGlobal, rvm::ScopeKeySized::VaryingSize, 1);
+        static constexpr rvm::Scope CodeScope = rvm::_details::SCOPE_MAKE(rvm::ScopeType::ScatteredMapOnGlobal, rvm::ScopeKeySized::VaryingSize, 1);
+        static constexpr rvm::Scope CodeHashScope = rvm::_details::SCOPE_MAKE(rvm::ScopeType::ScatteredMapOnGlobal, rvm::ScopeKeySized::VaryingSize, 1);
+        static constexpr rvm::Scope NonceScope = rvm::_details::SCOPE_MAKE(rvm::ScopeType::ScatteredMapOnGlobal, rvm::ScopeKeySized::VaryingSize, 1);
+        static constexpr rvm::Scope ContractIdScope = rvm::_details::SCOPE_MAKE(rvm::ScopeType::ScatteredMapOnGlobal, rvm::ScopeKeySized::VaryingSize, 1);
 
         static constexpr rvm::ContractScopeId StorageCSID = rvm::_details::CONTRACT_SET_SCOPE(EVM_CID, StorageScope);
         static constexpr rvm::ContractScopeId BalanceCSID = rvm::_details::CONTRACT_SET_SCOPE(EVM_CID, BalanceScope);
@@ -1015,7 +1015,7 @@ namespace preda_evm {
         rvm::InvokeResult ret;
         ret.SubCodeHigh = 0;
         ret.SubCodeLow = 0;
-        ret.GasBurnt = 1;
+        ret.GasBurnt = rvm::RVM_GAS_BURNT_DEFAULT;
 
         ContractModuleID deployId = _details::RvmCDIDToEVMCDID(contract_deployment_id);
         const ContractDatabaseEntry* entry = m_pDB->FindContractEntry(deployId);
@@ -1112,7 +1112,7 @@ namespace preda_evm {
         rvm::InvokeResult ret;
         ret.SubCodeHigh = 0;
         ret.SubCodeLow = 0;
-        ret.GasBurnt = 1;
+        ret.GasBurnt = rvm::RVM_GAS_BURNT_DEFAULT;
         ret.Code = rvm::InvokeErrorCode::Success;
 
 

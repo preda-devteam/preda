@@ -130,7 +130,7 @@ struct TypeTraits
 	};																													\
 	}																													\
 
-#define RVM_TYPETRAITS_DEF_CSTRUCT(T)																					\
+#define RVM_TYPETRAITS_DEF_STRUCT(T)																					\
 		namespace rvm {																									\
 		template<> struct TypeTraits<T, true, false>																	\
 		{	typedef T				Mutable;																			\
@@ -139,6 +139,18 @@ struct TypeTraits
 			static const bool		IsImmutable = true;																	\
 			static void				Jsonify(const T& x, rt::Json& json){ return x.Jsonify(json); }						\
 			static bool				JsonParse(T& x, const rt::String_Ref& str){ return x.JsonParse(str); }				\
+		};																												\
+		}																												\
+
+#define RVM_TYPETRAITS_DEF_INTERNAL_POD(T)																				\
+		namespace rvm {																									\
+		template<> struct TypeTraits<T, true, false>																	\
+		{	typedef T				Mutable;																			\
+			typedef T				Immutable;																			\
+			static const bool		IsMutable = true;																	\
+			static const bool		IsImmutable = true;																	\
+			static void				Jsonify(const T& x, rt::Json& json){ ASSERT(0); }									\
+			static bool				JsonParse(T& x, const rt::String_Ref& str){ return false; }							\
 		};																												\
 		}																												\
 
@@ -165,7 +177,7 @@ struct TypeTraits
 
 } // namespace rvm
 
-RVM_TYPETRAITS_DEF_CSTRUCT(Blob)
+RVM_TYPETRAITS_DEF_STRUCT(Blob)
 RVM_TYPETRAITS_DEF(Data, DataMutable)
 RVM_TYPETRAITS_DEF(Coins, CoinsMutable)
 RVM_TYPETRAITS_DEF_KEYABLE(BigNum, BigNumMutable)
@@ -229,7 +241,7 @@ inline T* RvmImmutableTypeClone(const T* m)
 }
 
 inline void RvmImmutableTypeDecompose(LPVOID p){ _SafeFree8AL(p); }
-#define _SafeRvmImmutableTypeFree(p) {if(p){ ::rvm::RvmImmutableTypeDecompose(p); p = nullptr; }}
+#define _SafeFreeRvmImmutableType(p) {if(p){ ::rvm::RvmImmutableTypeDecompose(p); p = nullptr; }}
 
 namespace _details
 {
@@ -307,7 +319,7 @@ struct rvmtype_ptr
 			}
 	~rvmtype_ptr(){ Release(); }
 	void	Detach(){ v = nullptr; owned = false; }
-	void	Release(){ if(owned){ _SafeRvmImmutableTypeFree(v); } v = nullptr; }
+	void	Release(){ if(owned){ _SafeFreeRvmImmutableType(v); } v = nullptr; }
 	void	Replace(const VAL& x)
 			{	UINT size = x.GetEmbeddedSize();
 				if(v && owned && v->GetEmbeddedSize() >= size)

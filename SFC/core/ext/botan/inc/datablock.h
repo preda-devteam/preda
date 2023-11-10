@@ -49,7 +49,7 @@ struct dword_op
 	static bool equ(LPCDWORD x, LPCDWORD v){ if(*x != *v)return false; return dword_op<_LEN-1>::equ(x+1,v+1); }
 	static bool equ_sec(LPCDWORD x, LPCDWORD v){ return 0 == diff_count(x, v); }
 	static bool not_equ_sec(LPCDWORD x, LPCDWORD v){ return diff_count(x, v) > 0; }
-	static bool not_equ(LPCDWORD x, LPCDWORD v){ if(*x == *v)return false; return dword_op<_LEN-1>::not_equ(x+1,v+1); }
+	static bool not_equ(LPCDWORD x, LPCDWORD v){ if(*x != *v)return true; return dword_op<_LEN - 1>::not_equ(x + 1, v + 1); }
 	static int  cmp(LPCDWORD x, LPCDWORD v){ if(*x > *v)return 1; if(*x < *v)return -1; return dword_op<_LEN-1>::cmp(x+1,v+1); }
 	static bool equ_constant_time(LPCDWORD x, LPCDWORD v)
 				{	bool ret = true;
@@ -71,7 +71,7 @@ struct dword_op
 		static bool equ(LPCDWORD x, DWORD v){ return true; }
 		static bool equ(LPCDWORD x, LPCDWORD v){ return true; }
 		static int  diff_count(LPCDWORD x, LPCDWORD v){ return 0; }
-		static bool not_equ(LPCDWORD x, LPCDWORD v){ return true; }
+		static bool not_equ(LPCDWORD x, LPCDWORD v){ return false; }
 		static int  cmp(LPCDWORD x, LPCDWORD v){ return 0; }
 	};
 

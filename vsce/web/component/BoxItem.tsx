@@ -47,7 +47,13 @@ export const DeployBox = ({data, key, title}: BoxItemType) => {
   const [more, setMore] = React.useState<boolean>(false)
 
   const originData = React.useMemo(() => {
-    return  more ? data : data[0] ? [data[0]] : [];
+    const info = data.info;
+    const sources = data.sources;
+    const resultList = info.map((i: any) => ({
+      ...i,
+      source: sources.find((s: any) => s.contract === i.contract)?.source
+    }));
+    return  more ? resultList : resultList[0] ? [resultList[0]] : [];
   }, [data, more]);
 
   return !originData.length ? null : (
@@ -70,10 +76,10 @@ export const DeployBox = ({data, key, title}: BoxItemType) => {
               </div>
           </div>
           {
-            d.structs && d.structs.length
+            d.Structs && d.Structs.length
               ? <div className='deploy-item'>
                   <p className='deploy-title'>Structs</p>
-                  {d.structs.map((struct: Struct) => (
+                  {d.Structs.map((struct: Struct) => (
                     <div className='struct-item' key={struct.name}>
                       <p className='deploy-name'>{struct.name}</p>
                       <div className='view-table'>
@@ -116,9 +122,9 @@ export const DeployBox = ({data, key, title}: BoxItemType) => {
           }
           <div className='deploy-item'>
             {
-              Object.keys(d.scopes || {}).map(scope => {
-                const scopeStates = (d.stateVariables || []).filter((state: StateVariable) => state.scope === scope) || [];
-                const scopeFns = (d.functions || []).filter((fn: DeployFunction) => fn.scope === scope) || [];
+              Object.keys(d.Scopes || {}).map(scope => {
+                const scopeStates = (d.StateVariables || []).filter((state: StateVariable) => state.scope === scope) || [];
+                const scopeFns = (d.Functions || []).filter((fn: DeployFunction) => fn.scope === scope) || [];
                 return (
                   <div className='deploy-scope'>
                     <p className='deploy-title'>{scope}</p>
@@ -169,7 +175,7 @@ export const DeployBox = ({data, key, title}: BoxItemType) => {
           </div>
         </div>
       ))}
-      {data.length > 1 ? (
+      {data.info.length > 1 ? (
         <div className='center'>
           <MoreSwitch onChange={(s: boolean) => setMore(s)} value={more} />
         </div>
@@ -291,7 +297,7 @@ export const TxnBox = ({data, key, title}: BoxItemType) => {
                     <div className='box-val blue-font'>
                       <Tooltip placement={'top'} trigger="hover" overlay={
                         <ReactJson
-                          src={d.Arguments || {}}
+                          src={(JSON.parse(JSON.stringify(d.Arguments || {})) as object)}
                           style={{ background: "none" }}
                           displayObjectSize={false}
                           enableClipboard={false}
@@ -404,7 +410,7 @@ export const BlockBox = ({data, key, title, shardOrder = '0'}: BoxItemType) => {
                           <div className='box-val blue-font'>
                             <Tooltip placement={'top'} trigger="hover" overlay={
                               <ReactJson
-                                src={txn.Arguments || {}}
+                                src={JSON.parse(JSON.stringify(txn.Arguments || {}))}
                                 style={{ background: "none" }}
                                 displayObjectSize={false}
                                 enableClipboard={false}

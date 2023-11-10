@@ -29,7 +29,7 @@ namespace prlrt {
 	//	g_inRelaySerialization = false;
 
 	//	if (!PREDA_CALL(EmitRelayToAddress, (const uint8_t*)&addr, opCode, args_serialized.size() > 0 ? &args_serialized[0] : nullptr, uint32_t(args_serialized.size())))
-	//		throw preda_exception("relay@address error", prlrt::ExceptionType::RelayError);
+	//		preda_exception::throw_exception("relay@address error", prlrt::ExceptionType::RelayError);
 	//}
 
 	template<typename TScope, typename ...Args>
@@ -41,7 +41,7 @@ namespace prlrt {
 		g_inRelaySerialization = false;
 
 		if (!PREDA_CALL(EmitRelayToScope, (const uint8_t*)&scope_key, sizeof(TScope), scope_type, opCode, args_serialized.size() > 0 ? &args_serialized[0] : nullptr, uint32_t(args_serialized.size())))
-			throw preda_exception("relay error", prlrt::ExceptionType::RelayError);
+			preda_exception::throw_exception("relay error", prlrt::ExceptionType::RelayError);
 	}
 
 	template<typename ...Args>
@@ -53,7 +53,7 @@ namespace prlrt {
 		g_inRelaySerialization = false;
 
 		if (!PREDA_CALL(EmitRelayToShards, opCode, args_serialized.size() > 0 ? &args_serialized[0] : nullptr, uint32_t(args_serialized.size())))
-			throw preda_exception("relay@shards error", prlrt::ExceptionType::RelayError);
+			preda_exception::throw_exception("relay@shards error", prlrt::ExceptionType::RelayError);
 	}
 
 	template<typename ...Args>
@@ -65,7 +65,7 @@ namespace prlrt {
 		g_inRelaySerialization = false;
 
 		if (!PREDA_CALL(EmitRelayToGlobal, opCode, args_serialized.size() > 0 ? &args_serialized[0] : nullptr, uint32_t(args_serialized.size())))
-			throw preda_exception("relay@global error", prlrt::ExceptionType::RelayError);
+			preda_exception::throw_exception("relay@global error", prlrt::ExceptionType::RelayError);
 	}
 
 
@@ -76,7 +76,7 @@ namespace prlrt {
 		const void *p[sizeof...(Args) + 1] = { &args..., &ret };
 		uint32_t crossCallRes = PREDA_CALL(CrossCall, contractId, templateContractImportSlot, opCode, p, sizeof...(Args) + 1);
 		if (crossCallRes != 0)
-			throw preda_exception("cross call error", prlrt::ExceptionType(crossCallRes >> 8));
+			preda_exception::throw_exception("cross call error", prlrt::ExceptionType(crossCallRes >> 8));
 		return ret;
 	}
 
@@ -86,7 +86,7 @@ namespace prlrt {
 		const void *p[sizeof...(Args) + 1] = { &args..., nullptr };		// here "+1" is necessary, otherwise when args... is empty, we are defining an empty array and get a compile error
 		uint32_t crossCallRes = PREDA_CALL(CrossCall, contractId, templateContractImportSlot, opCode, p, sizeof...(Args));
 		if (crossCallRes != 0)
-			throw preda_exception("cross call error", prlrt::ExceptionType(crossCallRes >> 8));
+			preda_exception::throw_exception("cross call error", prlrt::ExceptionType(crossCallRes >> 8));
 	}
 
 	template<typename T>
@@ -103,7 +103,7 @@ namespace prlrt {
 		const void* p[sizeof...(Args) + 1] = { &args..., nullptr };		// here "+1" is necessary, otherwise when args... is empty, we are defining an empty array and get a compile error
 		uint64_t new_contract_id = PREDA_CALL(DeployCall, templateContractImportSlot, p, sizeof...(Args));
 		if (new_contract_id == 0)		// 0 is invalid contract id
-			throw preda_exception("deploy call error", prlrt::ExceptionType::DeployFailed);
+			preda_exception::throw_exception("deploy call error", prlrt::ExceptionType::DeployFailed);
 
 		return new_contract_id;
 	}
@@ -111,12 +111,12 @@ namespace prlrt {
 	void burn_gas_loop()
 	{
 		if (!PREDA_CALL(BurnGasLoop, ))
-			throw preda_exception("gas used up by loop", prlrt::ExceptionType::GasUsedUp);
+			preda_exception::throw_exception("gas used up by loop", prlrt::ExceptionType::GasUsedUp);
 	}
 
 	void burn_gas_function_call()
 	{
 		if (!PREDA_CALL(BurnGasLoop, ))
-			throw preda_exception("gas used up by function call", prlrt::ExceptionType::GasUsedUp);
+			preda_exception::throw_exception("gas used up by function call", prlrt::ExceptionType::GasUsedUp);
 	}
 }

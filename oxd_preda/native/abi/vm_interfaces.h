@@ -4,6 +4,9 @@
 namespace rvm
 {
 struct CompiledModules;
+struct BigNum;
+
+static const uint32_t	RVM_GAS_BURNT_DEFAULT = 100;
 
 #pragma pack(push, 1)
 
@@ -110,6 +113,8 @@ struct ContractRepository // expose all deployed contracts for both PREDA and bc
 struct DeployedContract
 {
 	ContractModuleID				Module;
+	uint64_t						Height;		// the block height that a contract is launched
+	uint64_t						DAppName;	// DAppName in u64
 	BuildNum						Version;
 	uint16_t						StubSize;
 	uint8_t							Stub[1];	// deployment stub, size = StubSize
@@ -121,6 +126,7 @@ struct GlobalStates // only available in global scope
 	virtual ContractVersionId		GetContractByName(const ConstString* dapp_period_contract_name) const = 0; // return rvm::ContractScopeIdInvalid if not found
 	virtual BuildNum				GetContractEffectiveBuild(ContractId contract) const = 0;
 	virtual const DeployedContract*	GetContractDeployed(ContractVersionId contract) const = 0; // return on chain CMID of a contract of specific version
+	virtual bool					IsTokenMintAllowed(TokenId tid, ContractId contract) const = 0;
 };
 
 struct ChainStates: public GlobalStates
@@ -180,7 +186,7 @@ struct ExecutionContext: public ExecutionState
 	virtual bool					EmitBroadcastToShards(ContractInvokeId cid, OpCode opcode, const ConstData* args_serialized, uint32_t gas_redistribution_weight) = 0; // global scope to all shards
 
 	// Deploy an unnamed contract
-	virtual ContractVersionId		DeployUnnamedContract(DAppId dapp_id, EngineId engine_id, const ContractModuleID* module_id) = 0; // for global scope only
+	virtual ContractVersionId		DeployUnnamedContract(rvm::ContractVersionId deploy_initiator, uint64_t initiator_dappname, const rvm::DeployedContract* origin_deploy) = 0; // for global scope only
 
 	// invoke a contract function (may cross-engine)
 	virtual ExecuteResult			Invoke(uint32_t gas_limit, ContractInvokeId contract, OpCode opcode, const ConstData* args_serialized) = 0; // return pointer will be invalid after next call of `Invoke` or `SetReturnValue`						
@@ -189,6 +195,10 @@ struct ExecutionContext: public ExecutionState
 	virtual void					SetReturnValue(const ConstData* args_serialized) = 0;
 	virtual uint8_t*				SetReturnValueClaim(uint32_t size_estimated) = 0;
 	virtual void					SetReturnValueFinalize(uint32_t size_finalized) = 0;
+
+	// native contracts
+	virtual bool					CoreWalletWithdraw(TokenId tid, const rvm::BigNum* amount) = 0;
+	virtual void					CoreWalletDeposit(TokenId tid, const rvm::BigNum* amount) = 0;
 };
 
 struct BlockchainRuntime: public GlobalStates
@@ -217,10 +227,11 @@ struct CompiledModules
 struct ExecutionUnit		// multi-instances are allowed, and may run in different threads
 {
 	virtual InvokeResult			Invoke(ExecutionContext* exec, uint32_t gas_limit, ContractInvokeId contract, OpCode opcode, const ConstData* args_serialized) = 0;
-	virtual bool					DeployContracts(	ExecutionContext*	exec,
-														CompiledModules*	linked, 
-														DataBuffer**		deploy_stub,   // DataBuffer*[deploy_count]
-														LogMessageOutput*	log_msg_output
+	virtual bool					DeployContracts(	ExecutionContext*			exec,
+														CompiledModules*			linked, 
+														const ContractVersionId*	target_cvids,
+														DataBuffer**				deploy_stub,   // DataBuffer*[deploy_count]
+														LogMessageOutput*			log_msg_output
 									) = 0;
 	virtual InvokeResult			InitializeContracts(ExecutionContext* exec, uint32_t gas_limit, CompiledModules* linked, const ConstData* ctor_args) = 0;
 	virtual void					Release() = 0;

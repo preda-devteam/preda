@@ -46,6 +46,7 @@ class CContractDatabase : public rvm::RvmEngine
 	std::optional<wasmtime::Module> m_wasm_main_module;
 	std::map<rvm::ContractModuleID, std::unique_ptr<ContractModule>, _details::ModuleIdCompare> m_loadedContractModule;
 	uint64_t m_nextLinkStageIdx = 0;
+	os::Event m_cancel;
 
 private:
 	static std::string ConvertEntryToJson(const ContractDatabaseEntry *pEntry);
@@ -121,7 +122,7 @@ public:
 	const ContractDatabaseEntry* FindContractEntry(const rvm::ContractModuleID &moduleId) const;
 	const ContractDatabaseEntry* FindContractEntry(const rvm::ContractModuleID *moduleId) const;
 	ContractModule* GetContractModule(const rvm::ContractModuleID &deployId);
-	bool Deploy(const rvm::GlobalStates* chain_state, rvm::CompiledModules* linked, rvm::DataBuffer** out_stub, rvm::LogMessageOutput* log_msg_output);
+	bool Deploy(const rvm::GlobalStates* chain_state, rvm::CompiledModules* linked, const rvm::ContractVersionId* target_cvids, rvm::DataBuffer** out_stub, rvm::LogMessageOutput* log_msg_output);
 
 	bool VariableJsonify(rvm::ContractModuleID deployId, const char *type_string, const uint8_t *args_serialized, uint32_t args_size, std::string &outJson, const rvm::ChainStates* ps) const;
 

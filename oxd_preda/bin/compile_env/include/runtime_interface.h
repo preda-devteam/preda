@@ -205,6 +205,7 @@ namespace prlrt {
 	V(bool, HashToString, const void* pData, uint32_t dataLen, char* out) \
 	V(uint32_t, CrossCall, uint64_t cvId, int64_t templateContractImportSlot, uint32_t opCode, const void** ptrs, uint32_t numPtrs)\
 	V(uint32_t, InterfaceCall, uint64_t cvId, int64_t interfaceContractImportSlot, uint32_t slotIdx, uint32_t funcIdx, const void** ptrs, uint32_t numPtrs)\
+	V(bool, InterfaceIsImplemented, uint64_t cvId, int64_t interfaceContractImportSlot, uint32_t slotIdx)\
 	V(uint64_t, DeployCall, int64_t templateContractImportSlot, const void** ptrs, uint32_t numPtrs)\
 	V(void, ReportOrphanToken, uint64_t id, ::prlrt::BigintPtr amount)\
 	V(void, ReportReturnValue, const char* type_export_name, const uint8_t* serialized_data, uint32_t serialized_data_size)\

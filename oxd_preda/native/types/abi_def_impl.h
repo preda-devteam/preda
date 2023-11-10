@@ -6,10 +6,7 @@ namespace rvm
 
 struct ShardIndexString: public rt::tos::Number
 {
-	ShardIndexString(uint32_t si): rt::tos::Number(si)
-	{
-		if(si == rvm::GlobalShard){ _p[0] = 'g'; _len = 1; }
-	}
+	ShardIndexString(uint32_t si);
 };
 
 class StringStreamImpl : public rvm::StringStream
@@ -34,33 +31,25 @@ class DataBufferImpl : public rvm::DataBuffer
 {
 	rt::BufferEx<uint8_t>		_Data;
 public:
-	virtual uint8_t*			SetSize(uint32_t len) override
-	{
-		_Data.ChangeSize(len);
-		return _Data;
-	}
-	virtual const uint8_t*		GetData() override
-	{
-		return _Data;
-	}
-	virtual uint32_t			GetSize() override
-	{
-		return (uint32_t)_Data.GetSize();
-	}
+	virtual uint8_t*			SetSize(uint32_t len) override;
+	virtual const uint8_t*		GetData() override { return _Data; }
+	virtual uint32_t			GetSize() override { return (uint32_t)_Data.GetSize(); }
+	DataBufferImpl&				Empty();
+	ConstData					GetRvmConstData() const;
+};
 
-	DataBufferImpl&				Empty()
-	{
-		_Data.ShrinkSize(0);
-		return *this;
-	}
-	rvm::ConstData				GetRvmConstData() const
-	{
-		return { _Data.Begin(), (uint32_t)_Data.GetSize() };
-	}
+struct ToRvmString: public ConstString
+{
+	ToRvmString(const rt::String_Ref& x):ConstString{ x.Begin(), (uint32_t)x.GetLength() }{}
+	operator const ConstString* () const { return this; }
+	operator const ConstData* () const { return (ConstData*)this; }
+	operator const ConstData& () const { return *(ConstData*)this; }
 };
 
 extern void Signature_Jsonify(rt::Json& json, const rt::String_Ref& scope_name, const rt::String_Ref& signature, bool structSig);
 extern void BlockchainRuntime_DebugPrint(rvm::DebugMessageType type, const rvm::ConstString* text, const rvm::ExecutionState* ctx, const rvm::Contract* contract, int32_t line);
 extern void CompiledModules_Jsonify(rt::Json& json, rvm::CompiledModules* built);
+extern void ScopeKey_Jsonify(rt::Json& json, ScopeKeySized type, const ScopeKey& scope);
+extern void ScopeKey_Stringify(rt::String& append, ScopeKeySized type, const ScopeKey& scope);
 
 } // namespace rvm

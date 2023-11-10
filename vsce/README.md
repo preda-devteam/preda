@@ -3,6 +3,7 @@
 This is a local toolchain for the PREDA smart contract programming language. PREDA is designed for parallel execution of smart contract transactions on sharding blockchains. The PREDA language preview toolchain includes the pre-built PREDA compilers and execution engines, VSCode extensions, and sample smart contracts and execution scripts. Programmers can use VSCode to edit, compile, and execute PREDA smart contracts in a local blockchain simulator and check the execution results, e.g., address states on the chain.
 
 ## Installation
+
 requires node v12.17.0 or higher for ES2015 and async function support.
 
 ```
@@ -33,6 +34,11 @@ $ npm install -g @vscode/vsce
   - or click `PREDA: Run` button in context menu of file explorer
   - a new VSCode Tab will be automatically launched after the execuiton of the PREDA script
     ![Alt text](https://github.com/preda-devteam/preda/blob/main/vsce/resource/images/run.png?raw=true "Run")
+
+- To deploy PREDA smart contract (.prd):
+
+  - use shortcut `Ctrl+8` / `Command + 8`
+  - or right click the Text Editor and then click `PREDA: deploy` in editor context menu
 
 ## Snippets
 

@@ -53,6 +53,8 @@ private:
 	std::stack<prlrt::ExceptionType> exec_stack;
 	prlrt::ExceptionType* curr_exc = nullptr;
 
+private:
+	const ContractImplementedInterface* GetImplementedInterfaceFromContract(uint64_t cvId, int64_t interfaceContractImportSlot, uint32_t interfaceSlot);
 public:
 	void PushContractStack(const rvm::ContractModuleID &moduleId, rvm::ContractVersionId cvId, uint32_t functionFlags, const rvm::ContractVersionId* importedCvId, uint32_t numImportedContracts);
 	void PopContractStack()
@@ -153,4 +155,5 @@ STRINGIFY_ENUM_BEGIN(ExceptionType, prlrt)
 	STRINGIFY_ENUM(GasUsedUp)
 	STRINGIFY_ENUM(TokenMint_NegativeAmount)
 	STRINGIFY_ENUM(InvalidTokenId)
+	STRINGIFY_ENUM(DeployFailed)
 STRINGIFY_ENUM_END(ExceptionType, prlrt)

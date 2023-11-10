@@ -163,7 +163,7 @@ namespace prlrt {
 		{
 			if (_v == max_value::value)
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			_v++;
 		}
@@ -172,7 +172,7 @@ namespace prlrt {
 		{
 			if (_v == min_value::value)
 			{
-				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 			}
 			_v--;
 		}
@@ -188,7 +188,7 @@ namespace prlrt {
 		{
 			if (max_value::value - _v < rhs._v)
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			return this_type(_v + rhs._v);
 		}
@@ -197,7 +197,7 @@ namespace prlrt {
 		{
 			if (_v < rhs._v)
 			{
-				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 			}
 			return this_type(_v - rhs._v);
 		}
@@ -206,7 +206,7 @@ namespace prlrt {
 		{
 			if (_v != 0 && max_value::value / _v < rhs._v)
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			return this_type(_v * rhs._v);
 		}
@@ -215,7 +215,7 @@ namespace prlrt {
 		{
 			if (rhs._v == 0)
 			{
-				throw preda_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
+				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 			}
 			return this_type(_v / rhs._v);
 		}
@@ -224,7 +224,7 @@ namespace prlrt {
 		{
 			if (rhs._v == 0)
 			{
-				throw preda_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
+				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 			}
 			return this_type(_v % rhs._v);
 		}
@@ -291,7 +291,7 @@ namespace prlrt {
 				return ____uint<T_OtherInternal>(T_OtherInternal(_v));
 			if (_v > internal_type(____uint<T_OtherInternal>::max_value::value))
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			return ____uint<T_OtherInternal>(T_OtherInternal(_v));
 		}
@@ -303,7 +303,7 @@ namespace prlrt {
 				return ____int<T_OtherInternal>(T_OtherInternal(_v));
 			if (_v > internal_type(____int<T_OtherInternal>::max_value::value))
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			return ____int<T_OtherInternal>(T_OtherInternal(_v));
 		}
@@ -362,7 +362,7 @@ namespace prlrt {
 		{
 			if (_v == max_value::value)
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			_v++;
 		}
@@ -371,7 +371,7 @@ namespace prlrt {
 		{
 			if (_v == min_value::value)
 			{
-				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 			}
 			_v--;
 		}
@@ -382,7 +382,7 @@ namespace prlrt {
 		{
 			if (_v == min_value::value)
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			return this_type(-_v);
 		}
@@ -392,7 +392,7 @@ namespace prlrt {
 			if ((_v > 0 && max_value::value - _v < rhs._v)
 				|| (_v < 0 && min_value::value - _v > rhs._v))
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			return this_type(_v + rhs._v);
 		}
@@ -402,7 +402,7 @@ namespace prlrt {
 			if ((rhs._v > 0 && _v < min_value::value + rhs._v)
 				|| (rhs._v < 0 && _v > max_value::value + rhs._v))
 			{
-				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 			}
 			return this_type(_v - rhs._v);
 		}
@@ -415,14 +415,14 @@ namespace prlrt {
 				{
 					if (max_value::value / rhs._v < _v)
 					{
-						throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+						preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 					}
 				}
 				else if (rhs._v < 0)
 				{
 					if (min_value::value / rhs._v < _v)
 					{
-						throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+						preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 					}
 				}
 			}
@@ -432,14 +432,14 @@ namespace prlrt {
 				{
 					if (min_value::value / rhs._v > _v)
 					{
-						throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+						preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 					}
 				}
 				else if (rhs._v < 0)
 				{
 					if (max_value::value / rhs._v > _v)
 					{
-						throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+						preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 					}
 				}
 			}
@@ -450,11 +450,11 @@ namespace prlrt {
 		{
 			if (rhs._v == 0)
 			{
-				throw preda_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
+				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 			}
 			if (rhs._v == -1 && _v == min_value::value)
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			return this_type(_v / rhs._v);
 		}
@@ -463,11 +463,11 @@ namespace prlrt {
 		{
 			if (rhs._v == 0)
 			{
-				throw preda_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
+				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 			}
 			if (rhs._v == -1 && _v == min_value::value)
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			return this_type(_v % rhs._v);
 		}
@@ -492,11 +492,11 @@ namespace prlrt {
 				return ____int<T_OtherInternal>(T_OtherInternal(_v));
 			if (_v > internal_type(____int<T_OtherInternal>::max_value::value))
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			if (_v < internal_type(____int<T_OtherInternal>::min_value::value))
 			{
-				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 			}
 			return ____int<T_OtherInternal>(T_OtherInternal(_v));
 		}
@@ -505,12 +505,12 @@ namespace prlrt {
 		explicit operator ____uint<T_OtherInternal>() const
 		{
 			if (_v < 0)
-				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 			if (sizeof(T_OtherInternal) >= sizeof(internal_type))
 				return ____uint<T_OtherInternal>(T_OtherInternal(_v));
 			if (_v > internal_type(____uint<T_OtherInternal>::max_value::value))
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			return ____uint<T_OtherInternal>(T_OtherInternal(_v));
 		}
@@ -711,14 +711,14 @@ namespace prlrt {
 				memcpy(max._fStruct._Data, max_value._Data, std::min(sizeof(max_value._Data), sizeof(max._fStruct._Data)));
 				if(max < x)
 				{
-					throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+					preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 				}
 				____longint<T_OtherSize> min;
 				memset(min._fStruct._Data, 0xff, sizeof(min._fStruct._Data));
 				memcpy(min._fStruct._Data, min_value._Data, std::min(sizeof(min_value._Data), sizeof(min._fStruct._Data)));
 				if(min > x)
 				{
-					throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+					preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 				}
 			}
 			if(impl_type::LongInt_IsSign(x._fStruct))
@@ -736,7 +736,7 @@ namespace prlrt {
 				memcpy(max._fStruct._Data, max_value._Data, std::min(sizeof(max_value._Data), sizeof(max._fStruct._Data)));
 				if(max < x)
 				{
-					throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+					preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 				}
 			}
 			memcpy(_fStruct._Data, x._fStruct._Data, std::min(sizeof(_fStruct._Data), sizeof(x._fStruct._Data)));
@@ -760,7 +760,7 @@ namespace prlrt {
 		void operator++(){
 			if (*this == this_type(max_value))
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			this_type tmp((int8_t)1);
 			*this += tmp;
@@ -768,7 +768,7 @@ namespace prlrt {
 		void operator--(){
 			if (*this == this_type(min_value))
 			{
-				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			this_type tmp((int8_t)1);
 			*this -= tmp;
@@ -777,7 +777,7 @@ namespace prlrt {
 		this_type operator-() const{
 			if (*this == this_type(min_value))
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			internal_type result;
 			impl_type::LongInt_negate(_fStruct, result);
@@ -790,7 +790,7 @@ namespace prlrt {
 			impl_type::LongInt_sub(min_value, _fStruct, tmp_sub_result_2);
 			if ((!impl_type::LongInt_IsSign(_fStruct) && this_type(tmp_sub_result_1) < rhs) || (impl_type::LongInt_IsSign(_fStruct) && this_type(tmp_sub_result_2) > rhs))
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			internal_type result;
 			impl_type::LongInt_add(_fStruct, rhs._fStruct, result);
@@ -803,7 +803,7 @@ namespace prlrt {
 			impl_type::LongInt_add(max_value, rhs._fStruct, tmp_add_result_2);
 			if ((!impl_type::LongInt_IsSign(rhs._fStruct) && *this < this_type(tmp_add_result_1)) || (impl_type::LongInt_IsSign(rhs._fStruct) && *this > this_type(tmp_add_result_2)))
 			{
-				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 			}
 			internal_type result;
 			impl_type::LongInt_sub(_fStruct, rhs._fStruct, result);
@@ -820,14 +820,14 @@ namespace prlrt {
 				{
 					if (this_type(tmp_div_result_1) < *this)
 					{
-						throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+						preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 					}
 				}
 				else if (impl_type::LongInt_IsSign(rhs._fStruct))
 				{
 					if (this_type(tmp_div_result_2) < *this)
 					{
-						throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+						preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 					}
 				}
 			}
@@ -837,14 +837,14 @@ namespace prlrt {
 				{
 					if (this_type(tmp_div_result_2) > *this)
 					{
-						throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+						preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 					}
 				}
 				else if (impl_type::LongInt_IsSign(rhs._fStruct))
 				{
 					if (this_type(tmp_div_result_1) > *this)
 					{
-						throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+						preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 					}
 				}
 			}
@@ -861,11 +861,11 @@ namespace prlrt {
 		this_type operator/(const this_type &rhs) const{
 			if (rhs.isZero())
 			{
-				throw preda_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
+				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 			}
 			if (impl_type::LongInt_IsSign(rhs._fStruct) && *this == this_type(min_value))
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			internal_type result;
 			impl_type::LongInt_div(_fStruct, rhs._fStruct, result);
@@ -874,11 +874,11 @@ namespace prlrt {
 		this_type operator%(const this_type &rhs) const{
 			if (rhs.isZero())
 			{
-				throw preda_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
+				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 			}
 			if (impl_type::LongInt_IsSign(rhs._fStruct) && *this == this_type(min_value))
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			internal_type result;
 			impl_type::LongInt_mod(_fStruct, rhs._fStruct, result);
@@ -951,11 +951,11 @@ namespace prlrt {
 			int64_t result;
 			if(!ToInt64(result) || result > ____int<T_OtherInternal>::max_value::value)
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			else if(result < ____int<T_OtherInternal>::min_value::value)
 			{
-				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 			}
 			return ____int<T_OtherInternal>(T_OtherInternal(result));
 		}
@@ -965,11 +965,11 @@ namespace prlrt {
 			uint64_t result;
 			if(!ToUInt64(result) || result > ____uint<T_OtherInternal>::max_value::value)
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			else if(impl_type::LongInt_IsSign(_fStruct))
 			{
-				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 			}
 			return ____uint<T_OtherInternal>(T_OtherInternal(result));
 		}
@@ -1049,7 +1049,7 @@ template<short Size>
 		____ulongint(const ____int<T_OtherInternal>& x){
 			if(x._v < 0)
 			{
-				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 			}
 			impl_type::ULongInt_fromInt(_fStruct, (int64_t)x._v);
 		}
@@ -1062,7 +1062,7 @@ template<short Size>
 		____ulongint(const ____longint<T_OtherSize>& x){
 			if(impl_type::LongInt_IsSign(x._fStruct))
 			{
-				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
+				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 			}
 			else if(Size < T_OtherSize)
 			{
@@ -1070,7 +1070,7 @@ template<short Size>
 				memcpy(max._fStruct._Data, max_value._Data, std::min(sizeof(max_value._Data), sizeof(max._fStruct._Data)));
 				if(max < x)
 				{
-					throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+					preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 				}
 			}
 			memcpy(_fStruct._Data, x._fStruct._Data, std::min(sizeof(_fStruct._Data), sizeof(x._fStruct._Data)));
@@ -1084,7 +1084,7 @@ template<short Size>
 				memcpy(max._fStruct._Data, max_value._Data, std::min(sizeof(max_value._Data), sizeof(max._fStruct._Data)));
 				if(max < x)
 				{
-					throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+					preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 				}
 			}
 			memcpy(_fStruct._Data, x._fStruct._Data, std::min(sizeof(_fStruct._Data), sizeof(x._fStruct._Data)));
@@ -1104,7 +1104,7 @@ template<short Size>
 		void operator++(){
 			if (*this == this_type(max_value))
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			this_type tmp((uint8_t)1);
 			*this += tmp;
@@ -1112,7 +1112,7 @@ template<short Size>
 		void operator--(){
 			if (isZero())
 			{
-				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			this_type tmp((uint8_t)1);
 			*this -= tmp;
@@ -1123,7 +1123,7 @@ template<short Size>
 			impl_type::ULongInt_sub(max_value, _fStruct, tmp_sub_result);
 			if (this_type(tmp_sub_result) < rhs)
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			internal_type result;
 			impl_type::ULongInt_add(_fStruct, rhs._fStruct, result);
@@ -1132,7 +1132,7 @@ template<short Size>
 		this_type operator-(const this_type &rhs) const{
 			if(*this < rhs)
 			{
-				throw preda_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			internal_type result;
 			impl_type::ULongInt_sub(_fStruct, rhs._fStruct, result);
@@ -1144,7 +1144,7 @@ template<short Size>
 			impl_type::ULongInt_div(max_value, _fStruct, tmp_div_result_1);
 			if (this_type(tmp_div_result_1) < rhs)
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			internal_type result;
 			impl_type::ULongInt_mul(_fStruct, rhs._fStruct, result);
@@ -1156,7 +1156,7 @@ template<short Size>
 		}
 		this_type operator/(const this_type &rhs) const{
 			if(rhs.isZero()){
-				throw preda_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
+				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 			}
 			internal_type result;
 			impl_type::ULongInt_div(_fStruct, rhs._fStruct, result);
@@ -1164,7 +1164,7 @@ template<short Size>
 		}
 		this_type operator%(const this_type &rhs) const{
 			if(rhs.isZero()){
-				throw preda_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
+				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 			}
 			internal_type result;
 			impl_type::ULongInt_mod(_fStruct, rhs._fStruct, result);
@@ -1279,7 +1279,7 @@ template<short Size>
 			int64_t result;
 			if(!ToInt64(result) || result > ____int<T_OtherInternal>::max_value::value)
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			return ____int<T_OtherInternal>(T_OtherInternal(result));
 		}
@@ -1289,7 +1289,7 @@ template<short Size>
 			uint64_t result;
 			if(!ToUInt64(result) || result > ____uint<T_OtherInternal>::max_value::value)
 			{
-				throw preda_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
+				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
 			return ____uint<T_OtherInternal>(T_OtherInternal(result));
 		}

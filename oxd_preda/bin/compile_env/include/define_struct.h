@@ -133,7 +133,7 @@ struct STRUCT_INTERNAL_NAME {
 		cur_element_size = y.get_serialize_size();\
 		y.serialize_out(ptr, for_debug);\
 		ptr += cur_element_size;\
-		header[cur_member_idx + 1] = uint32_t(ptr - buffer) - get_serialize_header_size();\
+		header[cur_member_idx + 1] = uint32_t(ptr - buffer) - 4;\
 		cur_member_idx++;
 		// get_serialize_size() must be called before serialize_out(), some types (e.g. note) will change data when serializing out
 #undef SPLITTER

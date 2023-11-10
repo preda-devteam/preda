@@ -993,7 +993,7 @@ public:
 					{	if(*s == escape_sign){ *p++ = s[1]; s++; }
 						else{ *p++ = *s; }
 					}
-					if(*s != escape_sign)*p++ = *s;
+					if(s == end-1 && *s != escape_sign)*p++ = *s;
 					_SC::_len = (SIZE_T)(p-_SC::_p);
 					return *this;
 				}
@@ -1004,7 +1004,7 @@ public:
 					{	if(*s == escape_sign){ *p++ = unescape.Mapped(s[1]); s++; }
 						else{ *p++ = *s; }
 					}
-					if(*s != escape_sign)*p++ = *s;
+					if(s == end-1 && *s != escape_sign)*p++ = *s;
 					_SC::_len = (SIZE_T)(p-_SC::_p);
 					return *this;
 				}

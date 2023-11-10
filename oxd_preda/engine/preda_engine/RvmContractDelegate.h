@@ -40,6 +40,27 @@ private:
 	};
 	std::vector<ScopeDesc> m_scopes;
 
+	struct ImplementedInterface : public rvm::Interface
+	{
+		uint32_t implIdx;
+		const RvmContractDelegate* contractDelegate;
+		const ContractImplementedInterface& impl;
+
+		ImplementedInterface(uint32_t inimplIdx, const RvmContractDelegate* inContractDelegate);
+		virtual rvm::ConstString	GetName() const override;
+		virtual rvm::ConstString	GetFullName() const override;
+
+		// Function Definitions
+		virtual uint32_t			GetFunctionCount() const override;
+		virtual rvm::ConstString	GetFunctionName(uint32_t idx) const override;
+		virtual rvm::FunctionFlag	GetFunctionFlag(uint32_t idx) const override;
+		virtual rvm::Scope			GetFunctionScope(uint32_t idx) const override;
+		virtual rvm::OpCode			GetFunctionOpCode(uint32_t idx) const override;
+		virtual bool				GetFunctionSignature(uint32_t idx, rvm::StringStream* signature_out) const override;
+	};
+
+	std::vector<std::shared_ptr<ImplementedInterface>> m_implementedInterfaces;
+
 public:
 	RvmContractDelegate(const ContractCompileData* pContractCompiledData);
 
@@ -53,18 +74,21 @@ public:
 
 	virtual uint32_t				GetInterfaceImplementedCount() const override
 	{
-		// TODO
-		return 0;
+		return uint32_t(m_implementedInterfaces.size());
 	}
 	virtual const rvm::Interface*	GetInterfaceImplemented(uint32_t idx) const override
 	{
-		// TODO
-		return nullptr;
+		if (idx >= uint32_t(m_implementedInterfaces.size()))
+			return nullptr;
+		return m_implementedInterfaces[idx].get();
 	}
 	virtual rvm::OpCode				GetInterfaceImplementedOpCode(uint32_t idx, rvm::OpCode code) const override
 	{
-		// TODO
-		return rvm::OpCodeInvalid;
+		if (idx >= uint32_t(m_implementedInterfaces.size()))
+			return rvm::OpCodeInvalid;
+		if (uint32_t(code) >= uint32_t(m_implementedInterfaces[idx]->GetFunctionCount()))
+			return rvm::OpCodeInvalid;
+		return m_implementedInterfaces[idx]->GetFunctionOpCode(uint32_t(code));
 	}
 
 	virtual uint32_t				GetScopeCount() const override
@@ -148,7 +172,7 @@ public:
 		return uint32_t(m_pContractCompiledData->structs.size());
 	}
 
-	virtual rvm::ConstString				GetStructName(uint32_t idx) const override
+	virtual rvm::ConstString		GetStructName(uint32_t idx) const override
 	{
 		if (idx >= uint32_t(m_pContractCompiledData->structs.size()))
 			return rvm::ConstString{ nullptr, 0 };

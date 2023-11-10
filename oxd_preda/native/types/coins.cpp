@@ -39,7 +39,7 @@ void Coins::Jsonify(rt::Json &append) const
 	}
 }
 
-void CoinsMutable::_AlignCoinId(CoinsMutable &x)
+void CoinsMutable::_AlignCoinId(CoinsMutable &x) const
 {
 	if(x.CoinId != TokenIdInvalid)
 	{
@@ -84,18 +84,38 @@ BigNumMutable& CoinsMutable::GetModifiableAmount()	// CoinId will be set to zero
 
 void CoinsMutable::TransferTo(CoinsMutable& x)
 {
-	_AlignCoinId(x);
-	x.Amount += Amount;
+	if(x.IsZero())
+	{
+		_AlignCoinId(x);
+		x.Amount = Amount;
+	}
+	else
+	{
+		_AlignCoinId(x);
+		x.Amount += Amount;
+	}
+
 	Amount.SetZero();
 }
 
 void CoinsMutable::TransferTo(CoinsMutable& x, const BigNumRef& b)
 {
-	_AlignCoinId(x);
-	Amount -= b;
-	ASSERT(Amount.IsNonNegative());
+	if(x.IsZero())
+	{
+		_AlignCoinId(x);
+		Amount -= b;
+		ASSERT(Amount.IsNonNegative());
 
-	x.Amount += b;
+		x.Amount = b;
+	}
+	else
+	{
+		_AlignCoinId(x);
+		Amount -= b;
+		ASSERT(Amount.IsNonNegative());
+
+		x.Amount += b;
+	}
 }
 
 void CoinsMutable::Merge(const Coins& a, const Coins& b)
@@ -162,8 +182,16 @@ void CoinsMutable::Deposit(const Coins& a)
 {	
 	if(a.IsZero())return;
 
-	ASSERT(a.GetId() == CoinId);
-	Amount += a.Amount;
+	if(IsZero())
+	{
+		SetId(a.GetId());
+		Amount = a.Amount;
+	}
+	else
+	{
+		ASSERT(a.GetId() == CoinId);
+		Amount += a.Amount;
+	}
 }
 
 NonFungibleToken::NonFungibleToken(decltype(0) x)

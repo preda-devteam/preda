@@ -273,6 +273,8 @@ class ContractRuntimeInstanceWASM: public ContractRuntimeInstance
 	WASMRuntime& m_rt;
 	WASMEntryPoints &m_entry_points;
 	WasmPtrT m_wasm_contract = 0;
+	// Copy of the input states in wasm memory. Released after invocation.
+	std::vector<std::shared_ptr<WASMMemory>> m_input_state_copy;
 
 public:
 	ContractRuntimeInstanceWASM(
@@ -314,22 +316,22 @@ bool ContractRuntimeInstanceWASM::DestroyContractInstance()
 bool ContractRuntimeInstanceWASM::MapContractContextToInstance(prlrt::ContractContextType type, const uint8_t* buffer, uint32_t bufferSize)
 {
 	wasmtime::Store::Context ctx = m_entry_points.store.context();
-	WASMMemory mem(m_rt, bufferSize);
+	std::shared_ptr<WASMMemory> mem(new WASMMemory(m_rt, bufferSize));
 
-	if (!mem.Valid()) {
+	if (!mem->Valid()) {
 		return false;
 	}
 
-	std::copy(buffer, buffer + bufferSize, mem.HostPtr());
+	std::copy(buffer, buffer + bufferSize, mem->HostPtr());
 
 	auto r = m_entry_points.fnMapContractContextToInstance.call(ctx, {
-		m_wasm_contract, (uint32_t)type, mem.Ptr(), bufferSize
+		m_wasm_contract, (uint32_t)type, mem->Ptr(), bufferSize
 	});
 	if (!r || !r.unwrap()) {
 		return false;
 	}
 
-	mem.forget();
+	m_input_state_copy.push_back(std::move(mem));
 
 	return true;
 }
@@ -351,12 +353,12 @@ uint32_t ContractRuntimeInstanceWASM::TransactionCall(uint32_t functionId, const
 	});
 	prlrt::ExceptionType exc = m_engine.runtimeInterface().PopExecStack();
 
-	if (!r) {
-		std::string msg = r.err().message();
-		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExecutionError::WASMTrapError) << 8);
-	}
 	if (exc != prlrt::ExceptionType::NoException) {
 		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(exc) << 8);
+	}
+	if (!r) {
+		std::string msg = r.err().message();
+		return uint32_t(prlrt::ExecutionError::WASMTrapError);
 	}
 
 	return r.unwrap();
@@ -369,12 +371,12 @@ uint32_t ContractRuntimeInstanceWASM::ContractCall(uint32_t functionId, const vo
 		m_wasm_contract, (uint32_t)functionId, static_cast<WasmPtrT>(reinterpret_cast<uintptr_t>(ptrs)), numPtrs
 	});
 	prlrt::ExceptionType exc = m_engine.runtimeInterface().PopExecStack();
-	if (!r) {
-		std::string msg = r.err().message();
-		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExecutionError::WASMTrapError) << 8);
-	}
 	if (exc != prlrt::ExceptionType::NoException) {
 		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(exc) << 8);
+	}
+	if (!r) {
+		std::string msg = r.err().message();
+		return uint32_t(prlrt::ExecutionError::WASMTrapError);
 	}
 
 	return r.unwrap();
@@ -402,12 +404,12 @@ uint32_t ContractRuntimeInstanceWASM::SerializeOutContractContext(prlrt::Contrac
 	auto r = m_entry_points.fnSerializeOutContract.call(ctx, { m_wasm_contract, (uint32_t)type, mem.Ptr() });
 	prlrt::ExceptionType exc = m_engine.runtimeInterface().PopExecStack();
 
-	if (!r) {
-		std::string msg = r.err().message();
-		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExecutionError::WASMTrapError) << 8);
-	}
 	if (exc != prlrt::ExceptionType::NoException) {
 		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(exc) << 8);
+	}
+	if (!r) {
+		std::string msg = r.err().message();
+		return uint32_t(prlrt::ExecutionError::WASMTrapError);
 	}
 
 	std::copy(mem.HostPtr(), mem.HostPtr() + size, buffer);

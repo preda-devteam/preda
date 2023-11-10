@@ -46,13 +46,13 @@ namespace prlrt {
 				return false;
 
 			//if (id == 0)
-			//	throw preda_exception("trying to transfer from a token without token type", prlrt::ExceptionType::TokenTransfer_NoTokenType);
+			//	preda_exception::throw_exception("trying to transfer from a token without token type", prlrt::ExceptionType::TokenTransfer_NoTokenType);
 			//if (recipient.id != id && recipient.id != 0)
-			//	throw preda_exception("trying to transfer to a token of different token type", prlrt::ExceptionType::TokenTransfer_TokenTypeMismatch);
+			//	preda_exception::throw_exception("trying to transfer to a token of different token type", prlrt::ExceptionType::TokenTransfer_TokenTypeMismatch);
 			//if (transfer_amount < amount_type(0))
-			//	throw preda_exception("trying to transfer a negative amount", prlrt::ExceptionType::TokenTransfer_NegativeAmount);
+			//	preda_exception::throw_exception("trying to transfer a negative amount", prlrt::ExceptionType::TokenTransfer_NegativeAmount);
 			//if (amount < transfer_amount)
-			//	throw preda_exception("trying to transfer from a token without sufficient amount", prlrt::ExceptionType::TokenTransfer_InsufficientCredit);
+			//	preda_exception::throw_exception("trying to transfer from a token without sufficient amount", prlrt::ExceptionType::TokenTransfer_InsufficientCredit);
 
 			recipient.id = id;
 			amount -= transfer_amount;
@@ -75,7 +75,7 @@ namespace prlrt {
 		void serialize_out(uint8_t *buffer, bool for_debug) const
 		{
 			if (!for_debug && bSerialized)
-				throw preda_exception("trying to serialize a token twice", prlrt::ExceptionType::TokenDoubleSerialization);
+				preda_exception::throw_exception("trying to serialize a token twice", prlrt::ExceptionType::TokenDoubleSerialization);
 
 			id.serialize_out(buffer, for_debug);
 			static_assert(id_type::is_fixed_size::value, "___token_impl::id_type is not fixed_size_type");
@@ -183,5 +183,10 @@ namespace prlrt {
 		ret.ptr->id = id;
 		ret.ptr->amount = amount;
 		return ret;
+	}
+	void burn(__prlt_token token)
+	{
+		token.ptr->id = 0;
+		token.ptr->amount = 0;
 	}
 }

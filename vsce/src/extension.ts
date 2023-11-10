@@ -7,6 +7,7 @@ import predaCompletationProvider from "./CompletionProvider/preda";
 import runPreda from "./Commands/run";
 import editArgs from "./Commands/edit";
 import compile from "./Commands/compile";
+import deploy from "./Commands/deploy";
 import compileMultiple from "./Commands/compileMultiple";
 import view from "./Commands/view";
 import { PredaDefinitionProvider } from "./languageServer/definitionProvider";
@@ -46,6 +47,12 @@ export function activate(context: vscode.ExtensionContext) {
     (uri: vscode.Uri) => view(uri, context)
   );
 
+  // deploy
+  const deployCommand = vscode.commands.registerCommand(
+    "Preda.deploy",
+    (uri: vscode.Uri) => deploy(uri, context)
+  );
+
   // Register to the monitoring queue
   context.subscriptions.push(runChsimuCommand);
   context.subscriptions.push(editChsimuCommand);
@@ -54,6 +61,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(viewHtmlCommand);
   context.subscriptions.push(completationProvider);
   context.subscriptions.push(predaCompletationProvider);
+  context.subscriptions.push(deployCommand);
 
   let timeout: any = null;
   let activeEditor = vscode.window.activeTextEditor;
@@ -161,10 +169,15 @@ export function activate(context: vscode.ExtensionContext) {
     timeout = setTimeout(updateDecorations, 0);
   }
   // defind language
-  if(vscode.workspace.workspaceFolders) {
+  if (vscode.workspace.workspaceFolders) {
     // Push the disposable to the context's subscriptions so that the
     // client can be deactivated on extension deactivation
-    context.subscriptions.push(vscode.languages.registerDefinitionProvider({ language: 'preda', scheme: 'file' }, new PredaDefinitionProvider()));
+    context.subscriptions.push(
+      vscode.languages.registerDefinitionProvider(
+        { language: "preda", scheme: "file" },
+        new PredaDefinitionProvider()
+      )
+    );
   }
 }
 

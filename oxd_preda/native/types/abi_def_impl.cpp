@@ -1,9 +1,15 @@
 #include "../../../oxd_libsec/oxd_libsec.h"
+#include "typetraits.h"
 #include "abi_def_impl.h"
 
 
 namespace rvm
 {
+
+ShardIndexString::ShardIndexString(uint32_t si): rt::tos::Number(si)
+{
+	if(si == rvm::GlobalShard){ _p[0] = 'g'; _len = 1; }
+}
 
 char* StringStreamImpl::AppendBegin(uint32_t over_estimated_len)
 {
@@ -22,7 +28,7 @@ void StringStreamImpl::AppendEnd(uint32_t finalized_len)
 rvm::ConstString StringStreamImpl::GetString()
 {
 	ASSERT(_last_append_pos == -1);
-	return rvm::ConstString({ _str->Begin() + _base, (uint32_t)(_str->GetLength() - _base) });
+	return { _str->Begin() + _base, (uint32_t)(_str->GetLength() - _base) };
 }
 
 StringStreamImpl::StringStreamImpl(rt::String& str)
@@ -37,6 +43,23 @@ StringStreamImpl::StringStreamImpl()
 	_base = 0;
 	_last_append_pos = -1;
 	_str = &_intl;
+}
+
+uint8_t* DataBufferImpl::SetSize(uint32_t len)
+{
+	_Data.ChangeSize(len);
+	return _Data;
+}
+
+DataBufferImpl&	DataBufferImpl::Empty()
+{
+	_Data.ShrinkSize(0);
+	return *this;
+}
+
+ConstData DataBufferImpl::GetRvmConstData() const
+{
+	return { _Data.Begin(), (uint32_t)_Data.GetSize() };
 }
 
 void BlockchainRuntime_DebugPrint(rvm::DebugMessageType type, const rvm::ConstString* text, const rvm::ExecutionState* ctx, const rvm::Contract* contract, int32_t line)
@@ -155,6 +178,8 @@ void Signature_Jsonify(rt::Json& json, const rt::String_Ref& name, const rt::Str
 void CompiledModules_Jsonify(rt::Json& json, rvm::CompiledModules* built)
 {
 	ASSERT(built);
+	json.Array();
+
 	uint32_t count = built->GetCount();
 	for(uint32_t i=0; i<count; i++)
 	{
@@ -310,6 +335,56 @@ void CompiledModules_Jsonify(rt::Json& json, rvm::CompiledModules* built)
 			json_if(contract, json);
 		}
 	}
+}
+
+void ScopeKey_Jsonify(rt::Json& json, ScopeKeySized type, const ScopeKey& scope)
+{
+#define ITERATE(kst)	case ScopeKeySized::kst:										\
+							{	typedef kst T;											\
+								ASSERT(sizeof(T) == scope.Size);						\
+								rvm::TypeTraits<T>::Jsonify(*(T*)scope.Data, json);		\
+							}															\
+							break;
+
+	switch((ScopeKeySized)((int)type&(int)ScopeKeySized::BaseTypeBitmask))
+	{
+		ITERATE(Address);
+		ITERATE(UInt32);
+		ITERATE(UInt64);
+		ITERATE(UInt96);
+		ITERATE(UInt128);
+		ITERATE(UInt160);
+		ITERATE(UInt256);
+		ITERATE(UInt512);
+	default:
+		break;
+	}
+#undef ITERATE
+}
+
+void ScopeKey_Stringify(rt::String& append, ScopeKeySized type, const ScopeKey& scope)
+{
+#define ITERATE(kst)	case ScopeKeySized::kst:										\
+							{	typedef kst T;											\
+								ASSERT(sizeof(T) == scope.Size);						\
+								rvm::TypeTraits<T>::ToString(*(T*)scope.Data, append);	\
+							}															\
+							break;
+
+	switch((ScopeKeySized)((int)type&(int)ScopeKeySized::BaseTypeBitmask))
+	{
+		ITERATE(Address);
+		ITERATE(UInt32);
+		ITERATE(UInt64);
+		ITERATE(UInt96);
+		ITERATE(UInt128);
+		ITERATE(UInt160);
+		ITERATE(UInt256);
+		ITERATE(UInt512);
+	default:
+		break;
+	}
+#undef ITERATE
 }
 
 } // namespace rvm
