@@ -1,3 +1,4 @@
+#include <functional>
 #include "../../../oxd_libsec/oxd_libsec.h"
 #include "typetraits.h"
 #include "abi_def_impl.h"
@@ -69,32 +70,32 @@ void BlockchainRuntime_DebugPrint(rvm::DebugMessageType type, const rvm::ConstSt
 	thread_local rt::String log;
 	log = rt::SS("[PRD]");
 	static const rt::SS sep(": ");
-
+	rt::tos::Timestamp<true,false> timestamp(os::Timestamp::LocalDateTime());
 	if(contract && ctx)
 	{
-		log += sep;
-
-		if(ctx->GetInvokeType() == rvm::InvokeContextType::RelayInbound)
-		{
-			log += '[';
-			log += oxd::SecureAddress::String(*ctx->GetInitiator()) + "] #" + ShardIndexString(ctx->GetOriginatedShardIndex()) + "-h" + ctx->GetOriginatedBlockHeight() + " => ";
-		}
 
 		rvm::ContractInvokeId cid = ctx->GetContractId();
 		auto scope = rvm::CONTRACT_SCOPE(cid);
 
-		log += '#';
-		log += ShardIndexString(ctx->GetShardIndex());
-
-		if(scope == rvm::Scope::Address)
+		rt::String addr;
+		rt::String initiatorAddr;
+		if (ctx->GetInvokeType() == rvm::InvokeContextType::RelayInbound)
+		{
+			initiatorAddr = ' ' + oxd::SecureAddress::String(*ctx->GetInitiator(), true);
+		}
+		
+		if (scope == rvm::Scope::Address)
 		{
 			auto target = ctx->GetScopeTarget();
 			ASSERT(target.Size == sizeof(rvm::Address));
-			log += '[';
-			log += oxd::SecureAddress::String(*(rvm::Address*)target.Data) + "]-h" + ctx->GetBlockHeight();
+			addr = rt::SS(" ") + oxd::SecureAddress::String(*(rvm::Address*)target.Data, true);
 		}
-
-		log += rt::SS(": ") + contract->GetName().Str();
+		log += sep + rt::SS("[") + timestamp + rt::SS("]") + addr + rt::SS(" [#") + ShardIndexString(ctx->GetShardIndex()) + rt::SS("] [h:") + ctx->GetBlockHeight() + ']';
+		if (ctx->GetInvokeType() == rvm::InvokeContextType::RelayInbound)
+		{
+			log += rt::SS(" <=") + initiatorAddr + rt::SS(" [#") + ShardIndexString(ctx->GetOriginatedShardIndex()) + rt::SS("] [h:") + ShardIndexString((uint32_t)ctx->GetOriginatedBlockHeight()) + ']';
+		}
+		log += ' ' + contract->GetName().Str();
 		if(line >= 0)
 		{
 			log += rt::SS(", line ") + line;
@@ -117,28 +118,32 @@ void Signature_Jsonify(rt::Json& json, const rt::String_Ref& name, const rt::Str
 	rt::String_Ref var[1024];
 	uint32_t i = 2;
 
-	auto getVarNameType = [&var, &i](rt::String_Ref& varName, rt::String& varType, uint32_t size)
+	std::function<void(rt::String&, uint32_t)> typeLayoutToStr = [&var, &i, &typeLayoutToStr](rt::String& varType, uint32_t size)
 	{
 		static const rt::SS sz_array("array");
 		static const rt::SS sz_map("map");
 		rt::String_Ref curType = var[i++];
-		if(curType == sz_array && i + 2 <= size)
+		if (curType == sz_array && i + 2 <= size)
 		{
-			varType = sz_array + '(' + var[i] + ')';
-			varName = var[i + 1];
-			i += 2;
+			varType += sz_array + '(';
+			typeLayoutToStr(varType, size);
+			varType += ')';
 		}
-		else if(curType == sz_map && i + 3 <= size)
+		else if (curType == sz_map && i + 3 <= size)
 		{
-			varType = sz_map + '(' + var[i] + ':' + var[i + 1] + ')';
-			varName = var[i + 2];
-			i += 3;
+			varType += sz_map + '(' + var[i++] + ':';
+			typeLayoutToStr(varType, size);
+			varType += ')';
 		}
 		else
 		{
-			varType = curType;
-			varName = var[i++];
+			varType += curType;
 		}
+	};
+	auto getVarNameType = [&var, &i, &typeLayoutToStr](rt::String_Ref& varName, rt::String& varType, uint32_t size)
+	{
+		typeLayoutToStr(varType, size);
+		varName = var[i++];
 	};
 
 	//stateSig example
@@ -161,6 +166,7 @@ void Signature_Jsonify(rt::Json& json, const rt::String_Ref& name, const rt::Str
 				getVarNameType(varName, varType, co);
 				auto sss = json.ScopeAppendingElement();
 				json.Object((J(identifier) = varName, J(dataType) = varType));
+				varType.Empty();
 			}
 		}
 		else
@@ -170,6 +176,7 @@ void Signature_Jsonify(rt::Json& json, const rt::String_Ref& name, const rt::Str
 				getVarNameType(varName, varType, co);
 				auto sss = json.ScopeAppendingElement();
 				json.Object((J(name) = varName, J(scope) = name, J(dataType) = varType));
+				varType.Empty();
 			}
 		}
 	}

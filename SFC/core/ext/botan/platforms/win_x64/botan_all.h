@@ -32,7 +32,7 @@
 * Build configuration for Botan 2.17.3
 *
 * Automatically generated from
-* 'configure.py --amalgamation --disable-shared --cc=msvc --no-autoload --enable-modules=auto_rng,system_rng,rsa,sha1_sse2,sha1,md5,sha2_32,sha2_64,sha3,sm2,sm3,sm4,emsa1,emsa_pkcs1,emsa_pssr,emsa_raw,dh,ecdh,emsa_x931,crc32,cbc,des,blowfish,curve25519,dsa,win32_stats,aes,aes_ni,tls --cpu=x86_64 --os=windows --with-local-config=config_w32.h'
+* 'configure.py --amalgamation --disable-shared --cc=msvc --no-autoload --enable-modules=auto_rng,system_rng,rsa,sha1_sse2,sha1,md5,sha2_32,sha2_64,sha3,sm2,sm3,sm4,emsa1,emsa_pkcs1,emsa_pssr,emsa_raw,dh,ecdh,rmd160,ecdsa,emsa_x931,crc32,cbc,des,blowfish,curve25519,ed25519,dsa,win32_stats,aes,aes_ni,tls --cpu=x86_64 --os=windows --with-local-config=config_w32.h'
 *
 * Target
 *  - Compiler: cl  /EHs /GR /MD /bigobj /O2 /Oi
@@ -43,12 +43,12 @@
 #define BOTAN_VERSION_MAJOR 2
 #define BOTAN_VERSION_MINOR 17
 #define BOTAN_VERSION_PATCH 3
-#define BOTAN_VERSION_DATESTAMP 0
+#define BOTAN_VERSION_DATESTAMP 20201221
 
 
-#define BOTAN_VERSION_RELEASE_TYPE "unreleased"
+#define BOTAN_VERSION_RELEASE_TYPE "release"
 
-#define BOTAN_VERSION_VC_REVISION "git:536982e57727c6487d80f2a2e6fea94ba55dde54"
+#define BOTAN_VERSION_VC_REVISION "git:bcda19704da482c57eb0bce786cebb97f378f146"
 
 #define BOTAN_DISTRIBUTION_INFO "unspecified"
 
@@ -142,6 +142,7 @@
 #define BOTAN_HAS_ECDH 20131128
 #define BOTAN_HAS_ECDSA 20131128
 #define BOTAN_HAS_EC_CURVE_GFP 20131128
+#define BOTAN_HAS_ED25519 20170607
 #define BOTAN_HAS_EME_PKCS1 20190426
 #define BOTAN_HAS_EME_PKCS1v15 20131128
 #define BOTAN_HAS_EMSA1 20131128
@@ -171,6 +172,7 @@
 #define BOTAN_HAS_PEM_CODEC 20131128
 #define BOTAN_HAS_PK_PADDING 20131128
 #define BOTAN_HAS_PUBLIC_KEY_CRYPTO 20131128
+#define BOTAN_HAS_RIPEMD_160 20131128
 #define BOTAN_HAS_RSA 20160730
 #define BOTAN_HAS_SHA1 20131128
 #define BOTAN_HAS_SHA1_SSE2 20160803
@@ -201,13 +203,6 @@
 #undef BOTAN_VERSION_VC_REVISION
 #define BOTAN_VERSION_VC_REVISION ""
 
-#pragma warning(disable:4244)
-#pragma warning(disable:4297)
-#pragma warning(disable:4996)
-#pragma warning(disable:4250)
-#pragma warning(disable:4146)
-#pragma warning(disable:4334)
-
 #ifdef min
 #undef min
 #endif
@@ -217,18 +212,7 @@
 #undef max
 #endif
 
-/*
-
-#ifdef _WIN64
-#undef BOTAN_TARGET_ARCH_IS_X86_32
-#endif
-
-#define BOTAN_USE_STD_TR1
-
-#ifdef X942_DH_PARAMETERS
-#undef X942_DH_PARAMETERS
-#endif
-*/
+#pragma warning(disable:4250) // warning C4250: 'Botan::ECDSA_PrivateKey': inherits 'Botan::ECDSA_PublicKey::Botan::ECDSA_PublicKey::create_verification_op' via dominance
 
 /*
 * Things you can edit (but probably shouldn't)
@@ -12293,6 +12277,103 @@ class BOTAN_PUBLIC_API(2,0) ECDSA_PrivateKey final : public ECDSA_PublicKey,
 
 }
 
+namespace Botan {
+
+class BOTAN_PUBLIC_API(2,2) Ed25519_PublicKey : public virtual Public_Key
+   {
+   public:
+      std::string algo_name() const override { return "Ed25519"; }
+
+      size_t estimated_strength() const override { return 128; }
+
+      size_t key_length() const override { return 255; }
+
+      bool check_key(RandomNumberGenerator& rng, bool strong) const override;
+
+      AlgorithmIdentifier algorithm_identifier() const override;
+
+      std::vector<uint8_t> public_key_bits() const override;
+
+      /**
+      * Create a Ed25519 Public Key.
+      * @param alg_id the X.509 algorithm identifier
+      * @param key_bits DER encoded public key bits
+      */
+      Ed25519_PublicKey(const AlgorithmIdentifier& alg_id,
+                        const std::vector<uint8_t>& key_bits);
+
+      template<typename Alloc>
+      Ed25519_PublicKey(const std::vector<uint8_t, Alloc>& pub) :
+         Ed25519_PublicKey(pub.data(), pub.size()) {}
+
+      Ed25519_PublicKey(const uint8_t pub_key[], size_t len);
+
+      std::unique_ptr<PK_Ops::Verification>
+         create_verification_op(const std::string& params,
+                                const std::string& provider) const override;
+
+      const std::vector<uint8_t>& get_public_key() const { return m_public; }
+
+   protected:
+      Ed25519_PublicKey() = default;
+      std::vector<uint8_t> m_public;
+   };
+
+class BOTAN_PUBLIC_API(2,2) Ed25519_PrivateKey final : public Ed25519_PublicKey,
+                                     public virtual Private_Key
+   {
+   public:
+      /**
+      * Construct a private key from the specified parameters.
+      * @param alg_id the X.509 algorithm identifier
+      * @param key_bits PKCS #8 structure
+      */
+      Ed25519_PrivateKey(const AlgorithmIdentifier& alg_id,
+                         const secure_vector<uint8_t>& key_bits);
+
+      /**
+      * Generate a private key.
+      * @param rng the RNG to use
+      */
+      explicit Ed25519_PrivateKey(RandomNumberGenerator& rng);
+
+      /**
+      * Construct a private key from the specified parameters.
+      * @param secret_key the private key
+      */
+      explicit Ed25519_PrivateKey(const secure_vector<uint8_t>& secret_key);
+
+      const secure_vector<uint8_t>& get_private_key() const { return m_private; }
+
+      secure_vector<uint8_t> private_key_bits() const override;
+
+      bool check_key(RandomNumberGenerator& rng, bool strong) const override;
+
+      std::unique_ptr<PK_Ops::Signature>
+         create_signature_op(RandomNumberGenerator& rng,
+                             const std::string& params,
+                             const std::string& provider) const override;
+
+   private:
+      secure_vector<uint8_t> m_private;
+   };
+
+void ed25519_gen_keypair(uint8_t pk[32], uint8_t sk[64], const uint8_t seed[32]);
+
+void ed25519_sign(uint8_t sig[64],
+                  const uint8_t msg[],
+                  size_t msg_len,
+                  const uint8_t sk[64],
+                  const uint8_t domain_sep[], size_t domain_sep_len);
+
+bool ed25519_verify(const uint8_t msg[],
+                    size_t msg_len,
+                    const uint8_t sig[64],
+                    const uint8_t pk[32],
+                    const uint8_t domain_sep[], size_t domain_sep_len);
+
+}
+
 BOTAN_FUTURE_INTERNAL_HEADER(eme.h)
 
 namespace Botan {
@@ -17158,6 +17239,34 @@ class BOTAN_PUBLIC_API(2,0) PK_KEM_Decryptor final
 
    private:
       std::unique_ptr<PK_Ops::KEM_Decryption> m_op;
+   };
+
+}
+
+BOTAN_FUTURE_INTERNAL_HEADER(rmd160.h)
+
+namespace Botan {
+
+/**
+* RIPEMD-160
+*/
+class BOTAN_PUBLIC_API(2,0) RIPEMD_160 final : public MDx_HashFunction
+   {
+   public:
+      std::string name() const override { return "RIPEMD-160"; }
+      size_t output_length() const override { return 20; }
+      HashFunction* clone() const override { return new RIPEMD_160; }
+      std::unique_ptr<HashFunction> copy_state() const override;
+
+      void clear() override;
+
+      RIPEMD_160() : MDx_HashFunction(64, false, true), m_M(16), m_digest(5)
+         { clear(); }
+   private:
+      void compress_n(const uint8_t[], size_t blocks) override;
+      void copy_out(uint8_t[]) override;
+
+      secure_vector<uint32_t> m_M, m_digest;
    };
 
 }

@@ -575,12 +575,12 @@ public:
 						}
 					}
 	void			Remove(UINT i)
-					{	ASSERT(i<GetCount());
+					{	ASSERT(i<uint32_t(GetCount()));
 						if(i>=_BaseCount)
 							_NewItems.erase(i - _BaseCount);
 						else
 						{	// include base and remove
-							UINT new_count = _NewItems.GetSize();
+							UINT new_count = uint32_t(_NewItems.GetSize());
 							VERIFY(_NewItems.ChangeSize(new_count + _BaseCount - 1));
 							memmove(&_NewItems[_BaseCount-1], &_NewItems[0], new_count*sizeof(VAL));
 							memcpy(&_NewItems[0], _pBase->Data, i*sizeof(VAL));

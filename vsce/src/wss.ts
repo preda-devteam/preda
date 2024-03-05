@@ -8,9 +8,9 @@ import Channel from "./utils/channel";
 interface Task {
   data: string;
   id?: string;
-  filename: string;
-  filepath: string;
-  cname: string;
+  filenames: string[];
+  filepaths: string[];
+  cname: string[];
   dapp: string;
   avgGas: number;
   gasOffered: number;

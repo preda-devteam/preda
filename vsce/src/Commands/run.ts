@@ -4,20 +4,21 @@ import { existsSync } from "fs";
 
 import {
   getCurrentActiveFileAndFolder,
-  findTSByPrdName,
+  findTSByName,
   getConfigName
 } from "../utils/finder";
 import { outputToChannel } from "../utils/chsimu";
 
 export default async (uri: vscode.Uri, context: vscode.ExtensionContext) => {
   try {
+    vscode.commands.executeCommand('workbench.action.files.save');
     console.log('run', context)
     const fileContext = getCurrentActiveFileAndFolder(uri);
     const { currentFolder } = fileContext;
-    let { currentFileName, currentFilePath, exist } = findTSByPrdName(uri);
+    let { currentFileName, currentFilePath, exist } = findTSByName(uri);
 
     if (!exist) {
-      vscode.window.showErrorMessage(`${currentFilePath} not exist`);
+      vscode.window.showErrorMessage(`./${currentFileName} not exist`);
       return;
     }
 

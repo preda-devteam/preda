@@ -442,6 +442,12 @@ public:
 						if(_SC::_p[i] == ch)return i;
 					return -1;
 				}
+	SSIZE_T		FindCharacterReverse(const CharacterSet& seps, SIZE_T start_offset = 0) const
+				{	SIZE_T l=GetLength(), i=l-1;
+					for(;l>start_offset;l--,i--)
+						if(seps.Has(_SC::_p[i]))return i;
+					return -1;
+				}
 	template<typename T>
 	SSIZE_T		FindString(const T& x_in, SIZE_T start_offset = 0) const
 				{	t_StrRef x(x_in);

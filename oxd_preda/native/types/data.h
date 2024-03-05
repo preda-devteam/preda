@@ -66,6 +66,7 @@ public:
     auto		operator = (const rt::String_Ref& x) -> const rt::String_Ref& { Set(x, Data::TYPE_TEXT); return x; }
 	void		Set(const rt::String_Ref& x, UINT data_type = Data::TYPE_TEXT);
 	void		Reset();
+	void		SetSize(uint32_t size); // for Data::TYPE_RUNTIME only
 	uint32_t	Append(const rt::String_Ref& x); // for Data::TYPE_RUNTIME only
 	BYTE*		GetDataBuffer(uint32_t offset = 0);
 	bool		JsonParse(const rt::String_Ref& str, UINT data_type = Data::TYPE_TEXT);

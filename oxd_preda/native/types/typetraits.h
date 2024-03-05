@@ -1,9 +1,9 @@
 #pragma once
 #include "../../../oxd_libsec/oxd_libsec.h"
 #include "../abi/vm_types.h"
+#include "uint_ext.h"
 #include "big_num.h"
 #include "string.h"
-#include "blob.h"
 #include "coins.h"
 #include "data.h"
 #include "precision_float.h"
@@ -11,6 +11,17 @@
 
 namespace rvm
 {
+
+#define WIDE_UINT(type)	\
+	inline bool operator == (const type& x, const type& y)	{ return rt::IsEqual(x,y); } \
+	inline bool operator <  (const type& x, const type& y)	{ return x.a < y.a	|| (x.a == y.a	&& x.e < y.e);	} \
+	inline bool operator >  (const type& x, const type& y)	{ return x.a > y.a	|| (x.a == y.a	&& x.e > y.e);	} \
+	inline bool operator <= (const type& x, const type& y)	{ return x.a < y.a	|| (x.a == y.a	&& x.e <= y.e);	} \
+	inline bool operator >= (const type& x, const type& y)	{ return x.a > y.a	|| (x.a == y.a	&& x.e >= y.e);	} \
+
+	WIDE_UINT(UInt96) WIDE_UINT(UInt128) WIDE_UINT(UInt160) WIDE_UINT(UInt256) WIDE_UINT(UInt512)
+#undef WIDE_UINT
+
 namespace _details
 {
 template<typename T>
@@ -41,6 +52,9 @@ struct TypeTraits
 	typedef typename T::ImmutableType	Immutable;
 	static const bool		IsMutable = std::is_same<T, Mutable>::value;
 	static const bool		IsImmutable = std::is_same<T, Immutable>::value;
+	static uint32_t			GetEmbeddedSize(const Immutable& x){ return x.GetEmbeddedSize(); }
+	static uint32_t			GetEmbeddedSize(const Mutable& m){ return Immutable::GetEmbeddedSize(m); }
+	static uint32_t			Embed(void* x, const Mutable& m){ return ((Immutable*)x)->Embed(m); }
 	static void				Jsonify(const Immutable& x, rt::Json& json){ x.Jsonify(json); }
 	static bool				JsonParse(Mutable& x, const rt::String_Ref& str){ return !str.IsEmpty() && x.JsonParse(str); }
 };
@@ -57,6 +71,8 @@ struct TypeTraits
 		typedef T			Immutable;
 		static const bool	IsMutable = true;
 		static const bool	IsImmutable = true;
+		static uint32_t		GetEmbeddedSize(const T& m){ return sizeof(m); }
+		static uint32_t		Embed(void* x, const T& m){ *((Immutable*)x) = m; return sizeof(m); }
 		static void			ToString(T x, rt::String& append)
 							{	if constexpr (rt::NumericTraits<T>::IsFloat)
 									_details::_StringifyRealNum(x, append);
@@ -66,23 +82,21 @@ struct TypeTraits
 		static void			Jsonify(T x, rt::Json& json){ ToString(x, json.GetInternalString()); }
 		static bool			JsonParse(T& x, const rt::String_Ref& str){ return !str.IsEmpty() && str.ToNumber(x) == str.GetLength(); }
 	};
-
 	template<typename T>
 	struct TypeTraits<T, true, false>
 	{	typedef T			Mutable;
 		typedef T			Immutable;
 		static const bool	IsMutable = true;
 		static const bool	IsImmutable = true;
+		static uint32_t		GetEmbeddedSize(const T& m){ return sizeof(m); }
+		static uint32_t		Embed(void* x, const T& m){ *((Immutable*)x) = m; return sizeof(m); }
 		static void			ToString(const T& x, rt::String& append)
-							{	if constexpr (sizeof(T) <= sizeof(uint64_t))
-								{	os::Base16Encode(append.Extend(os::Base16EncodeLength(sizeof(T))), &x, sizeof(x));
-								}
+							{	if constexpr (std::is_same_v<T,rvm::Address>)
+									((oxd::SecureAddress&)x).ToString(append);
+								else if constexpr (std::is_same_v<T, rvm::HashValue>)
+									os::Base32CrockfordEncodeLowercase(append.Extend(os::Base32EncodeLength(sizeof(T))), &x, sizeof(x));
 								else
-								{	if constexpr (sizeof(T) == sizeof(rvm::Address))
-										((oxd::SecureAddress&)x).ToString(append);
-									else 
-										os::Base32CrockfordEncodeLowercase(append.Extend(os::Base32EncodeLength(sizeof(T))), &x, sizeof(x));
-								}
+									os::Base16Encode(append.Extend(os::Base16EncodeLength(sizeof(T))), &x, sizeof(x));
 							}
 		static void			Jsonify(const T& x, rt::Json& json)
 							{	auto& append = json.GetInternalString();
@@ -117,6 +131,9 @@ struct TypeTraits
 		typedef immut			Immutable;																				\
 		static const bool		IsMutable = true;																		\
 		static const bool		IsImmutable = false;																	\
+		static uint32_t			GetEmbeddedSize(const Immutable& x){ return x.GetEmbeddedSize(); }						\
+		static uint32_t			GetEmbeddedSize(const Mutable& m){ return Immutable::GetEmbeddedSize(m); }				\
+		static uint32_t			Embed(void* x, const Mutable& m){ return ((Immutable*)x)->Embed(m); }					\
 		static bool				JsonParse(mut& x, const rt::String_Ref& str){ return x.JsonParse(str); }				\
 	};																													\
 	template<> struct TypeTraits<immut>																					\
@@ -124,19 +141,24 @@ struct TypeTraits
 		typedef immut			Immutable;																				\
 		static const bool		IsMutable = false;																		\
 		static const bool		IsImmutable = true;																		\
+		static uint32_t			GetEmbeddedSize(const Immutable& x){ return x.GetEmbeddedSize(); }						\
+		static uint32_t			GetEmbeddedSize(const Mutable& m){ return Immutable::GetEmbeddedSize(m); }				\
+		static uint32_t			Embed(void* x, const Mutable& m){ return ((Immutable*)x)->Embed(m); }					\
 		static void				Jsonify(const immut& x, rt::Json& json){ x.Jsonify(json); }								\
 		static void				ToString(const immut& x, rt::String& append){ x.ToString(append); }						\
 		static bool				JsonParse(mut& x, const rt::String_Ref& str){ return x.JsonParse(str); }				\
 	};																													\
 	}																													\
 
-#define RVM_TYPETRAITS_DEF_STRUCT(T)																					\
+#define RVM_TYPETRAITS_DEF_CSTRUCT(T)																					\
 		namespace rvm {																									\
 		template<> struct TypeTraits<T, true, false>																	\
 		{	typedef T				Mutable;																			\
 			typedef T				Immutable;																			\
 			static const bool		IsMutable = true;																	\
 			static const bool		IsImmutable = true;																	\
+			static uint32_t			GetEmbeddedSize(const T& m){ return sizeof(m); }									\
+			static uint32_t			Embed(void* x, const T& m){ *((Immutable*)x) = m; return sizeof(m); }				\
 			static void				Jsonify(const T& x, rt::Json& json){ return x.Jsonify(json); }						\
 			static bool				JsonParse(T& x, const rt::String_Ref& str){ return x.JsonParse(str); }				\
 		};																												\
@@ -149,6 +171,8 @@ struct TypeTraits
 			typedef T				Immutable;																			\
 			static const bool		IsMutable = true;																	\
 			static const bool		IsImmutable = true;																	\
+			static uint32_t			GetEmbeddedSize(const T& m){ return sizeof(m); }									\
+			static uint32_t			Embed(void* x, const T& m){ *((Immutable*)x) = m; return sizeof(m); }				\
 			static void				Jsonify(const T& x, rt::Json& json){ ASSERT(0); }									\
 			static bool				JsonParse(T& x, const rt::String_Ref& str){ return false; }							\
 		};																												\
@@ -161,6 +185,8 @@ struct TypeTraits
 		typedef immut				Immutable;																			\
 		static const bool			IsMutable = std::is_same<mut, Mutable>::value;										\
 		static const bool			IsImmutable = std::is_same<mut, Immutable>::value;									\
+		static uint32_t				GetEmbeddedSize(const Mutable& m){ return Immutable::GetEmbeddedSize(m); }			\
+		static uint32_t				Embed(void* x, const Mutable& m){ return ((Immutable*)x)->Embed(m); }				\
 		static bool					JsonParse(Mutable& x, const rt::String_Ref& str){ return x.JsonParse(str); }		\
 	};																													\
 	template<template_arg> struct TypeTraits<immut, false, false>														\
@@ -168,6 +194,8 @@ struct TypeTraits
 		typedef immut				Immutable;																			\
 		static const bool			IsMutable = std::is_same<immut, Mutable>::value;									\
 		static const bool			IsImmutable = std::is_same<immut, Immutable>::value;								\
+		static uint32_t				GetEmbeddedSize(const Mutable& m){ return Immutable::GetEmbeddedSize(m); }			\
+		static uint32_t				Embed(void* x, const Mutable& m){ return ((Immutable*)x)->Embed(m); }				\
 		static void					Jsonify(const Immutable& x, rt::Json& json){ return x.Jsonify(json); }				\
 		static bool					JsonParse(Mutable& x, const rt::String_Ref& str){ return x.JsonParse(str); }		\
 	};																													\
@@ -175,9 +203,49 @@ struct TypeTraits
 
 #define RVM_TYPETRAITS_DEF(immut, mut)	RVM_TYPETRAITS_GENERIC_DEF(MARCO_CONCAT(), immut, mut)
 
+template<>
+struct TypeTraits<TokenId, true, true>
+{	typedef TokenId		Mutable;
+	typedef TokenId		Immutable;
+	static const bool	IsMutable = true;
+	static const bool	IsImmutable = true;
+	static uint32_t		GetEmbeddedSize(const TokenId& m){ return sizeof(m); }
+	static uint32_t		Embed(void* x, const TokenId& m){ *((Immutable*)x) = m; return sizeof(m); }
+	static void			ToString(TokenId x, rt::String& append){ append += TokenIdToSymbol(x); }
+	static void			Jsonify(TokenId x, rt::Json& json){ json.String(TokenIdToSymbol(x)); }
+	static bool			JsonParse(TokenId& x, const rt::String_Ref& str){ x = TokenIdFromSymbol(str.TrimQuotes()); return x != TokenIdInvalid; }
+};
+
+template<>
+struct TypeTraits<UInt336, true, false>
+{	typedef UInt336		Mutable;
+	typedef UInt336		Immutable;
+	static const bool	IsMutable = true;
+	static const bool	IsImmutable = true;
+	static uint32_t		GetEmbeddedSize(const UInt336& m){ return sizeof(m); }
+	static uint32_t		Embed(void* x, const UInt336& m){ *((Immutable*)x) = m; return sizeof(m); }
+	static void			ToString(const UInt336& x, rt::String& append)
+						{	os::Base16Encode(append.Extend(os::Base16EncodeLength(8)), &x.e, 8);
+							append += ':';
+							((oxd::SecureAddress&)x.a).ToString(append);
+						}
+	static void			Jsonify(const UInt336& x, rt::Json& json)
+						{	auto& append = json.GetInternalString();
+							append += '"';		ToString(x, append);		append += '"';
+						}
+	static bool			JsonParse(UInt336& x, const rt::String_Ref& str_in)
+						{	auto str = str_in.TrimQuotes();
+							rt::String_Ref segs[2];
+							return	str.Split(segs, 2, ':') == 2 &&
+									segs[0].ToNumber<uint64_t, 16>(x.e) == segs[0].GetLength() &&
+									((oxd::SecureAddress&)x.a).FromString(rt::String_Ref(segs[1].Begin(), str.End()));
+						}
+};
+
 } // namespace rvm
 
-RVM_TYPETRAITS_DEF_STRUCT(Blob)
+RVM_TYPETRAITS_DEF_CSTRUCT(uint24_t)
+RVM_TYPETRAITS_DEF_CSTRUCT(uint48_t)
 RVM_TYPETRAITS_DEF(Data, DataMutable)
 RVM_TYPETRAITS_DEF(Coins, CoinsMutable)
 RVM_TYPETRAITS_DEF_KEYABLE(BigNum, BigNumMutable)
@@ -223,8 +291,9 @@ TYPESIG_POD(TokenId,			token_id)
 template<typename T_Mutable>
 inline auto* RvmImmutableTypeCompose(const T_Mutable& m)
 {	typedef typename TypeTraits<T_Mutable>::Immutable RET;
-	auto* ret = (RET*)VERIFY(_Malloc8AL(BYTE, RET::GetEmbeddedSize(m)));
-	ret->Embed(m);
+	uint32_t size = TypeTraits<RET>::GetEmbeddedSize(m);
+	auto* ret = (RET*)VERIFY(_Malloc8AL(BYTE, size));
+	VERIFY(TypeTraits<RET>::Embed(ret, m) == size);
 	return ret;
 }
 

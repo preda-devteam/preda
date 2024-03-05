@@ -12,7 +12,7 @@ const mockdata = `
       "type": "Run",
       "content": 
       {
-         "script": "c:\\Users\\IDEA\\Documents\\GitHub\\oxd_preda\\simulator\\contracts\\Token.prdts",
+         "script": "c:\\Users\\IDEA\\Documents\\GitHub\\oxd_GCL\\simulator\\contracts\\Token.prdts",
          "ShardOrder": 2
       }
    },
@@ -23,7 +23,7 @@ const mockdata = `
          {
             "contract": "Token",
             "source": "Token.prd",
-            "engine": "PREDA_NATIVE",
+            "engine": "GCL_NATIVE",
             "hash": "07d55rhz0j7n1mkym1da6hcye6a8yc2e9kzz05fqbjyf6shftcn0",
             "finalized": false,
             "implments": [],
@@ -749,7 +749,7 @@ type VizLog = {
 }
 export const Home = () => {
    // PREDA_VIZ_LOG mockdata
-   const originData = json.parse(PREDA_VIZ_LOG.replace(/\\/g, '\\\\') || '[]') as VizLog[]
+   const originData = json.parse(window.PREDA_VIZ_LOG.replace(/\\/g, '\\\\') || '[]') as VizLog[]
    const shardOrder = originData[0].content?.ShardOrder
   return (
     <div className="home">

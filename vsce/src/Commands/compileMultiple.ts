@@ -7,6 +7,8 @@ import {
   getConfigName,
   transformCompileArg
 } from "../utils/finder";
+import { getdiagnosticCollection, msg2output, msg2problems } from "../utils/common";
+import { spawn } from "../utils/process";
 
 const path = require("path");
 let terminal: vscode.Terminal | undefined;
@@ -14,6 +16,7 @@ const isWin = process.platform === "win32";
 
 export default async (uri: vscode.Uri, context: vscode.ExtensionContext) => {
   try {
+    vscode.commands.executeCommand('workbench.action.files.save');
     const { currentFolder, currentFileName, currentFilePath } =
       getCurrentActiveFileAndFolder(uri);
 
@@ -56,14 +59,36 @@ export default async (uri: vscode.Uri, context: vscode.ExtensionContext) => {
         terminal.dispose();
       }
 
-      terminal = vscode.window.createTerminal({
-        message: "Preda Compile With Arguments",
-        cwd: chsimuFloder,
+      // terminal = vscode.window.createTerminal({
+      //   message: "Preda Compile With Arguments",
+      //   cwd: chsimuFloder,
+      // });
+      // terminal.show();
+      // terminal.sendText(
+      //   `.${isWin ? "\\" : "/"}${chsimuName} -log "${currentFilePath}" ${transformCompileArg(configCache, currentFolder)} -stdout`
+      // );
+      const diagnosticCollection = getdiagnosticCollection();
+      diagnosticCollection.clear();
+      const disgnostics: {[file: string]: vscode.Diagnostic[]} = {};
+      let msg = '';
+      spawn({
+        cmd: isWin ? chsimuName : "./" + chsimuName,
+        option: { cwd: chsimuFloder, shell: true },
+        args: [
+          `"${currentFilePath}"`,
+          `${transformCompileArg(configCache, currentFolder)}`,
+          '-stdout',
+        ],
+        onData: (data) => {
+          const message = data.toString();
+          msg += message;
+          msg2problems(message,disgnostics);
+        },
+        onErr () {},
+        onExt () {
+          msg2output(msg, 'Preda');
+        }
       });
-      terminal.show();
-      terminal.sendText(
-        `.${isWin ? "\\" : "/"}${chsimuName} -log "${currentFilePath}" ${transformCompileArg(configCache, currentFolder)} -stdout`
-      );
     } else {
       vscode.window.showErrorMessage("Preda Compile With Arguments: only run with prd file");
     }

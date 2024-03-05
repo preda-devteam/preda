@@ -119,7 +119,7 @@ bool PredaCompiledContracts::ValidateDependency(const rvm::GlobalStates* chain_s
 	if (m_dependencyData.size() == 0)
 		return true;
 
-	const rt::String_Ref depStr((char*)m_dependencyData[0], uint32_t(m_dependencyData.size()));
+	const rt::String_Ref depStr((char*)&m_dependencyData[0], uint32_t(m_dependencyData.size()));
 	int32_t nameLen = int32_t(depStr.FindCharacterReverse(';'));
 	if (nameLen == -1)
 		return true;

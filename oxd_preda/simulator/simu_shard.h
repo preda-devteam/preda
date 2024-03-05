@@ -1,5 +1,7 @@
 #pragma once
 #include "shard_data.h"
+#include "../native/types/typetraits.h"
+#include "core_contracts.h"
 
 
 namespace oxd
@@ -15,7 +17,7 @@ class ExecutionUnit
 	rvm::ExecutionUnit*	pUnits[(int)rvm::EngineId::Max];
 
 public:
-	rvm::ExecutionUnit* Get(rvm::EngineId e) const { if (e >= rvm::EngineId::Max) return nullptr; return pUnits[(int)e]; }
+	rvm::ExecutionUnit* Get(rvm::EngineId e) const { if(e >= rvm::EngineId::Max) return nullptr; return pUnits[(int)e]; }
 	void	Release(){ for(auto& p : pUnits)_SafeRelease(p); }
 	ExecutionUnit(){ rt::Zero(pUnits); }
 	~ExecutionUnit(){ Release(); }
@@ -26,6 +28,7 @@ class RelayEmission
 protected:
 	rt::BufferEx<SimuTxn*>				_ToGlobal;
 	rt::Buffer<rt::BufferEx<SimuTxn*>>	_ToShards;
+	rt::BufferEx<SimuTxn*>				_ToNextBlock;
 
 	Simulator*  _pSimulator;
 	SimuShard*  _pShard;
@@ -33,8 +36,10 @@ protected:
 public:
 	RelayEmission(Simulator* s, SimuShard* shard);
 	~RelayEmission();
-	void	Collect(SimuTxn* origin, rt::BufferEx<SimuTxn*>& txns);
+	void	Collect(SimuTxn* origin, rt::BufferEx<SimuTxn*>& txns, uint64_t& remained_gas);
 	void	Dispatch();  // dispatch all collected and clean up
+	auto&	GetDeferredTxns() const { return _ToNextBlock; }
+	void	ClearDeferredTxns(){ _ToNextBlock.ShrinkSize(0); };
 };
 
 struct ShardStates
@@ -46,7 +51,8 @@ struct ShardStates
 	void	Commit(ShardStates& to); // this will be clear
 };
 
-class SimuShard: protected rvm::ExecutionContext
+class SimuShard: public rvm::ExecutionContext
+			   , protected rvm::NativeTokens
 			   , protected ShardStates
 {
 protected:
@@ -56,6 +62,7 @@ protected:
 
 	PendingTxns					_PendingTxns;
 	PendingTxns					_PendingRelayTxns;
+	PendingTxns					_IntraRelayTxns;
 	uint32_t					_ConfirmedTxnCount;
 
 	SimuChainState<SimuAddressContract>		_AddressStates; // shard scope only
@@ -64,22 +71,24 @@ protected:
 	os::Event					_GoNextBlock;
 	os::Thread					_BlockCreator;
 	void						_BlockCreationRoutine();
-#ifdef _VIZ
+	void						_Execute(SimuTxn* t);
+
 	ext::fast_map<SimuTxn*, rt::BufferEx<SimuTxn*>>	_TxnTrace;
-#endif
+
 protected:
 	// current block being executing
 	uint64_t					_BlockTimeBase;
 	uint64_t					_BlockHeight;
 	rvm::HashValue				_BlockHash;
 	rvm::HashValue				_PrevBlockHash;
-	uint32_t					_ShardIndex; // = -1 for global shard
+	uint32_t					_ShardIndex; // = 65535 for global shard
 	uint32_t					_ShardOrder;
 	rt::Randomizer				_Rand;
 	uint64_t					_TotalGasBurnt;
 	rt::BufferEx<ConfirmTxn>	_TxnExecuted;
 	RelayEmission				_TxnEmitted;
 
+	constexpr static uint64_t relay_base_gas = 2000;
 	// current transaction being executing
 	SimuTxn*					_pTxn = nullptr;
 	rt::BufferEx<uint8_t>		_ReturnVal;
@@ -88,16 +97,16 @@ protected:
 	rvm::Scope					_GetScope() const { if(_pTxn) return _pTxn->GetScope(); return rvm::ScopeInvalid; }
 	bool						_IsGlobalScope() const { return (SimuShard*)_pGlobalShard == this; }
 	uint64_t					_GetBlockTime() const { return _BlockTimeBase + _BlockHeight*SIMU_BLOCK_INTERVAL; }
-	SimuTxn*					_CreateRelayTxn(rvm::ContractInvokeId cid, rvm::OpCode opcode, const rvm::ConstData* args_serialized) const;
+	SimuTxn*					_CreateRelayTxn(rvm::ContractInvokeId ciid, rvm::OpCode opcode, const rvm::ConstData* args_serialized, uint32_t gas_redistribution_weight) const;
 
-protected:
+public:
 	/////////////////////////////////////////////////////
 	// From rvm::ExecutionContext::ChainState
 	virtual rvm::DAppId						GetDAppByName(const rvm::ConstString* dapp_name) const override;
 	virtual rvm::ContractVersionId			GetContractByName(const rvm::ConstString* dapp_contract_name) const override;
 	virtual rvm::BuildNum					GetContractEffectiveBuild(rvm::ContractId contract) const override;
 	virtual const rvm::DeployedContract*	GetContractDeployed(rvm::ContractVersionId) const override;
-	virtual bool							IsTokenMintAllowed(rvm::TokenId tid, rvm::ContractId contract) const override;
+	virtual rvm::TokenMinterFlag			GetTokenMinterState(rvm::TokenId tid, rvm::ContractId contract) const override;
 
 	virtual rvm::ConstAddress*		GetBlockCreator() const override;
 	virtual uint64_t				GetBlockHeight() const override { return _BlockHeight; }
@@ -114,12 +123,19 @@ public:
 
 protected:
 	/////////////////////////////////////////////////////
+	// From rvm::NativeTokens
+	virtual uint32_t				GetCount() const override;
+	virtual rvm::ConstNativeToken	Get(uint32_t idx) const override;
+	virtual void					Release() override { ASSERT(0); }
+
+	/////////////////////////////////////////////////////
 	// From rvm::ExecutionContext::InvocationInfo
 	virtual	const rvm::HashValue*	GetTxnHash(rvm::HashValue* hash_out = nullptr) const override; // hash_out can be nullptr is current utxn is the first one in a relay group, or in a non-grouped txn
 	virtual uint32_t				GetMicroTxnIndex() const override;
 	virtual rvm::ScopeKey			GetScopeTarget() const override;
 	virtual rvm::OpCode				GetOpCode() const override { ASSERT(_pTxn); return _pTxn->Op; }
-	virtual rvm::ContractInvokeId	GetContractId() const override {return _pTxn ? _pTxn->Contract : rvm::ContractInvokeIdInvalid; }
+	virtual rvm::ContractInvokeId	GetContractId() const override { return _pTxn ? _pTxn->Contract : rvm::ContractInvokeIdInvalid; }
+	virtual const rvm::NativeTokens*GetNativeTokenSupplied() const override { ASSERT(_pTxn && _pTxn->Type == rvm::InvokeContextType::Normal); return this; }
 	virtual uint64_t				GetTimestamp() const override { ASSERT(_pTxn); return _pTxn->Timestamp; }
 	virtual rvm::InvokeContextType	GetInvokeType() const override { return _pTxn ? _pTxn->Type : rvm::InvokeContextType::System; }
 	// normal txn
@@ -134,14 +150,24 @@ protected:
 
 	/////////////////////////////////////////////////////
 	// From rvm::ExecutionContext
-	virtual uint64_t				GetRandomNumber() override { return _Rand.GetNext() | (((uint64_t)_Rand.GetNext())<<32U); }
+	virtual void					Randomize(uint8_t* fill, uint32_t size) override { _Rand.Randomize(fill, size); }
 	virtual uint8_t*				AllocateStateMemory(uint32_t dataSize) override;
 	virtual void					DiscardStateMemory(uint8_t* state) override;		// `state` must be allocated from AllocateStateMemory
-	virtual void					CommitNewState(rvm::ContractInvokeId cid, uint8_t* state) override;  // `state` must be allocated from AllocateStateMemory
-	virtual void					CommitNewState(rvm::ContractInvokeId cid, const rvm::ScopeKey* key, uint8_t* state) override;  // `state` must be allocated from AllocateStateMemory
+	virtual void					CommitNewState(rvm::ContractInvokeId ciid, uint8_t* state) override;  // `state` must be allocated from AllocateStateMemory
+	virtual void					CommitNewState(rvm::ContractInvokeId ciid, const rvm::ScopeKey* key, uint8_t* state) override;  // `state` must be allocated from AllocateStateMemory
+
+	template<rvm::ContractInvokeId ciid>
+	void							CommitCoreState(const typename rvm::TypeTraits<typename CoreContractTypeTraits<ciid>::StateType>::Mutable& x)
+									{
+										typedef typename CoreContractTypeTraits<ciid>::StateType IMMUTABLE;
+										auto* state = VERIFY((IMMUTABLE*)AllocateStateMemory(IMMUTABLE::GetEmbeddedSize(x)));
+										state->Embed(x);
+										CommitNewState(ciid, (uint8_t*)state);
+									}
 
 	virtual bool					EmitRelayToScope(rvm::ContractInvokeId cid, const rvm::ScopeKey* key, rvm::OpCode opcode, const rvm::ConstData* args_serialized, uint32_t gas_redistribution_weight) override;
 	virtual bool					EmitRelayToGlobal(rvm::ContractInvokeId cid, rvm::OpCode opcode, const rvm::ConstData* args_serialized, uint32_t gas_redistribution_weight) override;
+	virtual bool					EmitRelayDeferred(rvm::ContractInvokeId cid, rvm::OpCode opcode, const rvm::ConstData* args_serialized, uint32_t gas_redistribution_weight) override;
 	virtual bool					EmitBroadcastToShards(rvm::ContractInvokeId cid, rvm::OpCode opcode, const rvm::ConstData* args_serialized, uint32_t gas_redistribution_weight) override;
 
 	virtual rvm::ContractVersionId	DeployUnnamedContract(rvm::ContractVersionId deploy_initiator, uint64_t initiator_dappname, const rvm::DeployedContract* origin_deploy) override { ASSERT(0); return rvm::ContractVersionIdInvalid; } // for global shard only
@@ -151,9 +177,8 @@ protected:
 	virtual void					SetReturnValue(const rvm::ConstData* args_serialized) override;
 	virtual uint8_t*				SetReturnValueClaim(uint32_t size_estimated) override { _ReturnVal.SetSize(size_estimated); return _ReturnVal.Begin(); }
 	virtual void					SetReturnValueFinalize(uint32_t size_finalized) override { ASSERT(size_finalized<=_ReturnVal.GetSize()); _ReturnVal.ShrinkSize(size_finalized); }
-	virtual bool					CoreWalletWithdraw(rvm::TokenId tid, const rvm::BigNum* amount) override { ASSERT(0); return false; }
-	virtual void					CoreWalletDeposit(rvm::TokenId tid, const rvm::BigNum* amount) override { ASSERT(0); }
-
+	virtual bool					NativeTokensDeposit(const rvm::ConstNativeToken* tokens, uint32_t count) override;
+	virtual void					NativeTokensSupplyChange(const rvm::ConstNativeToken* tokens, uint32_t count) override;
 
 public:
 	SimuShard(Simulator* simu, uint64_t time_base, uint32_t shard_order, uint32_t shard_index, SimuGlobalShard* global); // normal shard
@@ -168,23 +193,24 @@ public:
 	void		SetState(rvm::ContractScopeId cid, const rvm::Address& target, SimuState* s);
 
 	bool		HavePendingTxns() const { return _PendingTxns.GetSize() || _PendingRelayTxns.GetSize(); }
-	void		PushTxn(SimuTxn* t);
-	void		PushTxn(SimuTxn** relay_txns, uint32_t count);
+	void		PushNormalTxn(SimuTxn* t);
+	void		PushRelayTxn(SimuTxn** relay_txns, uint32_t count);
 	void		Step();  // create next block and stop
 	void		LogInfo();
 
-#ifdef _VIZ
 	bool		JsonifyAllAddressStates(rt::Json& append, const rt::BufferEx<User>& Users, rvm::ContractId cid);
 	bool		JsonifyBlocks(rt::Json& append, int64_t height = -1);
-	bool		JsonifyAddressState(rt::Json& append, rvm::Address& Address, const rt::BufferEx<User>& Users, rvm::ContractId cid);
+	bool		JsonifyAddressState(rt::Json& append, const rvm::Address* targetAddr, const rt::BufferEx<User>& Users, rvm::ContractId cid);
+	bool		JsonifyScopeState(rt::Json& append, SimuAddressContract key, bool allState);
+	void		JsonifyAddressStateWithoutGrouping(rt::Json& append, rvm::ContractId cid);
 	bool		JsonifyShardState(rt::Json& append, rvm::ContractId cid);
 	void		JsonifyProfile(rt::Json& append) const;
 	const		rt::BufferEx<SimuTxn*>	GetTxnTrace(SimuTxn* txn) const;
 	void		AppendToTxnTrace(SimuTxn* origin, SimuTxn* relay);
-	auto		GetConfirmTxn(const SimuTxn* txn) const -> rvm::InvokeResult*;
+	bool		ConfirmedTxnJsonify(const SimuTxn* txn, rt::Json& append) const;
 	size_t		GetPendingTxnCount() const {return _PendingTxns.GetSize();}
 	auto		GetAddressState(SimuAddressContract k) { return (const SimuState*)_AddressStates.Get(k); }
-#endif
+	void		PushIntraRelay(SimuTxn* t) { _IntraRelayTxns.Push(t); }
 };
 
 } // namespace oxd

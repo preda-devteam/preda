@@ -7,8 +7,6 @@ cmake_minimum_required(VERSION 3.18)
 if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
     set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
-
-    # set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,StaticLibDebug>:EditAndContinue>,$<$<CONFIG:Debug,StaticLibDebug>:ProgramDatabase>>")
 endif()
 
 set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
@@ -19,7 +17,6 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-set(CMAKE_CONFIGURATION_TYPES Release Debug)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -75,6 +72,7 @@ file(GLOB OXD_LIBSEC_HEAD src/*.h)
 file(GLOB MAIN_FILES
     src/keccak256.cpp
     test/proj.win/main.cpp
+	test/keypair_gen.cpp
     oxd_libsec.h
     test/sec_tests.*
 )
@@ -91,10 +89,11 @@ add_library(oxd_libsec STATIC
 )
 include_directories(./src/libsodium/libsodium/src/libsodium/include/sodium)
 
+option(INCLUDE_TEST_PROJECT "oxd_libsec_test for devs" OFF)
+message(STATUS "INCLUDE_TEST_PROJECT is ${INCLUDE_TEST_PROJECT}, to enable with: -DINCLUDE_TEST_PROJECT=ON")
+
 if(WIN32)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-        # set(CMAKE_SHARED_LINKER_FLAGS_DEBUG "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} /DEBUG:FULL /INCREMENTAL")
-        # set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE_INIT} /DEBUG:FULL /OPT:REF /OPT:ICF /LTCG:incremental")
         set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /sdl /Gy /permissive /O2 /Oi /GL /FC")
         set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /ZI /JMC /sdl /RTC1 /permissive /Od /bigobj /FC")
     endif()
@@ -107,21 +106,11 @@ if(WIN32)
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug,StaticLibDebug>:Debug>"
     )
     target_compile_definitions(oxd_libsec PRIVATE -DUNICODE -D_UNICODE _CONSOLE)
-
-    # target_compile_options(oxd_libsec PRIVATE
-    # $<$<CONFIG:Debug,StaticLibDebug>:/ZI /JMC /sdl /RTC1 /permissive /Od /bigobj /FC >
-    # $<$<CONFIG:Release,StaticLibRelease>:/Zi /sdl /Gy /permissive /O2 /Oi /GL /FC /LTCG>
-    # )
     set_target_properties(oxd_libsec PROPERTIES InheritWarningLevel TRUE)
 
     # ##################### add libsec_test to build as exe ###################################
-    option(INCLUDE_TEST_PROJECT "oxd_libsec_test for devs" OFF)
-    message(STATUS "INCLUDE_TEST_PROJECT sln is ${INCLUDE_TEST_PROJECT}, to enable with -DINCLUDE_TEST_PROJECT=ON")
-
     if(INCLUDE_TEST_PROJECT)
         if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-            # set(CMAKE_SHARED_LINKER_FLAGS_DEBUG "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} /DEBUG:FULL /INCREMENTAL")
-            # set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE_INIT} /DEBUG:FULL /OPT:REF /OPT:ICF /LTCG:incremental")
             set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF /LTCG:incremental")
             set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /W3 /sdl /Gy /permissive /O2 /Oi /GL /FC")
             set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /ZI /JMC /W3 /sdl /RTC1 /permissive /Od /bigobj /FC")
@@ -144,28 +133,89 @@ if(WIN32)
         )
         target_compile_definitions(libsec_test PRIVATE -DUNICODE -D_UNICODE _CONSOLE OXD_LIBSEC_TESTPROJ)
         set_target_properties(libsec_test PROPERTIES InheritWarningLevel TRUE)
-
-        # target_compile_options(libsec_test PRIVATE
-        # $<$<CONFIG:Debug,StaticLibDebug>:/ZI /JMC /W3 /sdl /RTC1 /permissive /Od /bigobj /FC>
-        # $<$<CONFIG:Release,StaticLibRelease>:/Zi /W3 /sdl /Gy /permissive /O2 /Oi /GL /FC>
-        # )
         set_target_properties(libsec_test PROPERTIES OUTPUT_NAME "oxd_libsec")
     endif()
 elseif(UNIX AND NOT APPLE)
     # linux_link_ipp_rule(oxd_libsec)
     target_link_directories(oxd_libsec PRIVATE ../SFC/libs/linux)
-    file(GLOB LINUX_IPP_LIBS ../SFC/libs/linux/ipp*.a)
+    file(GLOB LINUX_IPP_LIBS ../SFC/libs/linux/*.a)
     target_link_libraries(oxd_libsec PRIVATE
         pthread dl X11
     )
     target_link_libraries(oxd_libsec PRIVATE ${LINUX_IPP_LIBS})
     add_compile_options(-fPIC -pthread -ldl -lX11)
+    ########################## add libsec_test executable target ###################################
+    if(INCLUDE_TEST_PROJECT)
+        link_directories(../SFC/libs/linux)
+        link_libraries(${LINUX_IPP_LIBS})
+        file(GLOB EXCLUDE_SOURCE_FILES test/proj.win/main.cpp)
+        list(REMOVE_ITEM MAIN_FILES ${EXCLUDE_SOURCE_FILES})
+        add_executable(libsec_test
+            ${ESSENTIALS_SOURCES}
+            ${BOTAN_SOURCES}
+            ${OXD_LIBSEC_SOURCES}
+            ${LIBSODIUM_SOURCES}
+            ${MAIN_FILES}
+        )
+        target_sources(libsec_test PRIVATE
+            test/sec_tests.cpp
+            test/sec_tests.h
+            test/keypair_gen.cpp
+            test/proj.linux/main.cpp
+        )
+        target_link_directories(libsec_test PRIVATE ../SFC/libs/linux)
+        target_link_libraries(libsec_test PRIVATE
+            pthread dl X11
+        )
+        target_link_libraries(libsec_test PRIVATE ${LINUX_IPP_LIBS})
+        set_target_properties(libsec_test PROPERTIES OUTPUT_NAME "libsec_test")
+        set_target_properties(libsec_test PROPERTIES
+            ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib/$<0:>
+            LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib/$<0:>
+            RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib/$<0:>
+        )
+    endif()
 elseif(APPLE)
-    file(GLOB MAC_LIBS ../SFC/libs/mac/ipp*.a)
+    file(GLOB MAC_LIBS ../SFC/libs/mac/*.a)
     target_link_directories(oxd_libsec PRIVATE ../SFC/libs/mac)
     list(APPEND OXD_LIBSEC_SOURCES ../SFC/core/os/objc_wrap.mm)
     target_link_libraries(oxd_libsec PRIVATE ${MAC_LIBS})
     set(CMAKE_OSX_DEPLOYMENT_TARGET 10.14)
+    if(INCLUDE_TEST_PROJECT)
+        link_directories(../SFC/libs/mac)
+        link_libraries(${MAC_LIBS})
+        file(GLOB EXCLUDE_SOURCE_FILES test/proj.win/main.cpp)
+        list(REMOVE_ITEM MAIN_FILES ${EXCLUDE_SOURCE_FILES})
+        add_executable(libsec_test
+            ${ESSENTIALS_SOURCES}
+            ${BOTAN_SOURCES}
+            ${OXD_LIBSEC_SOURCES}
+            ${LIBSODIUM_SOURCES}
+            ${MAIN_FILES}
+        )
+        target_sources(libsec_test PRIVATE
+            test/sec_tests.cpp
+            test/sec_tests.h
+            test/keypair_gen.cpp
+            test/proj.mac/main.cpp
+        )
+        target_link_directories(libsec_test PRIVATE ../SFC/libs/mac)
+        target_link_libraries(libsec_test PRIVATE ${MAC_LIBS})
+        target_link_libraries(libsec_test PRIVATE
+            "-framework CoreGraphics"
+            "-framework CoreFoundation"
+            "-framework IOKit"
+            "-framework ApplicationServices"
+            "-framework Security"
+            "-framework Foundation"
+        )
+        set_target_properties(libsec_test PROPERTIES OUTPUT_NAME "libsec_test")
+        set_target_properties(libsec_test PROPERTIES
+            ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib/$<0:>
+            LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib/$<0:>
+            RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib/$<0:>
+        )
+    endif()
 endif()
 
 # set oxd_libsec name as oxd_libsec_d in debug mode

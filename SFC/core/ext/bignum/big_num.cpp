@@ -180,7 +180,7 @@ bool BN_AbsEqual(const BN_Unsigned& a, const BN_Unsigned& b) // a == b
 	return true;
 }
 
-bool BN_IsZero(const BN_Ref& a)
+bool BN_IsZero(const BigNumRef& a)
 {
 	if(a.Len == 0)return true;
 	for(UINT i=0; i<a.Len; i++)
@@ -207,7 +207,7 @@ int  BN_AbsCompare(const BN_Unsigned& a, const BN_Unsigned& b) // a < b: -1, a =
 	return 0;
 }
 
-bool BN_Less(const BN_Ref& a, const BN_Ref& b) // a < b
+bool BN_Less(const BigNumRef& a, const BigNumRef& b) // a < b
 {
 	if(&a == &b)return false;
 
@@ -225,7 +225,7 @@ bool BN_Less(const BN_Ref& a, const BN_Ref& b) // a < b
 	return false;
 }
 
-bool BN_Equal(const BN_Ref& a, const BN_Ref& b) // a == b
+bool BN_Equal(const BigNumRef& a, const BigNumRef& b) // a == b
 {
 	if(&a == &b)return true;
 
@@ -236,7 +236,7 @@ bool BN_Equal(const BN_Ref& a, const BN_Ref& b) // a == b
 	return a.GetSign() == b.GetSign() || BN_IsZero(a);
 }
 
-bool BN_LessOrEqual(const BN_Ref& a, const BN_Ref& b) // a <= b
+bool BN_LessOrEqual(const BigNumRef& a, const BigNumRef& b) // a <= b
 {
 	if(&a == &b)return true;
 
@@ -254,7 +254,7 @@ bool BN_LessOrEqual(const BN_Ref& a, const BN_Ref& b) // a <= b
 	return false;
 }
 
-int BN_Compare(const BN_Ref& a, const BN_Ref& b) // a < b: -1, a == b:0, a > b:1
+int BN_Compare(const BigNumRef& a, const BigNumRef& b) // a < b: -1, a == b:0, a > b:1
 {
 	if(&a == &b)return 0;
 
@@ -368,7 +368,7 @@ void BN_Dyn::RightShift(UINT a)
 	}
 }
 
-void BN_ToString(const BN_Ref& a, rt::String& append, int base)
+void BN_ToString(const BigNumRef& a, rt::String& append, int base)
 {
 	if(base == 16)
 	{
@@ -539,7 +539,7 @@ void BN_AbsSub(const BN_Unsigned& b, ext::BigNumMutable& ret)
 	ret.TrimLeadingZero();
 }
 
-void BN_Add(const BN_Ref& b, ext::BigNumMutable& ret) // ret += b
+void BN_Add(const BigNumRef& b, ext::BigNumMutable& ret) // ret += b
 {
 	switch(SIGNS_A_B(ret,b))
 	{	
@@ -548,7 +548,7 @@ void BN_Add(const BN_Ref& b, ext::BigNumMutable& ret) // ret += b
 		ret.SetSign(false);
 		break;
 	case SIGNS_POS_NEG: BN_Sub(b.Abs(), ret); break;
-	case SIGNS_NEG_POS: BN_Sub(BN_Ref(true, b.pData, b.Len), ret); break;
+	case SIGNS_NEG_POS: BN_Sub(BigNumRef(true, b.pData, b.Len), ret); break;
 		break;
 	case SIGNS_NEG_NEG: 
 		BN_AbsAdd(b, ret);
@@ -557,7 +557,7 @@ void BN_Add(const BN_Ref& b, ext::BigNumMutable& ret) // ret += b
 	}
 }
 
-void BN_Sub(const BN_Ref& b, ext::BigNumMutable& ret) // ret -= b
+void BN_Sub(const BigNumRef& b, ext::BigNumMutable& ret) // ret -= b
 {
 	switch(SIGNS_A_B(ret,b))
 	{	
@@ -586,7 +586,7 @@ void BN_Sub(const BN_Ref& b, ext::BigNumMutable& ret) // ret -= b
 	}
 }
 
-void BN_Add(const BN_Ref& a, const BN_Ref& b, ext::BigNumMutable& ret) // ret = a + b
+void BN_Add(const BigNumRef& a, const BigNumRef& b, ext::BigNumMutable& ret) // ret = a + b
 {
 	switch(SIGNS_A_B(a,b))
 	{	
@@ -603,7 +603,7 @@ void BN_Add(const BN_Ref& a, const BN_Ref& b, ext::BigNumMutable& ret) // ret = 
 	}
 }
 
-void BN_Sub(const BN_Ref& a, const BN_Ref& b, ext::BigNumMutable& ret) // ret = a - b
+void BN_Sub(const BigNumRef& a, const BigNumRef& b, ext::BigNumMutable& ret) // ret = a - b
 {
 	switch(SIGNS_A_B(a,b))
 	{	
@@ -766,7 +766,7 @@ void BN_AbsMul(UINT b_in, ext::BigNumMutable& ret)
 	ret.TrimLeadingZero();
 }
 
-void BN_Mul(const BN_Ref& a, const BN_Ref& b, ext::BigNumMutable& ret)
+void BN_Mul(const BigNumRef& a, const BigNumRef& b, ext::BigNumMutable& ret)
 {
 	ret.SetLength(a.Len + b.Len + 1);
 	ret.FillZero();
@@ -804,7 +804,7 @@ void BN_Mul(const BN_Ref& a, const BN_Ref& b, ext::BigNumMutable& ret)
 }
 
 
-void BN_Mul(const BN_Ref& a, const NativeFloat& b, ext::BigNumMutable& ret)
+void BN_Mul(const BigNumRef& a, const NativeFloat& b, ext::BigNumMutable& ret)
 {
 	if(b.Mantissa == 0 || a.GetLength()*BN_BLK_BITSIZE + b.Exponent + 32 <= 0)
 	{
@@ -878,7 +878,7 @@ bool BN_Div(const BN_Unsigned& a, UINT b_in, UINT* remainder, ext::BigNumMutable
 	return true;
 }
 
-float BN_2_float(const BN_Ref& x)
+float BN_2_float(const BigNumRef& x)
 {
 	if(x.GetLength() == 0)return 0;
 
@@ -890,7 +890,7 @@ float BN_2_float(const BN_Ref& x)
 	return (float&)y;
 }
 
-double BN_2_double(const BN_Ref& x)
+double BN_2_double(const BigNumRef& x)
 {
 	if(x.GetLength() == 0)return 0;
 	
@@ -902,7 +902,7 @@ double BN_2_double(const BN_Ref& x)
 	return (double&)y;
 }
 
-bool BN_2_rough(const BN_Ref& x, BigNumRough* out)
+bool BN_2_rough(const BigNumRef& x, BigNumRough* out)
 {
 	if(x.GetSign()){ rt::Zero(*out); return false; }
 
@@ -1106,13 +1106,13 @@ void Div_Unnormalize(ext::BigNumMutable& Remainder, ext::BigNumMutable& a_temp, 
  -       20 / -3 --> result: -6   remainder:  2
  -      -20 / -3 --> result:  6   remainder: -2
  */
-void Div_Set_sign(const BN_Ref& a, const BN_Ref& b,ext::BigNumMutable& quotient, ext::BigNumMutable& Remainder){
+void Div_Set_sign(const BigNumRef& a, const BigNumRef& b,ext::BigNumMutable& quotient, ext::BigNumMutable& Remainder){
 	quotient.SetSign(a.GetSign() != b.GetSign());
 	Remainder.SetSign(a.GetSign());
 }
 } //namespace _details
 
-void BN_Div(const BN_Ref& a, const BN_Ref& b, ext::BigNumMutable *remainder, ext::BigNumMutable& quotient)	//quotient = (a/b) + remainder, a is dividend, b is divisor
+void BN_Div(const BigNumRef& a, const BigNumRef& b, ext::BigNumMutable *remainder, ext::BigNumMutable& quotient)	//quotient = (a/b) + remainder, a is dividend, b is divisor
 {
 	static_assert(sizeof(BN_BLK)==sizeof(uint64_t),"BN_Div2 only supports 64 bits blocks");
 
@@ -1318,6 +1318,32 @@ void BigNumMutable::CopyLowBits(UINT w, const BigNumRef& a)
 	_Data[len-1] &= mask;
 
 	TrimLeadingZero();
+}
+
+bool BigNumMutable::AreLowBitsZero(uint32_t w)
+{
+	typedef _details::BN_BLK	BN_BLK;
+
+	w = std::min(w, uint32_t(GetLength() * sizeof(BN_BLK) * 8));
+
+	uint32_t len = (w + sizeof(BN_BLK) * 8 - 1) / (sizeof(BN_BLK) * 8);
+
+	uint32_t remain = w % (sizeof(BN_BLK) * 8);
+	for (uint32_t i = 0; i + 1 < len; i++)
+		if (_Data[i])
+			return false;
+	BN_BLK mask = (~((BN_BLK)0)) >> (sizeof(BN_BLK) * 8 - remain);
+	return (_Data[len - 1] & mask) == 0;
+}
+
+uint8_t BigNumMutable::GetBit(uint32_t w)
+{
+	typedef _details::BN_BLK	BN_BLK;
+
+	if (w >= uint32_t(GetLength() * sizeof(BN_BLK) * 8))
+		return 0;
+
+	return (_Data[w / (sizeof(BN_BLK) * 8)] >> (w % (sizeof(BN_BLK) * 8))) & 1;
 }
 
 void BigNumMutable::SetToPowerOfTwo(UINT exp)

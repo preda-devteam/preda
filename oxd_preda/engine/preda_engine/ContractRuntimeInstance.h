@@ -17,7 +17,7 @@ class ContractModuleLoaded {
 public:
 	virtual ~ContractModuleLoaded() = default;
 
-	virtual std::unique_ptr<ContractRuntimeInstance> NewInstance(CExecutionEngine&, rvm::ContractVersionId cvId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts) = 0;
+	virtual std::unique_ptr<ContractRuntimeInstance> NewInstance(CExecutionEngine&, rvm::ContractVersionId cvId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit) = 0;
 };
 
 class ContractModule {
@@ -57,4 +57,12 @@ public:
 	virtual uint32_t GetContractContextSerializeSize(prlrt::ContractContextType type) = 0;
 
 	virtual uint32_t SerializeOutContractContext(prlrt::ContractContextType type, uint8_t* buffer, uint32_t size) = 0;
+
+	virtual uint32_t TransactionCallWithoutInstance(uint32_t functionId, const uint8_t* args, uint32_t args_size) = 0;
+
+	virtual uint32_t InitGasTable(uint16_t* gas_cost_tbl, uint8_t gas_tbl_size) = 0;
+
+	virtual uint64_t GetRemainingGas() = 0;
+
+	virtual uint32_t SetRemainingGas(uint64_t remainingGas) = 0;
 };

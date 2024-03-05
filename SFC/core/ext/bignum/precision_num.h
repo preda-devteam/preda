@@ -48,6 +48,10 @@ namespace ext
  * @ingroup ext
  *  @{
  */
+
+class BigNumMutable;
+class BigNumRef;
+
 #pragma pack(push, 4)
 namespace _details
 {
@@ -55,18 +59,24 @@ template<int bit_width>
 class PrecisionFloat
 {
 	TYPETRAITS_DECLARE_POD;
-	BYTE		_Data[bit_width/8 + 4];
+	BYTE	_Data[bit_width/8 + 4];
 public:
 	PrecisionFloat(){ rt::Zero(_Data); }
-	PrecisionFloat(ULONGLONG x);
-	PrecisionFloat(UINT x):PrecisionFloat((ULONGLONG)x){}
-	PrecisionFloat(LONGLONG x);
-	PrecisionFloat(INT x):PrecisionFloat((LONGLONG)x){}
+	PrecisionFloat(ULONGLONG x, int exp_base2 = 0);	// this = x*2^exp
+	PrecisionFloat(LONGLONG x, int exp_base2 = 0);	// this = x*2^exp	
+	PrecisionFloat(UINT x, int exp_base2 = 0):PrecisionFloat((ULONGLONG)x, exp_base2){}
+	PrecisionFloat(INT x, int exp_base2 = 0):PrecisionFloat((LONGLONG)x, exp_base2){}
 	PrecisionFloat(double x);
 	PrecisionFloat(LPCSTR val_str);
 
+	void	FlipSign();
+	bool	IsZero() const;
+	bool	IsSign() const;
+
 	bool	Pow(ULONGLONG idx);
 	bool	Pow(UINT idx){ return Pow((ULONGLONG)idx); }
+	bool	Pow(LONGLONG idx);
+	bool	Pow(int idx){ return Pow((LONGLONG)idx); }
 	bool	Pow(const PrecisionFloat& idx);
 	bool	Log(const PrecisionFloat& f, const PrecisionFloat& base);
 
@@ -74,10 +84,11 @@ public:
 	bool	Sub(const PrecisionFloat& f);
 	bool	Mul(const PrecisionFloat& f);
 	bool	Div(const PrecisionFloat& f);
+	void	MulPowOf2(int exp_base2);
+	bool	MulBigNum(BigNumMutable& a_inplace, bool round_down = true) const;		// round down toward 0 if true, otherwise round to the nearest integer
+	bool	MulBigNum(const BigNumRef& a, BigNumMutable& ret, bool round_down = true) const;		// round down toward 0 if true, otherwise round to the nearest integer
 
-//	void	BN_Mul(const ext::BigNumRef& a, ext::BigNumMutable& b) const;	///< b = a*this
-
-	std::string	ToString() const;
+	auto	ToString() const -> std::string;
 	bool	ToNumber(SIZE_T& x) const;
 	bool	ToNumber(double& x) const;
 

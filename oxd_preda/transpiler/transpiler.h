@@ -96,8 +96,10 @@ namespace transpiler {
 		MultipleConstructor = 86,
 		DeployInNonGlobal = 87,
 		UseCurrentContractType = 88,
+		RelayNextFromShard = 89,
+		MemberOnlyAccessibleViaTypeName = 90,
 
-		SyntaxError = 0x7fff,
+		SyntaxError = 1024,
 		InternalError = 0xffff,
 	};
 

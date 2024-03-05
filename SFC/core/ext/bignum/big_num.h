@@ -58,6 +58,7 @@ namespace ext
 
 class BigNumMutable;
 class BigNumRough;
+class BigNumRef;
 
 namespace _details
 {
@@ -72,25 +73,24 @@ static const UINT		BN_BLK_SIZE = sizeof(BN_BLK);
 static const UINT		BN_BLK_BITSIZE = sizeof(BN_BLK)*8;
 
 class BN_Unsigned;
-class BN_Ref;
 
-extern bool		BN_Less(const BN_Ref& a, const BN_Ref& b); ///< a < b
-extern bool		BN_Equal(const BN_Ref& a, const BN_Ref& b); ///< a == b
-extern bool		BN_LessOrEqual(const BN_Ref& a, const BN_Ref& b); ///< a <= b
-extern int		BN_Compare(const BN_Ref& a, const BN_Ref& b); ///< a < b: -1, a == b:0, a > b:1
-extern bool		BN_IsZero(const BN_Ref& a);
+extern bool		BN_Less(const BigNumRef& a, const BigNumRef& b); ///< a < b
+extern bool		BN_Equal(const BigNumRef& a, const BigNumRef& b); ///< a == b
+extern bool		BN_LessOrEqual(const BigNumRef& a, const BigNumRef& b); ///< a <= b
+extern int		BN_Compare(const BigNumRef& a, const BigNumRef& b); ///< a < b: -1, a == b:0, a > b:1
+extern bool		BN_IsZero(const BigNumRef& a);
 
 extern bool		BN_AbsLess(const BN_Unsigned& a, const BN_Unsigned& b); ///< a < b
 extern bool		BN_AbsEqual(const BN_Unsigned& a, const BN_Unsigned& b); ///< a == b
 extern bool		BN_AbsLessOrEqual(const BN_Unsigned& a, const BN_Unsigned& b); ///< a <= b
 extern int		BN_AbsCompare(const BN_Unsigned& a, const BN_Unsigned& b); ///< a < b: -1, a == b:0, a > b:1
 
-extern void		BN_ToString(const BN_Ref& a, rt::String& out, int base);
+extern void		BN_ToString(const BigNumRef& a, rt::String& out, int base);
 
-extern void		BN_Add(const BN_Ref& a, const BN_Ref& b, ext::BigNumMutable& ret); ///< ret = a + b
-extern void		BN_Sub(const BN_Ref& a, const BN_Ref& b, ext::BigNumMutable& ret); ///< ret = a - b
-extern void		BN_Add(const BN_Ref& b, ext::BigNumMutable& ret); ///< ret += b
-extern void		BN_Sub(const BN_Ref& b, ext::BigNumMutable& ret); ///< ret -= b
+extern void		BN_Add(const BigNumRef& a, const BigNumRef& b, ext::BigNumMutable& ret); ///< ret = a + b
+extern void		BN_Sub(const BigNumRef& a, const BigNumRef& b, ext::BigNumMutable& ret); ///< ret = a - b
+extern void		BN_Add(const BigNumRef& b, ext::BigNumMutable& ret); ///< ret += b
+extern void		BN_Sub(const BigNumRef& b, ext::BigNumMutable& ret); ///< ret -= b
 extern void		BN_AbsAdd(const BN_Unsigned& a, const BN_Unsigned& b, ext::BigNumMutable& ret); ///< ret = a + b
 extern void		BN_AbsSub(const BN_Unsigned& a, const BN_Unsigned& b, ext::BigNumMutable& ret); ///< ret = a - b
 extern void		BN_AbsAdd(const BN_Unsigned& b, ext::BigNumMutable& ret); ///< ret += b
@@ -98,8 +98,8 @@ extern void		BN_AbsSub(const BN_Unsigned& b, ext::BigNumMutable& ret); ///< ret 
 extern UINT		BN_Mantissa32(const BN_Unsigned& b, int* exp);
 extern auto		BN_Mantissa64(const BN_Unsigned& b, int* exp) -> ULONGLONG;
 
-extern void		BN_Mul(const BN_Ref& a, const BN_Ref& b, ext::BigNumMutable& ret); ///< ret = a*b
-extern void		BN_Mul(const BN_Ref& a, const NativeFloat& b, ext::BigNumMutable& ret); ///< ret = a*b
+extern void		BN_Mul(const BigNumRef& a, const BigNumRef& b, ext::BigNumMutable& ret); ///< ret = a*b
+extern void		BN_Mul(const BigNumRef& a, const NativeFloat& b, ext::BigNumMutable& ret); ///< ret = a*b
 extern void		BN_Mul(const NativeFloat& b, ext::BigNumMutable& ret);
 
 extern void		BN_AbsMul(const BN_Unsigned& a, UINT b, ext::BigNumMutable& ret); ///< ret = a*b
@@ -107,18 +107,18 @@ extern void		BN_AbsMul(const BN_Unsigned& a, ULONGLONG b, ext::BigNumMutable& re
 extern void		BN_AbsMul(UINT b, ext::BigNumMutable& ret); ///< ret *= b
 
 /**
- * @brief ret = (a - *reminder)/b
+ * @brief ret = (a - *remainder)/b
  * 
  * if it is an early out case, quotient and remainder will both be 0.
  * @param a 
  * @param b 
- * @param reminder 
+ * @param remainder 
  * @param ret 
  * @return 
 */
-extern bool		BN_Div(const BN_Unsigned& a, UINT b, UINT* reminder, ext::BigNumMutable& ret); ///<ret = (a - *reminder)/b
+extern bool		BN_Div(const BN_Unsigned& a, UINT b, UINT* remainder, ext::BigNumMutable& ret); ///<ret = (a - *remainder)/b
 /**
- * @brief ret = (a - *reminder)/b
+ * @brief ret = (a - *remainder)/b
  * 
  * if it is an early out case, quotient and remainder will both be 0.
  * @param a 
@@ -126,11 +126,11 @@ extern bool		BN_Div(const BN_Unsigned& a, UINT b, UINT* reminder, ext::BigNumMut
  * @param remainder 
  * @param ret 
 */
-extern void     BN_Div(const BN_Ref& a, const BN_Ref& b, ext::BigNumMutable *remainder, ext::BigNumMutable& ret);
+extern void     BN_Div(const BigNumRef& a, const BigNumRef& b, ext::BigNumMutable *remainder, ext::BigNumMutable& ret);
 
-extern double	BN_2_double(const BN_Ref& x);
-extern float	BN_2_float(const BN_Ref& x);
-extern bool		BN_2_rough(const BN_Ref& x, BigNumRough* out); // false if range exceeds, but *out will be the saturated value
+extern double	BN_2_double(const BigNumRef& x);
+extern float	BN_2_float(const BigNumRef& x);
+extern bool		BN_2_rough(const BigNumRef& x, BigNumRough* out); // false if range exceeds, but *out will be the saturated value
 
 class BN_Unsigned
 {
@@ -150,23 +150,27 @@ public:
 	BN_Unsigned		SubVal(UINT s) const { return BN_Unsigned(pData + s, Len - s); }
 	BN_Unsigned		SubVal(UINT s, UINT len) const { return BN_Unsigned(pData + s, Len); }
 };
+} // namespace _details
 
-class BN_Ref: public BN_Unsigned
+class BigNumRef: public _details::BN_Unsigned
 {
 public:
 	bool		Sign;
 	bool		GetSign() const { return Sign; }
 	UINT		GetLength() const { return Len; }
-	LPC_BN_BLK	Data() const { return pData; }
+	_details::LPC_BN_BLK	Data() const { return pData; }
 
-	BN_Ref(){ Sign = false; Len = 0; pData = nullptr; }
-	BN_Ref(bool sign, const BN_BLK* data, UINT len){ Sign = sign; Len = len; pData = (BN_BLK*)data; }
+	BigNumRef(){ Sign = false; Len = 0; pData = nullptr; }
+	BigNumRef(bool sign, const _details::BN_BLK* data, UINT len){ Sign = sign; Len = len; pData = (_details::BN_BLK*)data; }
+	BigNumRef(const _details::BN_BLK* data, UINT len){ Sign = 0; Len = len; pData = (_details::BN_BLK*)data; }
 
-	BN_Ref		Abs() const { return BN_Ref(false, pData, Len); }
-	BN_Ref		Negate() const { return BN_Ref(!Sign, pData, Len); }
+	BigNumRef	Abs() const { return BigNumRef(false, pData, Len); }
+	BigNumRef	Negate() const { return BigNumRef(!Sign, pData, Len); }
+	bool		IsZero() const { return BN_IsZero(*this); }
 };
 
-
+namespace _details
+{
 #pragma pack(push, 1)
 struct BN_Dyn
 {
@@ -195,11 +199,11 @@ struct BN_Dyn
 	void		TrimLeadingZero();
 	void		SetZero(){ SetSign(false); SetLength(0); }
 
-	operator	BN_Ref() const { return BN_Ref(_Sign, _Data.Begin(), (UINT)_Data.GetSize()); }
+	operator	BigNumRef() const { return BigNumRef(_Sign, _Data.Begin(), (UINT)_Data.GetSize()); }
 	BN_Unsigned	SubVal(UINT s) const { return BN_Unsigned((BN_BLK*)_Data.Begin() + s, (UINT)(_Data.GetSize() - s)); }
 	BN_Unsigned	SubVal(UINT s, UINT len) const { return BN_Unsigned((BN_BLK*)_Data.Begin() + s, len); }
-	BN_Ref		Abs() const { return BN_Ref(false, (BN_BLK*)_Data.Begin(), (UINT)_Data.GetSize()); }
-	BN_Ref		Negate() const { return BN_Ref(!GetSign(), _Data.Begin(), (UINT)GetLength()); }
+	BigNumRef	Abs() const { return BigNumRef(false, (BN_BLK*)_Data.Begin(), (UINT)_Data.GetSize()); }
+	BigNumRef	Negate() const { return BigNumRef(!GetSign(), _Data.Begin(), (UINT)GetLength()); }
 };
 #pragma pack(pop)
 
@@ -223,18 +227,17 @@ struct BN_Fix
 	bool		IsNonnegative() const { return (_Sign_Len&0x80) == 0; }
 	void		SetSign(bool x) { _Sign_Len = (_Sign_Len&0x7f)|(x?0x80:0); }
 
-	operator	BN_Ref() const { return BN_Ref(GetSign(), _Data, GetLength()); }
+	operator	BigNumRef() const { return BigNumRef(GetSign(), _Data, GetLength()); }
 	BN_Unsigned	SubVal(UINT s) const { return BN_Unsigned((BN_BLK*)_Data + s, GetEmbeddedSize() - s); }
 	BN_Unsigned	SubVal(UINT s, UINT len) const { return BN_Unsigned((BN_BLK*)_Data + s, len); }
 
-	BN_Ref		Abs() const { return BN_Ref(false, (BN_BLK*)_Data, GetEmbeddedSize()); }
-	BN_Ref		Negate() const { return BN_Ref(!GetSign(), _Data, GetLength()); }
+	BigNumRef	Abs() const { return BigNumRef(false, (BN_BLK*)_Data, GetEmbeddedSize()); }
+	BigNumRef	Negate() const { return BigNumRef(!GetSign(), _Data, GetLength()); }
 };
 #pragma pack(pop)
 
 } // namespace _details
 
-typedef _details::BN_Ref	BigNumRef;
 
 #pragma pack(push, 1)
 class BigNumRough
@@ -307,12 +310,12 @@ struct BigNumImmutable: public STORE_CLS
 				}
 
 	auto		Abs() const 
-				{	BigNumImmutable<_details::BN_Ref> x;
+				{	BigNumImmutable<BigNumRef> x;
 					x.Len = STORE_CLS::GetLength();	x.pData = (BN_BLK *)STORE_CLS::Data();
 					return x;
 				}
 	auto		Negate() const 
-				{	BigNumImmutable<_details::BN_Ref> x;
+				{	BigNumImmutable<BigNumRef> x;
 					x.Len = STORE_CLS::GetLength();	x.pData = (BN_BLK *)STORE_CLS::Data();	x.Sign = !STORE_CLS::GetSign();
 					return x;
 				}
@@ -450,7 +453,7 @@ public:
 	float 			operator = (float x){ _FromNativeFloat(x); return x; }
 	double 			operator = (double x){ _FromNativeFloat(x); return x; }
 
-	const rt::String_Ref & operator = (const rt::String_Ref &x){ FromString(x); return  x; }
+	const rt::String_Ref & operator = (const rt::String_Ref &x){ FromString(x); return x; }
 	const BigNumRough&     operator = (const BigNumRough& x);
 
 	bool FromString(const rt::String_Ref& s);
@@ -469,8 +472,8 @@ public:
 	void Mul(const BigNumRef& a, ULONGLONG b){ _details::BN_AbsMul(a, b, *this); SetSign(a.GetSign()); }
 	void Mul(const BigNumRef& a, float b){ _details::BN_Mul(a, _details::NativeFloat(b), *this); }
 	void Mul(const BigNumRef& a, double b){ _details::BN_Mul(a, _details::NativeFloat(b), *this); }
-	void Div(const BigNumRef& a, UINT b, UINT* reminder = nullptr){ _details::BN_Div(a, b, reminder, *this); }
-	void Div(const BigNumRef& a, const BigNumRef& b, BigNumMutable* reminder = nullptr){ _details::BN_Div(a, b, reminder, *this); }
+	void Div(const BigNumRef& a, UINT b, UINT* remainder = nullptr){ _details::BN_Div(a, b, remainder, *this); }
+	void Div(const BigNumRef& a, const BigNumRef& b, BigNumMutable* remainder = nullptr){ _details::BN_Div(a, b, remainder, *this); }
 
 	void DivFast(const BigNumRef& a, const BigNumRef& b); ///< this ~= a/b (9 digits precision)
 	void DivRough(const BigNumRef& a, const BigNumRef& b); ///< this ~= a/b (19 digits precision)
@@ -504,6 +507,8 @@ public:
 	}
 
 	void CopyLowBits(UINT w, const BigNumRef& a);
+	bool AreLowBitsZero(uint32_t w);
+	uint8_t GetBit(uint32_t w);
 	void SetToPowerOfTwo(UINT exp);
 };
 

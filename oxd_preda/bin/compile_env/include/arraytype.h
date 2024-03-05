@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include "gascost.h"
 
 namespace prlrt {
 
@@ -276,55 +277,65 @@ namespace prlrt {
 		}
 		void operator=(const __prlt_array<T> &rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_ARRAY_ASSIGN]);
 			ptr = rhs.ptr;
 		}
 
 		// array interface
 		external_index_type __prli_length() const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_ARRAY_OP_SIMPLE]);
 			return external_index_type(external_index_type::internal_type(ptr->length()));
 		}
 
 		element_type& operator[](const external_index_type &index)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_ARRAY_OP_SIMPLE]);
 			internal_index_type indexInternal = internal_index_type(index._v);
 			return (*(ptr.get()))[indexInternal];
 		}
 
 		const element_type& operator[](const external_index_type &index) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_ARRAY_OP_SIMPLE]);
 			internal_index_type indexInternal = internal_index_type(index._v);
 			return (*((const implementation_type*)ptr.get()))[indexInternal];
 		}
 
 		void __prli_push(const T& value)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_ARRAY_OP_SIMPLE]);
 			ptr->push(value);
 		}
 
 		void __prli_pop()
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_ARRAY_OP_SIMPLE]);
 			ptr->pop();
 		}
 
 		void __prli_set_length(const external_index_type& new_size)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_ARRAY_OP_SIMPLE]);
 			ptr->set_length(internal_index_type(new_size._v));
 		}
 
 		// serialization-related interface
 		serialize_size_type get_serialize_size() const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_SIZE]);
 			return ptr->get_serialize_size();
 		}
 
 		void serialize_out(uint8_t *buffer, bool for_debug) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_OUT_STATIC]);
 			ptr->serialize_out(buffer, for_debug);
 		}
 
 		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_MAP_STATIC]);
 			return ptr->map_from_serialized_data(buffer, bufferSize, bDeep);
 		}
 	};

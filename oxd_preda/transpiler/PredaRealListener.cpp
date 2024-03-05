@@ -292,14 +292,14 @@ ConcreteTypePtr PredaRealListener::ImportContractSymbols(transpiler::IContractSy
 					transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInIntegerType(64, false), true, false),
 					std::vector<transpiler::DefinedIdentifierPtr>(),
 					uint32_t(transpiler::FunctionFlags::IsConst)
-				), true) != nullptr;
+				), false) != nullptr;
 
 				// __valid()
 				res = res & interfaceType->DefineMemberFunction("__valid", transpiler::FunctionSignature(
 					transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInBoolType(), true, false),
 					std::vector<transpiler::DefinedIdentifierPtr>(),
 					uint32_t(transpiler::FunctionFlags::IsConst)
-				), true) != nullptr;
+				), false) != nullptr;
 			}
 
 			codeSerializer.AddLine("struct " + interfaceType->outputFullName.substr(interfaceType->outputFullName.rfind("::") + 2) + " : public prlrt::interface_struct {");
@@ -365,7 +365,7 @@ ConcreteTypePtr PredaRealListener::ImportContractSymbols(transpiler::IContractSy
 				GenerateCodeForInterfaceFunction(codeSerializer, int64_t(contractImportSlot), interfaceIdx, pDefinedFunction->outputName, functionSignature, functionIdx);
 			}
 
-			codeSerializer.AddLine("__prlt_bool __prli___valid() { return prlrt::interface_is_implemented(contract_id, " + std::to_string(contractImportSlot) + ", " + std::to_string(interfaceIdx) + "); }");
+			codeSerializer.AddLine("__prlt_bool __prli___valid() { return prlrt::contract_implements_interface(contract_id, " + std::to_string(contractImportSlot) + ", " + std::to_string(interfaceIdx) + "); }");
 
 			codeSerializer.PopIndent();
 			codeSerializer.AddLine("};");
@@ -521,6 +521,18 @@ ConcreteTypePtr PredaRealListener::ImportContractSymbols(transpiler::IContractSy
 		if (pDefinedFunction == nullptr)
 			return nullptr;
 		codeSerializer.AddLine(m_transpilerCtx.GetBuiltInIntegerType(64, false)->outputFullName + " __prli___id() { return contract_id; }");
+	}
+
+	// __valid()
+	{
+		transpiler::DefinedIdentifierPtr pDefinedFunction = contractType->DefineMemberFunction("__valid", transpiler::FunctionSignature(
+			transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInBoolType(), true, false),
+			std::vector<transpiler::DefinedIdentifierPtr>(),
+			uint32_t(transpiler::FunctionFlags::IsConst)
+			), false);
+		if (pDefinedFunction == nullptr)
+			return nullptr;
+		codeSerializer.AddLine(m_transpilerCtx.GetBuiltInBoolType()->outputFullName + " __prli___valid()  { return prlrt::contract_has_template(contract_id, " + std::to_string(contractImportSlot) + "); }");
 	}
 
 	// __address()
@@ -1087,6 +1099,7 @@ void PredaRealListener::enterRelayStatement(PredaParser::RelayStatementContext *
 
 	RelayType relayType;
 	transpiler::ScopeType expectedfuncScope = transpiler::ScopeType::None;
+	bool bRelayNext = false;
 
 	ExpressionParser::ExpressionResult targetScopeExpRes;
 	if (ctx->relayType()->expression())
@@ -1120,7 +1133,7 @@ void PredaRealListener::enterRelayStatement(PredaParser::RelayStatementContext *
 	else if (ctx->relayType()->GlobalKeyword())
 	{
 		m_transpilerCtx.functionCtx.GetFunctionSignature()->flags |= uint32_t(transpiler::FunctionFlags::HasRelayGlobalStatement);
-		if ((m_transpilerCtx.functionCtx.GetFunctionSignature()->flags & uint32_t(transpiler::ScopeType::Mask)) == uint32_t(transpiler::FunctionFlags::GlobalStateDependency))
+		if ((m_transpilerCtx.functionCtx.GetFunctionSignature()->flags & uint32_t(transpiler::ScopeType::Mask)) == uint32_t(transpiler::ScopeType::Global))
 		{
 			m_errorPortal.SetAnchor(ctx->relayType()->start);
 			m_errorPortal.AddRelayGlobalFromGlobalError();
@@ -1128,6 +1141,27 @@ void PredaRealListener::enterRelayStatement(PredaParser::RelayStatementContext *
 		}
 		relayType = RelayType::Global;
 		expectedfuncScope = transpiler::ScopeType::Global;
+	}
+	else if (ctx->relayType()->NextKeyword())
+	{
+		m_transpilerCtx.functionCtx.GetFunctionSignature()->flags |= uint32_t(transpiler::FunctionFlags::HasRelayScopeStatement);
+		transpiler::ScopeType curFuncScopeType = transpiler::ScopeType(m_transpilerCtx.functionCtx.GetFunctionSignature()->flags & uint32_t(transpiler::ScopeType::Mask));
+		switch (curFuncScopeType)
+		{
+		case transpiler::ScopeType::Shard:
+			m_errorPortal.SetAnchor(ctx->relayType()->start);
+			m_errorPortal.AddRelayNextFromShardError();
+			return;
+		case transpiler::ScopeType::Global:
+			relayType = RelayType::Global;
+			expectedfuncScope = curFuncScopeType;
+			break;
+		default:
+			relayType = RelayType::CustomScope;
+			expectedfuncScope = curFuncScopeType;
+			break;
+		}
+		bRelayNext = true;
 	}
 	else
 	{
@@ -1270,19 +1304,26 @@ void PredaRealListener::enterRelayStatement(PredaParser::RelayStatementContext *
 		}
 	}
 
-	switch (relayType)
+	if (bRelayNext)
 	{
-	case RelayType::CustomScope:
-		codeSerializer.AddLine("prlrt::relay(" + targetScopeExpRes.text + ", " + std::to_string(uint32_t(expectedfuncScope)) + ", " + std::to_string(opCode) + argumentsString + ");");
-		break;
-	case RelayType::Shards:
-		codeSerializer.AddLine("prlrt::relay_shards(" + std::to_string(opCode) + argumentsString + ");");
-		break;
-	case RelayType::Global:
-		codeSerializer.AddLine("prlrt::relay_global(" + std::to_string(opCode) + argumentsString + ");");
-		break;
-	default:
-		assert(0);
+		codeSerializer.AddLine("prlrt::relay_next(" + std::to_string(opCode) + argumentsString + ");");
+	}
+	else
+	{
+		switch (relayType)
+		{
+		case RelayType::CustomScope:
+			codeSerializer.AddLine("prlrt::relay(" + targetScopeExpRes.text + ", " + std::to_string(uint32_t(expectedfuncScope)) + ", " + std::to_string(opCode) + argumentsString + ");");
+			break;
+		case RelayType::Shards:
+			codeSerializer.AddLine("prlrt::relay_shards(" + std::to_string(opCode) + argumentsString + ");");
+			break;
+		case RelayType::Global:
+			codeSerializer.AddLine("prlrt::relay_global(" + std::to_string(opCode) + argumentsString + ");");
+			break;
+		default:
+			assert(0);
+		}
 	}
 }
 
@@ -1661,7 +1702,7 @@ void PredaRealListener::DefineInterface(PredaParser::InterfaceDefinitionContext*
 			transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInIntegerType(64, false), true, false),
 			std::vector<transpiler::DefinedIdentifierPtr>(),
 			uint32_t(transpiler::FunctionFlags::IsConst)
-		), true);
+		), false);
 	}
 
 	// __valid()
@@ -1670,7 +1711,7 @@ void PredaRealListener::DefineInterface(PredaParser::InterfaceDefinitionContext*
 			transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInBoolType(), true, false),
 			std::vector<transpiler::DefinedIdentifierPtr>(),
 			uint32_t(transpiler::FunctionFlags::IsConst)
-		), true);
+		), false);
 	}
 
 	std::vector<PredaParser::FunctionDeclarationContext*> functionDeclarations = ctx->functionDeclaration();
@@ -1969,6 +2010,11 @@ void PredaRealListener::enterContractDefinition(PredaParser::ContractDefinitionC
 	codeSerializer.AddLine("struct " + m_currentContractOutputName + " {");
 	codeSerializer.PushIndent();
 	codeSerializer.AddLine("uint64_t contract_id = 0;");		// id of the contract, initialized in CreateInstance()
+	codeSerializer.AddLine("prlrt::__prlt___block __prli___block;");
+	codeSerializer.AddLine("prlrt::__prlt___transaction __prli___transaction;");
+	codeSerializer.AddLine("prlrt::__prlt___event __prli___event;");
+	codeSerializer.AddLine("prlrt::__prlt___debug __prli___debug;");
+
 	codeSerializer.AddLine("");
 	for (uint32_t i = 0; i < uint32_t(m_importedContracts.size()); i++)
 	{
@@ -2118,7 +2164,7 @@ void PredaRealListener::enterContractDefinition(PredaParser::ContractDefinitionC
 
 			GenerateCodeForInterfaceFunction(codeSerializer, -1, interfaceIdx, pDefinedFunction->outputName, functionSignature, uint32_t(i));
 		}
-		codeSerializer.AddLine("__prlt_bool __prli___valid() { return prlrt::interface_is_implemented(contract_id, -1, " + std::to_string(interfaceIdx) + "); }");
+		codeSerializer.AddLine("__prlt_bool __prli___valid() { return prlrt::contract_implements_interface(contract_id, -1, " + std::to_string(interfaceIdx) + "); }");
 		codeSerializer.PopIndent();
 		codeSerializer.AddLine("};");
 	}
@@ -2189,6 +2235,21 @@ void PredaRealListener::enterContractDefinition(PredaParser::ContractDefinitionC
 		codeSerializer.AddLine(m_transpilerCtx.GetBuiltInIntegerType(64, false)->outputFullName + " __prli___id() { return contract_id; }");
 	}
 
+	// __valid()
+	{
+		transpiler::DefinedIdentifierPtr pDefinedFunction = contractType->DefineMemberFunction("__valid", transpiler::FunctionSignature(
+			transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInBoolType(), true, false),
+			std::vector<transpiler::DefinedIdentifierPtr>(),
+			uint32_t(transpiler::FunctionFlags::IsConst)
+		), false);
+		if (pDefinedFunction == nullptr)
+		{
+			m_errorPortal.AddInternalError(ctx->identifier()->start, "Cannot define built-in function __id() for contract. Probably compiler bug.");
+			return;
+		}
+		codeSerializer.AddLine(m_transpilerCtx.GetBuiltInBoolType()->outputFullName + " __prli___valid()  { return prlrt::contract_has_template(contract_id, -1); }");
+	}
+
 	// __address()
 	{
 		transpiler::DefinedIdentifierPtr pDefinedFunction = contractType->DefineMemberFunction("__address", transpiler::FunctionSignature(
@@ -2208,7 +2269,10 @@ void PredaRealListener::enterContractDefinition(PredaParser::ContractDefinitionC
 	{
 		transpiler::DefinedIdentifierPtr pDefinedFunction = contractType->DefineMemberFunction("__mint", transpiler::FunctionSignature(
 			transpiler::QualifiedConcreteType(m_transpilerCtx.GetBuiltInTokenType(), false, false),
-			{transpiler::Allocator::New<transpiler::DefinedIdentifier>(m_transpilerCtx.GetBuiltInBigIntType(), true, true, "amount", 0)},
+			{
+				transpiler::Allocator::New<transpiler::DefinedIdentifier>(m_transpilerCtx.GetBuiltInIntegerType(64, false), true, true, "id", 0),
+				transpiler::Allocator::New<transpiler::DefinedIdentifier>(m_transpilerCtx.GetBuiltInBigIntType(), true, true, "amount", 0)
+			},
 			uint32_t(transpiler::FunctionFlags::IsConst)
 		), false);
 		if (pDefinedFunction == nullptr)
@@ -2216,7 +2280,7 @@ void PredaRealListener::enterContractDefinition(PredaParser::ContractDefinitionC
 			m_errorPortal.AddInternalError(ctx->identifier()->start, "Cannot define built-in function __mint() for contract. Probably compiler bug.");
 			return;
 		}
-		codeSerializer.AddLine(m_transpilerCtx.GetBuiltInTokenType()->outputFullName + " __prli___mint(__prlt_bigint amount) { return prlrt::mint(contract_id, amount); }");
+		codeSerializer.AddLine(m_transpilerCtx.GetBuiltInTokenType()->outputFullName + " __prli___mint(__prlt_uint64 id, __prlt_bigint amount) { return prlrt::mint(id, amount); }");
 	}
 
 	// __burn()
@@ -2231,18 +2295,7 @@ void PredaRealListener::enterContractDefinition(PredaParser::ContractDefinitionC
 			m_errorPortal.AddInternalError(ctx->identifier()->start, "Cannot define built-in function __burn() for contract. Probably compiler bug.");
 			return;
 		}
-		codeSerializer.AddLine(m_transpilerCtx.GetBuiltInBoolType()->outputFullName + " __prli___burn(__prlt_token burn_token) {");
-		codeSerializer.PushIndent();
-		codeSerializer.AddLine("if(burn_token.__prli_get_id() == contract_id){");
-		codeSerializer.PushIndent();
-		codeSerializer.AddLine("prlrt::burn(burn_token);");
-		codeSerializer.AddLine("return __prlt_bool(true);");
-		codeSerializer.PopIndent();
-		codeSerializer.AddLine("}");
-		codeSerializer.AddLine("return __prlt_bool(false);");
-		codeSerializer.PopIndent();
-		codeSerializer.AddLine("}");
-
+		codeSerializer.AddLine(m_transpilerCtx.GetBuiltInBoolType()->outputFullName + " __prli___burn(__prlt_token burn_token) { return prlrt::burn(burn_token); }");
 	}
 
 	TraverseAllFunctions();
@@ -2426,6 +2479,7 @@ void PredaRealListener::GenerateAuxiliaryFunctions()
 			{
 				codeSerializer.AddLine("try {");
 				codeSerializer.PushIndent();
+				codeSerializer.AddLine("if (pContractInstance) ((" + m_currentContractOutputName + " *)pContractInstance)->__prli___transaction.import_supplied_tokens();");
 				{
 					codeSerializer.AddLine("switch (functionId){");
 					for (size_t funcIdx = 0; funcIdx < m_exportedFunctions.size(); funcIdx++)
@@ -2453,7 +2507,7 @@ void PredaRealListener::GenerateAuxiliaryFunctions()
 								}
 								codeSerializer.AddLine("if (args_size != 0) return uint32_t(prlrt::ExecutionError::ArgumentDeserializationFailure);");
 
-								std::string line;
+								std::string line = "if (pContractInstance) ";
 								if (signature.returnType.baseConcreteType != nullptr)
 									line = signature.returnType.baseConcreteType->outputFullName + " ret = ";
 								line += "((" + m_currentContractOutputName + " *)pContractInstance)->" + curFunc.functionIdentifier->outputName + "(";
@@ -2486,6 +2540,7 @@ void PredaRealListener::GenerateAuxiliaryFunctions()
 				codeSerializer.PopIndent();
 				codeSerializer.AddLine("}");
 				codeSerializer.AddLine("");
+				codeSerializer.AddLine("if (pContractInstance) ((" + m_currentContractOutputName + " *)pContractInstance)->__prli___transaction.clear_supplied_tokens();");		// collect residual from the supplied tokens, this is only needed when transaction execution succeeds
 				codeSerializer.AddLine("return uint32_t(prlrt::ExecutionError::NoError);");
 			}
 		}
@@ -2572,9 +2627,10 @@ void PredaRealListener::GenerateAuxiliaryFunctions()
 
 		codeSerializer.AddLine("");
 
-		codeSerializer.AddLine("API_EXPORT void* Contract_" + m_currentContractUniqueIdentifierStr + "_CreateInstance(prlrt::IRuntimeInterface *pInterface, uint64_t curContractId, const uint64_t *importedContractIds, uint32_t numImportedContracts) {");
+		codeSerializer.AddLine("API_EXPORT void* Contract_" + m_currentContractUniqueIdentifierStr + "_CreateInstance(prlrt::IRuntimeInterface *pInterface, uint64_t curContractId, const uint64_t *importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit) {");
 		codeSerializer.PushIndent();
 		{
+			codeSerializer.AddLine("prlrt::RemainingGas = gas_limit;");
 			codeSerializer.AddLine("if (numImportedContracts != " + std::to_string(m_importedContracts.size()) + ") return nullptr;");
 			codeSerializer.AddLine("prlrt::g_executionEngineInterface = pInterface;");
 			codeSerializer.AddLine(m_currentContractOutputName + " *ret = new " + m_currentContractOutputName + ";");
@@ -2611,49 +2667,55 @@ void PredaRealListener::GenerateAuxiliaryFunctions()
 			codeSerializer.AddLine(m_currentContractOutputName + " *pClassInst = (" + m_currentContractOutputName + " *)pInstance;");
 			codeSerializer.AddLine("uint8_t *read_ptr = buffer;");
 			codeSerializer.AddLine("prlrt::serialize_size_type readbuf_size = prlrt::serialize_size_type(bufferSize);");
-			codeSerializer.AddLine("");
-			codeSerializer.AddLine("switch (type) {");
-
-			transpiler::ScopeType perSectionFlags[] = { transpiler::ScopeType::Global, transpiler::ScopeType::Shard, transpiler::ScopeType::Address, transpiler::ScopeType::Uint32, transpiler::ScopeType::Uint64,
-														transpiler::ScopeType::Uint96, transpiler::ScopeType::Uint128, transpiler::ScopeType::Uint160, transpiler::ScopeType::Uint256, transpiler::ScopeType::Uint512 };
-			std::string perSectionEnum[] = { "Global", "Shard", "Address", "Uint32", "Uint64", "Uint96", "Uint128", "Uint160", "Uint256", "Uint512" };
-			static_assert(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]) == sizeof(perSectionEnum) / sizeof(perSectionEnum[0]), "state variable section metadata length doesn't match");
-
-			constexpr uint32_t numOfSections = uint32_t(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]));
-
-			for (uint32_t sectionIdx = 0; sectionIdx < numOfSections; sectionIdx++)
+			codeSerializer.AddLine("try{");
+			codeSerializer.PushIndent();
 			{
-				codeSerializer.AddLine("case prlrt::ContractContextType::" + perSectionEnum[sectionIdx] + ":");
-				codeSerializer.PushIndent();
+				codeSerializer.AddLine("switch (type) {");
+
+				transpiler::ScopeType perSectionFlags[] = { transpiler::ScopeType::Global, transpiler::ScopeType::Shard, transpiler::ScopeType::Address, transpiler::ScopeType::Uint32, transpiler::ScopeType::Uint64,
+															transpiler::ScopeType::Uint96, transpiler::ScopeType::Uint128, transpiler::ScopeType::Uint160, transpiler::ScopeType::Uint256, transpiler::ScopeType::Uint512 };
+				std::string perSectionEnum[] = { "Global", "Shard", "Address", "Uint32", "Uint64", "Uint96", "Uint128", "Uint160", "Uint256", "Uint512" };
+				static_assert(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]) == sizeof(perSectionEnum) / sizeof(perSectionEnum[0]), "state variable section metadata length doesn't match");
+
+				constexpr uint32_t numOfSections = uint32_t(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]));
+
+				for (uint32_t sectionIdx = 0; sectionIdx < numOfSections; sectionIdx++)
 				{
-					uint32_t numStateVar = 0;
-					for (auto itor : m_definedStateVariables)
-						if ((itor.second.flags & uint32_t(transpiler::ScopeType::Mask)) == uint32_t(perSectionFlags[sectionIdx]))
-							numStateVar++;
-					if (numStateVar > 0)
-						codeSerializer.AddLine("if (!prlrt::util_rip_struct_serialized_header(" + std::to_string(numStateVar) + ", read_ptr, readbuf_size)) return false;");
-
-					for (auto itor : m_definedStateVariables)
+					codeSerializer.AddLine("case prlrt::ContractContextType::" + perSectionEnum[sectionIdx] + ":");
+					codeSerializer.PushIndent();
 					{
-						// state variables are always non-const
-						transpiler::DefinedIdentifier definedVariable = itor.second;
+						uint32_t numStateVar = 0;
+						for (auto itor : m_definedStateVariables)
+							if ((itor.second.flags & uint32_t(transpiler::ScopeType::Mask)) == uint32_t(perSectionFlags[sectionIdx]))
+								numStateVar++;
+						if (numStateVar > 0)
+							codeSerializer.AddLine("if (!prlrt::util_rip_struct_serialized_header(" + std::to_string(numStateVar) + ", read_ptr, readbuf_size)) return false;");
 
-						if ((definedVariable.flags & uint32_t(transpiler::ScopeType::Mask)) == uint32_t(perSectionFlags[sectionIdx]))
-							codeSerializer.AddLine("if (!pClassInst->" + definedVariable.outputName + ".map_from_serialized_data(read_ptr, readbuf_size, false)) return false;");
+						for (auto itor : m_definedStateVariables)
+						{
+							// state variables are always non-const
+							transpiler::DefinedIdentifier definedVariable = itor.second;
+
+							if ((definedVariable.flags & uint32_t(transpiler::ScopeType::Mask)) == uint32_t(perSectionFlags[sectionIdx]))
+								codeSerializer.AddLine("if (!pClassInst->" + definedVariable.outputName + ".map_from_serialized_data(read_ptr, readbuf_size, false)) return false;");
+						}
+						codeSerializer.AddLine("if (readbuf_size != 0) return false;");
+						codeSerializer.AddLine("return true;");
 					}
-					codeSerializer.AddLine("if (readbuf_size != 0) return false;");
-					codeSerializer.AddLine("return true;");
+					codeSerializer.PopIndent();
 				}
-				codeSerializer.PopIndent();
+				codeSerializer.AddLine("}");
 			}
-
+			codeSerializer.PopIndent();
+			codeSerializer.AddLine("} catch (prlrt::preda_exception &e) {");
+			codeSerializer.PushIndent();
+			codeSerializer.AddLine("return false;");
+			codeSerializer.PopIndent();
 			codeSerializer.AddLine("}");
-			codeSerializer.AddLine("");
 			codeSerializer.AddLine("return false;");
 		}
 		codeSerializer.PopIndent();
 		codeSerializer.AddLine("}");
-
 		codeSerializer.AddLine("");
 
 		codeSerializer.AddLine("API_EXPORT uint32_t Contract_" + m_currentContractUniqueIdentifierStr + "_GetContractContextSerializeSize(void *pInstance, prlrt::ContractContextType type) {");
@@ -2661,42 +2723,49 @@ void PredaRealListener::GenerateAuxiliaryFunctions()
 		{
 			codeSerializer.AddLine(m_currentContractOutputName + " *pClassInst = (" + m_currentContractOutputName + " *)pInstance;");
 			codeSerializer.AddLine("uint32_t ret = 0;");
-			codeSerializer.AddLine("");
-			codeSerializer.AddLine("switch (type) {");
-
-			transpiler::ScopeType perSectionFlags[] = { transpiler::ScopeType::Global, transpiler::ScopeType::Shard, transpiler::ScopeType::Address, transpiler::ScopeType::Uint32, transpiler::ScopeType::Uint64,
-														transpiler::ScopeType::Uint96, transpiler::ScopeType::Uint128, transpiler::ScopeType::Uint160, transpiler::ScopeType::Uint256, transpiler::ScopeType::Uint512 };
-			std::string perSectionEnum[] = { "Global", "Shard", "Address", "Uint32", "Uint64", "Uint96", "Uint128", "Uint160", "Uint256", "Uint512" };
-			static_assert(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]) == sizeof(perSectionEnum) / sizeof(perSectionEnum[0]), "state variable section metadata length doesn't match");
-
-			constexpr uint32_t numOfSections = uint32_t(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]));
-
-			for (uint32_t sectionIdx = 0; sectionIdx < numOfSections; sectionIdx++)
+			codeSerializer.AddLine("try{");
+			codeSerializer.PushIndent();
 			{
-				codeSerializer.AddLine("case prlrt::ContractContextType::" + perSectionEnum[sectionIdx] + ":");
-				codeSerializer.PushIndent();
+				codeSerializer.AddLine("switch (type) {");
+
+				transpiler::ScopeType perSectionFlags[] = { transpiler::ScopeType::Global, transpiler::ScopeType::Shard, transpiler::ScopeType::Address, transpiler::ScopeType::Uint32, transpiler::ScopeType::Uint64,
+															transpiler::ScopeType::Uint96, transpiler::ScopeType::Uint128, transpiler::ScopeType::Uint160, transpiler::ScopeType::Uint256, transpiler::ScopeType::Uint512 };
+				std::string perSectionEnum[] = { "Global", "Shard", "Address", "Uint32", "Uint64", "Uint96", "Uint128", "Uint160", "Uint256", "Uint512" };
+				static_assert(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]) == sizeof(perSectionEnum) / sizeof(perSectionEnum[0]), "state variable section metadata length doesn't match");
+
+				constexpr uint32_t numOfSections = uint32_t(sizeof(perSectionFlags) / sizeof(perSectionFlags[0]));
+
+				for (uint32_t sectionIdx = 0; sectionIdx < numOfSections; sectionIdx++)
 				{
-					uint32_t numStateVar = 0;
-					for (auto itor : m_definedStateVariables)
+					codeSerializer.AddLine("case prlrt::ContractContextType::" + perSectionEnum[sectionIdx] + ":");
+					codeSerializer.PushIndent();
 					{
-						// state variables are always non-const
-						transpiler::DefinedIdentifier definedVariable = itor.second;
-
-						if ((definedVariable.flags & uint32_t(transpiler::ScopeType::Mask)) == uint32_t(perSectionFlags[sectionIdx]))
+						uint32_t numStateVar = 0;
+						for (auto itor : m_definedStateVariables)
 						{
-							numStateVar++;
-							codeSerializer.AddLine("ret += pClassInst->" + definedVariable.outputName + ".get_serialize_size();");
-						}
-					}
-					if (numStateVar > 0)
-						codeSerializer.AddLine("ret += " + std::to_string((numStateVar + 1) * 4) + ";");
-					codeSerializer.AddLine("return ret;");
-				}
-				codeSerializer.PopIndent();
-			}
+							// state variables are always non-const
+							transpiler::DefinedIdentifier definedVariable = itor.second;
 
+							if ((definedVariable.flags & uint32_t(transpiler::ScopeType::Mask)) == uint32_t(perSectionFlags[sectionIdx]))
+							{
+								numStateVar++;
+								codeSerializer.AddLine("ret += pClassInst->" + definedVariable.outputName + ".get_serialize_size();");
+							}
+						}
+						if (numStateVar > 0)
+							codeSerializer.AddLine("ret += " + std::to_string((numStateVar + 1) * 4) + ";");
+						codeSerializer.AddLine("return ret;");
+					}
+					codeSerializer.PopIndent();
+				}
+				codeSerializer.AddLine("}");
+			}
+			codeSerializer.PopIndent();
+			codeSerializer.AddLine("} catch (prlrt::preda_exception &e) {");
+			codeSerializer.PushIndent();
+			codeSerializer.AddLine("ret = 0xffffffff;");
+			codeSerializer.PopIndent();
 			codeSerializer.AddLine("}");
-			codeSerializer.AddLine("");
 			codeSerializer.AddLine("return ret;");
 		}
 		codeSerializer.PopIndent();
@@ -2774,6 +2843,32 @@ void PredaRealListener::GenerateAuxiliaryFunctions()
 			codeSerializer.PopIndent();
 			codeSerializer.AddLine("}");
 			codeSerializer.AddLine("");
+			codeSerializer.AddLine("return uint32_t(prlrt::ExecutionError::NoError);");
+		}
+		codeSerializer.PopIndent();
+		codeSerializer.AddLine("}");
+		
+		codeSerializer.AddLine("API_EXPORT uint32_t Contract_" + m_currentContractUniqueIdentifierStr + "_InitGasTable(uint16_t* gas_cost_tbl, uint8_t gas_tbl_size) {");
+		codeSerializer.PushIndent();
+		{
+			codeSerializer.AddLine("prlrt::gas_costs = gas_cost_tbl;");
+			codeSerializer.AddLine("return uint32_t(prlrt::ExecutionError::NoError);");
+		}
+		codeSerializer.PopIndent();
+		codeSerializer.AddLine("}");
+
+		codeSerializer.AddLine("API_EXPORT uint64_t Contract_" + m_currentContractUniqueIdentifierStr + "_GetRemainingGas() {");
+		codeSerializer.PushIndent();
+		{
+			codeSerializer.AddLine("return prlrt::RemainingGas;");
+		}
+		codeSerializer.PopIndent();
+		codeSerializer.AddLine("}");
+
+		codeSerializer.AddLine("API_EXPORT uint32_t Contract_" + m_currentContractUniqueIdentifierStr + "_SetRemainingGas(uint64_t remainingGas) {");
+		codeSerializer.PushIndent();
+		{
+			codeSerializer.AddLine("prlrt::RemainingGas = remainingGas;");
 			codeSerializer.AddLine("return uint32_t(prlrt::ExecutionError::NoError);");
 		}
 		codeSerializer.PopIndent();

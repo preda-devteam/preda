@@ -114,6 +114,15 @@ namespace transpiler {
 			res = res && (DefineMemberFunction("get_originated_shard_order", FunctionSignature(QualifiedConcreteType(pTranspilerContext->GetBuiltInIntegerType(32, false), true, false), std::vector<DefinedIdentifierPtr>(), flags), false) != nullptr);
 
 			res = res && (DefineMemberFunction("get_initiator_address", FunctionSignature(QualifiedConcreteType(pTranspilerContext->GetBuiltInAddressType(), true, false), std::vector<DefinedIdentifierPtr>(), flags), false) != nullptr);
+
+			{
+				std::vector<ConcreteTypePtr> args = { pTranspilerContext->GetBuiltInTokenType() };
+				ConcreteTypePtr arrTokenType = pTranspilerContext->GetBuiltInArrayType()->GetConcreteTypeFromTemplateParams(args);
+				res = res && (DefineMemberFunction("get_supplied_tokens", FunctionSignature(QualifiedConcreteType(arrTokenType, false, false), std::vector<DefinedIdentifierPtr>(), flags), false) != nullptr);
+
+			}
+
+			res = res && (DefineMemberFunction("get_remaining_gas", FunctionSignature(QualifiedConcreteType(pTranspilerContext->GetBuiltInIntegerType(64, false), true, false), std::vector<DefinedIdentifierPtr>(), flags), false) != nullptr);
 			assert(res);
 		}
 	}
@@ -210,9 +219,6 @@ namespace transpiler {
 
 				signature.returnType = QualifiedConcreteType(nullptr, true, false);
 				signature.parameters.clear();
-				signature.parameters.push_back(Allocator::New<DefinedIdentifier>(pTranspilerContext->GetBuiltInBoolType(), true, true, "condition", 0));
-				res = res && (DefineMemberFunction("assert", signature, false) != nullptr);
-				signature.parameters.push_back(Allocator::New<DefinedIdentifier>(pTranspilerContext->GetBuiltInStringType(), true, true, "message", 0));
 				res = res && (DefineMemberFunction("assert", signature, false) != nullptr);
 			}
 

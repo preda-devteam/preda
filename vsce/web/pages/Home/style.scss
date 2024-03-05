@@ -58,6 +58,18 @@
       color: #3499F6;
       cursor: pointer;
     }
+    .view-table {
+      padding: 0;
+      background: #282828;
+      th, td {
+        padding: 18px;
+      }
+    }
+  }
+  .txn-state {
+    .view-table {
+      background: #1E1E1E;
+    }
   }
 }
 

@@ -175,7 +175,7 @@ RvmDataJsonifier::RvmDataJsonifier(const char *pTypeStr, ISymbolDatabaseForJsoni
 int RvmDataJsonifier::Jsonify(std::string& outJson, const uint8_t* pData, uint32_t dataSize, bool bWrapValueWithQuotation)
 {
 	uint32_t remainingSize = dataSize;
-	if (!_Jsonify(outJson, pData, remainingSize, bWrapValueWithQuotation))
+	if(!_Jsonify(outJson, pData, remainingSize, bWrapValueWithQuotation))
 		return -1;
 
 	return dataSize - remainingSize;
@@ -193,21 +193,21 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 		if(!(m_typeStrStream >> numMember))
 			return false;
 
-		if (pData)
+		if(pData)
 		{
 			// parse struct header
-			if (dataSize < 1)
+			if(dataSize < 1)
 				return false;
 			uint8_t bytesPerOffset = (pData[0] & 3) + 1;			// lower 4 bits of first byte is offset byte width
-			if (dataSize < bytesPerOffset)
+			if(dataSize < bytesPerOffset)
 				return false;
 
 			uint32_t numMember2 = (pData[0] >> 4);				// rest of first byteWidth bytes is number of members
 			for (uint8_t i = 1; i < bytesPerOffset; i++)
 				numMember2 += uint32_t(pData[i]) << ((i - 1) * 8 + 4);
-			if (numMember2 != numMember)							// the number of members should match the one in signature
+			if(numMember2 != numMember)							// the number of members should match the one in signature
 				return false;
-			if (dataSize < bytesPerOffset * (numMember2 + 1))		// skip the offset table
+			if(dataSize < bytesPerOffset * (numMember2 + 1))		// skip the offset table
 				return false;
 			pData += bytesPerOffset * (numMember2 + 1);
 			dataSize -= bytesPerOffset * (numMember2 + 1);
@@ -235,15 +235,15 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 
 		return true;
 	}
-	else if (curType == "uint512" || curType == "uint256" || curType == "uint128" || curType == "uint64" || curType == "uint32" || curType == "uint16" || curType == "uint8" || curType == "interface" || curType == "contract")
+	else if(curType == "uint512" || curType == "uint256" || curType == "uint128" || curType == "uint64" || curType == "uint32" || curType == "uint16" || curType == "uint8" || curType == "interface" || curType == "contract")
 	{
-		if (!pData)
+		if(!pData)
 		{
 			outJson = "0";
 			return true;
 		}
 		uint32_t width;
-		if (curType == "interface" || curType == "contract")
+		if(curType == "interface" || curType == "contract")
 			width = 64;
 		else
 		{
@@ -285,9 +285,9 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 
 		return false;
 	}
-	else if (curType == "int512" || curType == "int256" || curType == "int128" || curType == "int64" || curType == "int32" || curType == "int16" || curType == "int8")
+	else if(curType == "int512" || curType == "int256" || curType == "int128" || curType == "int64" || curType == "int32" || curType == "int16" || curType == "int8")
 	{
-		if (!pData)
+		if(!pData)
 		{
 			outJson = "0";
 			return true;
@@ -330,7 +330,7 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 		return false;
 	}
 	else if(curType == "float256" || curType == "float512" || curType == "float1024") {
-		if (!pData)
+		if(!pData)
 		{
 			outJson = "0";
 			return true;
@@ -362,7 +362,7 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 	}
 	else if(curType == "bool")
 	{
-		if (!pData)
+		if(!pData)
 		{
 			outJson = "false";
 			return true;
@@ -377,7 +377,7 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 	}
 	else if(curType == "string")
 	{
-		if (!pData)
+		if(!pData)
 		{
 			outJson = bWrapValueWithQuotation ? "\"\"" : "";
 			return true;
@@ -412,11 +412,12 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 	}
 	else if(curType == "array")
 	{
-		if (!pData)
+		if(!pData)
 		{
 			outJson = "[]";
 			std::string tmp;
-			m_typeStrStream >> tmp;
+			if (!TypeStrStreamSeekForwardOneType(m_typeStrStream))
+				return false;
 			return true;
 		}
 		if(dataSize < 4)
@@ -462,12 +463,13 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 	}
 	else if(curType == "map")
 	{
-		if (!pData)
+		if(!pData)
 		{
 			outJson = "{}";
 			std::string tmp;
 			m_typeStrStream >> tmp;
-			m_typeStrStream >> tmp;
+			if (!TypeStrStreamSeekForwardOneType(m_typeStrStream))
+				return false;
 			return true;
 		}
 		if(dataSize < 4)
@@ -536,31 +538,9 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 
 		return true;
 	}
-	else if(curType == "blob")
-	{
-		if (!pData)
-		{
-			outJson = bWrapValueWithQuotation ? "\"null\"" : "null";
-			return true;
-		}
-		uint32_t numBytes = sizeof(::rvm::Blob);
-		if(dataSize < numBytes)
-			return false;
-
-		rt::Json res;
-		::rvm::RvmTypeJsonify(*(::rvm::Blob *)pData, res);
-		outJson = res.GetInternalString();
-		if(!bWrapValueWithQuotation && outJson.size() >= 2 && outJson[0] == '\"' && outJson[outJson.size() - 1] == '\"')
-			outJson = outJson.substr(1, outJson.size() - 2);
-
-		dataSize -= numBytes;
-		pData += numBytes;
-
-		return true;
-	}
 	else if(curType == "hash")
 	{
-		if (!pData)
+		if(!pData)
 		{
 			outJson = bWrapValueWithQuotation ? "\"\"" : "";
 			return true;
@@ -582,7 +562,7 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 	}
 	else if(curType == "address")
 	{
-		if (!pData)
+		if(!pData)
 		{
 			outJson = bWrapValueWithQuotation ? "\"\"" : "";
 			return true;
@@ -604,7 +584,7 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 	}
 	else if(curType == "data")
 	{
-		if (!pData)
+		if(!pData)
 		{
 			outJson = bWrapValueWithQuotation ? "\"null\"" : "null";
 			return true;
@@ -627,7 +607,7 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 	}
 	else if(curType == "bigint")
 	{
-		if (!pData)
+		if(!pData)
 		{
 			outJson = bWrapValueWithQuotation ? "\"0\"" : "0";
 			return true;
@@ -651,7 +631,7 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 	}
 	else if(curType == "token")
 	{
-		if (!pData)
+		if(!pData)
 		{
 			outJson = bWrapValueWithQuotation ? "{\"id\":0,\"amount\":\"0\"}" : "{id:0,amount:0}";
 			return true;
@@ -698,9 +678,9 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 		if(!(m_typeStrStream >> enumTypeName))
 			return false;
 		uint16_t value = 0;
-		if (pData)
+		if(pData)
 		{
-			if (dataSize < 2)
+			if(dataSize < 2)
 				return false;
 			value = *(uint16_t*)pData;
 		}
@@ -711,7 +691,7 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 			outJson = "\"" + std::string(enumString) + "\"";
 		else
 			outJson = std::string(enumString);
-		if (pData)
+		if(pData)
 		{
 			dataSize -= 2;
 			pData += 2;
@@ -720,7 +700,7 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 	}
 	else if(curType == "vault")
 	{
-		if (!pData)
+		if(!pData)
 		{
 			outJson = "[]";
 			return true;
@@ -756,7 +736,7 @@ bool RvmDataJsonParser::IsLongIntegerLiteralInRange(const rt::String_Ref& litera
 {
 	bool literalIsNonPositive = literalBody[0] == '-';
 	rt::String_Ref str = literalIsNonPositive ? literalBody.SubStr(1) : literalBody;
-	if (str[0] == '0' && (str[1] == 'x' || str[0] == 'X'))
+	if(str[0] == '0' && (str[1] == 'x' || str[0] == 'X'))
 	{
 		return false;
 	}
@@ -764,19 +744,19 @@ bool RvmDataJsonParser::IsLongIntegerLiteralInRange(const rt::String_Ref& litera
 	static const std::vector<std::string> signed_max{ "170141183460469231731687303715884105727", "57896044618658097711785492504343953926634992332820282019728792003956564819967", "0", "6703903964971298549787012499102923063739682910296196688861780721860882015036773488400937149083451713845015929093243025426876941405973284973216824503042047" };
 	std::string maxValue = bIsSigned ? signed_max[bitWidth / 128 - 1] : unsigned_max[bitWidth / 128 - 1];
 	size_t maxValueLen = maxValue.length();
-	if (literalIsNonPositive)
+	if(literalIsNonPositive)
 	{
-		if (!bIsSigned)
+		if(!bIsSigned)
 		{
 			return false;
 		}
 		maxValue[maxValue.length() - 1] = '8';
 	}
-	if (str.GetLength() > maxValueLen)
+	if(str.GetLength() > maxValueLen)
 	{
 		return false;
 	}
-	else if (str.GetLength() < maxValueLen)
+	else if(str.GetLength() < maxValueLen)
 	{
 		return true;
 	}
@@ -784,8 +764,8 @@ bool RvmDataJsonParser::IsLongIntegerLiteralInRange(const rt::String_Ref& litera
 	{
 		for (int i = 0; i < maxValueLen; i++)
 		{
-			if (str[i] > maxValue[i]) return false;
-			if (str[i] < maxValue[i]) return true;
+			if(str[i] > maxValue[i]) return false;
+			if(str[i] < maxValue[i]) return true;
 		}
 	}
 	//when literalBody = maxValue
@@ -799,7 +779,7 @@ bool RvmDataJsonParser::IsIntegerLiteralInRange(const rt::String_Ref& literalBod
 	if(literalBody[0] == '0' && (literalBody[1] == 'x' || literalBody[1] == 'X')) {
 		base = 16;
 	}
-	if (bitWidth > 64)
+	if(bitWidth > 64)
 	{
 		return IsLongIntegerLiteralInRange(literalBody, bitWidth, bIsSigned);
 	}
@@ -899,12 +879,12 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 
 		return true;
 	}
-	else if (curType == "uint512" || curType == "uint256" || curType == "uint128" || curType == "uint64" || curType == "uint32" || curType == "uint16" || curType == "uint8" || curType == "interface" || curType == "contract")
+	else if(curType == "uint512" || curType == "uint256" || curType == "uint128" || curType == "uint64" || curType == "uint32" || curType == "uint16" || curType == "uint8" || curType == "interface" || curType == "contract")
 	{
 		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_NUMBER)
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting number.");
 		uint32_t width;
-		if (curType == "interface" || curType == "contract")
+		if(curType == "interface" || curType == "contract")
 		{
 			width = 64;
 		}
@@ -961,7 +941,7 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 
 		return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonUnknownIntegerWidth, "Internal error. Unknown integer width.");
 	}
-	else if (curType == "int512" || curType == "int256" || curType == "int128" || curType == "int64" || curType == "int32" || curType == "int16" || curType == "int8") 
+	else if(curType == "int512" || curType == "int256" || curType == "int128" || curType == "int64" || curType == "int32" || curType == "int16" || curType == "int8") 
 	{
 		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_NUMBER)
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting number.");
@@ -1058,7 +1038,7 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 		outBuffer.resize(1);
 		rt::String boolStr = jsonStr;
 		boolStr = boolStr.MakeLower();
-		if (boolStr != "true" && boolStr != "false" && boolStr != "t" && boolStr != "f")
+		if(boolStr != "true" && boolStr != "false" && boolStr != "t" && boolStr != "f")
 		{
 			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Incorrect boolean value.");
 		}
@@ -1227,17 +1207,6 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 
 		return true;
 	}
-	else if(curType == "blob")
-	{
-		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_STRING)
-			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting a string.");
-
-		outBuffer.resize(sizeof(::rvm::Blob));
-		if(!::rvm::RvmTypeJsonParse(*(::rvm::Blob*)&outBuffer[0], jsonStr))
-			return SetError(jsonStr.Begin(), JsonParseErrorCode::InvalidBlobValue, "Invalid blob value.");
-
-		return true;
-	}
 	else if(curType == "hash")
 	{
 		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_STRING)
@@ -1372,7 +1341,7 @@ bool FunctionArgumentUtil::JsonifyArguments(const char *pArgSignatureStr, ISymbo
 		RvmDataJsonifier jsonifier(argumentTypes[i].c_str(), pSymbolDatabase);
 		std::string paramJson;
 		int32_t numConsumedBytes = jsonifier.Jsonify(paramJson, pData, dataSize, true);
-		if (numConsumedBytes == -1)
+		if(numConsumedBytes == -1)
 			return false;
 
 		pData += numConsumedBytes;

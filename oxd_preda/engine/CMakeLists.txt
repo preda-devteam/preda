@@ -62,7 +62,6 @@ target_sources(preda_engine
   ../../SFC/core/ext/rocksdb/rocksdb.cpp
   ../../SFC/essentials.cpp
   ../native/types/data_jsonifer.cpp
-  ../native/types/blob.cpp
   ../native/types/data.cpp
 )
 target_include_directories(preda_engine

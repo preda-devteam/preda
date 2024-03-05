@@ -3,6 +3,7 @@
 #include <cassert>
 #include "common.h"
 #include "exceptions.h"
+#include "gascost.h"
 
 //The reason why there is a wrapper around __float<bitWidth> is that
 //engine and compile_env might be compiled by different compiler, thus result in different vtable layout
@@ -68,6 +69,7 @@ struct ____float{
     using internal_type = prlrt::PrecisionFloatInternal<bitWidth>;
     using fixed_size_in_bytes = std::integral_constant<serialize_size_type, serialize_size_type(sizeof(internal_type))>;
 	using type_identifier_type = simple_type_type_identifier<____get_type_identifier_enum_of_float_type<bitWidth>()>;
+	constexpr static uint32_t gas_coefficient = bitWidth / 256;
 	static constexpr uint32_t get_type_identifier_size()
 	{
 		return type_identifier_type::value.length();
@@ -81,6 +83,7 @@ struct ____float{
 		____floatType::float_zero(_fStruct);
 	}
 	____float(const char* float_literal){
+		burn_gas((uint64_t)gas_costs[PRDOP_FLOAT_ASSIGN] * gas_coefficient);
 		____floatType::ConvertFromString(_fStruct, float_literal);
 	}
 	____float(internal_type x){
@@ -88,27 +91,32 @@ struct ____float{
 	}
 	void operator=(const this_type &rhs)
 	{
+		burn_gas((uint64_t)gas_costs[PRDOP_FLOAT_ASSIGN] * gas_coefficient);
 		_fStruct = rhs._fStruct;
 	}
 	this_type operator-() const{
+		burn_gas((uint64_t)gas_costs[PRDOP_FLOAT_OP_SELF] * gas_coefficient);
 		internal_type result;
 		____floatType::float_negate(_fStruct, result);
 		this_type out(result);
 		return out;
 	}
 	this_type operator+(const this_type &rhs) const{
+		burn_gas((uint64_t)gas_costs[PRDOP_FLOAT_OP_SIMPLE] * gas_coefficient);
 		internal_type result;
 		____floatType::float_add(_fStruct, rhs._fStruct, result);
 		this_type out(result);
 		return out;
 	}
 	this_type operator-(const this_type &rhs) const{
+		burn_gas((uint64_t)gas_costs[PRDOP_FLOAT_OP_SIMPLE] * gas_coefficient);
 		internal_type result;
 		____floatType::float_sub(_fStruct, rhs._fStruct, result);
 		this_type out(result);
 		return out;
 	}
 	this_type operator*(const this_type &rhs) const{
+		burn_gas((uint64_t)gas_costs[PRDOP_FLOAT_OP_COMPLEX] * gas_coefficient);
 		internal_type result;
 		____floatType::float_mul(_fStruct, rhs._fStruct, result);
 		this_type out(result);
@@ -118,6 +126,7 @@ struct ____float{
 		return ____floatType::float_isZero(_fStruct);
 	}
 	this_type operator/(const this_type &rhs) const{
+		burn_gas((uint64_t)gas_costs[PRDOP_FLOAT_OP_COMPLEX] * gas_coefficient);
 		if(rhs.isZero()){
 			preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 		}
@@ -127,6 +136,7 @@ struct ____float{
 		return out;
 	}
 	__prlt_bool operator==(const this_type& rhs) const{
+		burn_gas((uint64_t)gas_costs[PRDOP_FLOAT_OP_SIMPLE] * gas_coefficient);
 		int result = ____floatType::float_compare(_fStruct, rhs._fStruct);
 		if(result == 0){
 			return __prlt_bool(true);
@@ -134,6 +144,7 @@ struct ____float{
 		return __prlt_bool(false);
 	}
 	__prlt_bool operator!=(const this_type& rhs) const{
+		burn_gas((uint64_t)gas_costs[PRDOP_FLOAT_OP_SIMPLE] * gas_coefficient);
 		int result = ____floatType::float_compare(_fStruct, rhs._fStruct);
 		if(result != 0){
 			return __prlt_bool(true);
@@ -141,6 +152,7 @@ struct ____float{
 		return __prlt_bool(false);
 	}
 	__prlt_bool operator>=(const this_type& rhs) const{
+		burn_gas((uint64_t)gas_costs[PRDOP_FLOAT_OP_SIMPLE] * gas_coefficient);
 		int result = ____floatType::float_compare(_fStruct, rhs._fStruct);
 		if(result == 0 || result == 1){
 			return __prlt_bool(true);
@@ -148,6 +160,7 @@ struct ____float{
 		return __prlt_bool(false);
 	}
 	__prlt_bool operator<=(const this_type& rhs) const{
+		burn_gas((uint64_t)gas_costs[PRDOP_FLOAT_OP_SIMPLE] * gas_coefficient);
 		int result = ____floatType::float_compare(_fStruct, rhs._fStruct);
 		if(result == 0 || result == -1){
 			return __prlt_bool(true);
@@ -155,6 +168,7 @@ struct ____float{
 		return __prlt_bool(false);
 	}
 	__prlt_bool operator<(const this_type& rhs) const{
+		burn_gas((uint64_t)gas_costs[PRDOP_FLOAT_OP_SIMPLE] * gas_coefficient);
 		int result = ____floatType::float_compare(_fStruct, rhs._fStruct);
 		if(result == -1){
 			return __prlt_bool(true);
@@ -162,6 +176,7 @@ struct ____float{
 		return __prlt_bool(false);
 	}
 	__prlt_bool operator>(const this_type& rhs) const{
+		burn_gas((uint64_t)gas_costs[PRDOP_FLOAT_OP_SIMPLE] * gas_coefficient);
 		int result = ____floatType::float_compare(_fStruct, rhs._fStruct);
 		if(result == 1){
 			return __prlt_bool(true);
@@ -180,21 +195,24 @@ struct ____float{
 		std::string float_str(&buf[0], len);
 		return float_str;
 	}
-	constexpr serialize_size_type get_serialize_size() const
+	serialize_size_type get_serialize_size() const
 	{
-		return sizeof(this_type);
+		burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_SIZE]);
+		return fixed_size_in_bytes::value;
 	}
 	void serialize_out(uint8_t *buffer, bool for_debug) const
 	{
-		*(this_type*)buffer = *this;
+		burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_OUT_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * fixed_size_in_bytes::value);
+		(*(this_type*)buffer)._fStruct = _fStruct;
 	}
 	bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 	{
-		if (bufferSize < serialize_size_type(sizeof(internal_type)))
+		burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_MAP_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * fixed_size_in_bytes::value);
+		if (bufferSize < fixed_size_in_bytes::value)
 			return false;
 		_fStruct = *(internal_type*)buffer;
-		buffer += serialize_size_type(sizeof(internal_type));
-		bufferSize -= serialize_size_type(sizeof(internal_type));
+		buffer += fixed_size_in_bytes::value;
+		bufferSize -= fixed_size_in_bytes::value;
 		return true;
 	}
 

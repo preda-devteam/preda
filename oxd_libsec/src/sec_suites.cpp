@@ -1,6 +1,7 @@
-#include "sec_suites.h"
 #include "../../SFC/core/ext/ipp/ipp_core.h"
 #include "../../SFC/core/rt/json.h"
+#include "sec_suites.h"
+#include "base58check.h"
 
 
 namespace oxd
@@ -43,9 +44,8 @@ bool SecureAddress::IsValid(const SecuritySuite& ss) const
 	auto ssid = ss.Id();
 	ASSERT(ssid == GetSecuritySuiteId());
 
-	ASSERT((ss.AddressEffectiveSize()%4) == 0);
-	for(UINT i = ss.AddressEffectiveSize()/4; i<32/4; i++)
-		if(DWords[i])return false;
+	for(UINT i = ss.AddressEffectiveSize(); i<32; i++)
+		if(Bytes[i])return false;
 
 	switch(ssid)
 	{
@@ -69,11 +69,7 @@ bool SecureAddress::IsValid(const SecuritySuite& ss) const
 void SecureAddress::SetupChecksum(const SecuritySuite& ss)
 {
 	ASSERT(ss.IsValid());
-	ASSERT((ss.AddressEffectiveSize()%4) == 0);
-
-	for(UINT i = ss.AddressEffectiveSize()/4; i<32/4; i++)
-		DWords[i] = 0;
-
+	rt::Zero(&Bytes[ss.AddressEffectiveSize()], sizeof(SecureAddress) - ss.AddressEffectiveSize());
 	DWords[8] = ((BYTE)ss.Id()) | (0xfffffff0 & ipp::crc32c(Bytes, 32, ss.Id()));
 }
 
@@ -164,6 +160,38 @@ void SecureAddress::ToString(rt::String& append) const
 	{
 		uint32_t addr_len = SecureAddress::String::GetStringifyLength(*this);
 		SecureAddress::String::Stringify(*this, append.Extend(addr_len), addr_len);
+	}
+}
+
+void SecureAddress::ToDialectString(rt::String& append) const
+{
+	auto ss = GetSecuritySuiteId();
+	switch(ss)
+	{
+	case oxd::SEC_SUITE_ETHEREUM:
+		{	
+			auto* p = append.Extend(os::Base16EncodeLength(20) + 2);
+			*p++ = '0';
+			*p++ = 'x';
+			os::Base16Encode(p, Bytes, 20);
+		}
+		break;
+	case oxd::SEC_SUITE_BITCOIN_P2PKH:
+		{
+			char str[200];
+			size_t str_len = sizeofArray(str) - 1;
+			VERIFY(b58enc(str, &str_len, Bytes, 25));
+			append += rt::String_Ref(str, str_len - 1);
+		}
+		break;
+	case oxd::SEC_SUITE_ED25519:
+		{	
+			auto* p = append.Extend(os::Base32EncodeLength(32));
+			os::Base32CrockfordEncodeLowercase(p, Bytes, 32);
+		}
+		break;
+	default:
+		break;
 	}
 }
 
@@ -277,28 +305,29 @@ uint32_t SecureAddress::String::GetStringifyLength(const SecureAddress& addr, bo
 	auto ss = addr.GetSecuritySuiteId();
 
 	if(ss == SEC_SUITE_UNKNOWN && addr.IsZero())
-		return (shorten?sz_NullAddressShort:sz_NullAddress).GetLength();
+		return (uint32_t)(shorten?sz_NullAddressShort:sz_NullAddress).GetLength();
 	else if(!addr.IsValid())
-		return (shorten?sz_InvalidAddressShort:sz_InvalidAddress).GetLength();
+		return (uint32_t)(shorten?sz_InvalidAddressShort:sz_InvalidAddress).GetLength();
 	else
 	{
 		if(shorten)
 		{
 			auto ssid = addr.GetSecuritySuiteId();
-			if (ssid > SEC_SUITE_DELEGATED_HASH && ssid < SEC_SUITE_DELEGATED_MAX)
-				return addr.GetDelegatedString().GetLength() + 2;
-			else if (ssid == SEC_SUITE_CONTRACT)
+			if(ssid > SEC_SUITE_DELEGATED_HASH && ssid < SEC_SUITE_DELEGATED_MAX)
+				return (uint32_t)addr.GetDelegatedString().GetLength() + 2;
+			else if(ssid == SEC_SUITE_CONTRACT)
 				return 18; //"0x" + uint64_t in hex
 			else
 				return 10; //"<xxx..xxx>"
 		}
 		else
-			if (ss == SEC_SUITE_CONTRACT)
+			if(ss == SEC_SUITE_CONTRACT)
 			{
-				return SecuritySuite::IdToString(SEC_SUITE_CONTRACT).GetLength() + 1 + 18; //"0x" + uint64_t in hex + ':' + suite id string
+				return (uint32_t)SecuritySuite::IdToString(SEC_SUITE_CONTRACT).GetLength() + 1 + 18; //"0x" + uint64_t in hex + ':' + suite id string
 			}
 			else
-			return	SecuritySuite::IdToString(ss).GetLength() + 1 + 
+			return	(uint32_t)SecuritySuite::IdToString(ss).GetLength() + 1 + 
+					(uint32_t)
 					(
 						(ss > SEC_SUITE_DELEGATED_HASH && ss < SEC_SUITE_DELEGATED_MAX)?
 							addr.GetDelegatedString().GetLength():
@@ -315,13 +344,13 @@ uint32_t SecureAddress::String::Stringify(const SecureAddress& addr, char* buf, 
 	{
 		auto& str = shorten?sz_NullAddressShort:sz_NullAddress;
 		ASSERT(buf_size >= str.GetLength());
-		return str.CopyTo(buf);
+		return (uint32_t)str.CopyTo(buf);
 	}
 	else if(!addr.IsValid())
 	{
 		auto& str = shorten?sz_InvalidAddressShort:sz_InvalidAddress;
 		ASSERT(buf_size >= str.GetLength());
-		return str.CopyTo(buf);
+		return (uint32_t)str.CopyTo(buf);
 	}
 	else
 	{
@@ -332,17 +361,17 @@ uint32_t SecureAddress::String::Stringify(const SecureAddress& addr, char* buf, 
 				auto str = addr.GetDelegatedString();
 				ASSERT(str.GetLength() + 2 <= buf_size);
 
-				return (rt::SS() + '<' + str + '>').CopyTo(buf);
+				return (uint32_t)(rt::SS() + '<' + str + '>').CopyTo(buf);
 			}
 			else if(ss == SEC_SUITE_CONTRACT)
 			{
 				auto cid = *(uint64_t*)&addr;
-				return (rt::SS("0x") + rt::tos::HexNum(cid)).CopyTo(buf);
+				return (uint32_t)(rt::SS("0x") + rt::tos::HexNum(cid)).CopyTo(buf);
 			}
 			else
 			{
 				ASSERT(9 <= buf_size);
-				uint32_t b32_len = os::Base32EncodeLength(sizeof(SecureAddress));
+				uint32_t b32_len = (uint32_t)os::Base32EncodeLength(sizeof(SecureAddress));
 				char* b32_buf = (char*)alloca(b32_len);
 
 				os::Base32CrockfordEncodeLowercase(b32_buf, &addr, sizeof(SecureAddress));
@@ -359,21 +388,21 @@ uint32_t SecureAddress::String::Stringify(const SecureAddress& addr, char* buf, 
 			{
 				auto str = addr.GetDelegatedString();
 				ASSERT(name.GetLength() + 1 + str.GetLength() <= buf_size);
-				return (str + ':' + name).CopyTo(buf);
+				return (uint32_t)(str + ':' + name).CopyTo(buf);
 			}
 			else if(ss == SEC_SUITE_CONTRACT)
 			{
 				auto cid = *(uint64_t*)&addr;
-				return (rt::SS("0x") + rt::tos::HexNum<17, true, true>(cid) + ':' + name).CopyTo(buf);
+				return (uint32_t)(rt::SS("0x") + rt::tos::HexNum<17, true, true>(cid) + ':' + name).CopyTo(buf);
 			}
 			else
 			{
-				uint32_t b32_len = os::Base32EncodeLength(sizeof(SecureAddress));
+				uint32_t b32_len = (uint32_t)os::Base32EncodeLength(sizeof(SecureAddress));
 				ASSERT(name.GetLength() + 1 + b32_len <= buf_size);
 
 				os::Base32CrockfordEncodeLowercase(buf, &addr, sizeof(SecureAddress));
 				buf[b32_len] = ':';
-				return name.CopyTo(buf + b32_len + 1) + 1 + b32_len;
+				return (uint32_t)name.CopyTo(buf + b32_len + 1) + 1 + b32_len;
 			}
 		}
 	}
@@ -397,13 +426,14 @@ SecuritySuite::SecuritySuite()
 }
 
 #define SEC_SUITE_ITERATE	ITERATE(SEC_SUITE_ETHEREUM)				\
+                            ITERATE(SEC_SUITE_BITCOIN_P2PKH)		\
                             ITERATE(SEC_SUITE_SM2)					\
 							ITERATE(SEC_SUITE_ED25519)				\
 							ITERATE(SEC_SUITE_DELEGATED_HASH)		\
 							ITERATE(SEC_SUITE_DELEGATED_NAME)		\
 							ITERATE(SEC_SUITE_DELEGATED_DAPP)		\
 							ITERATE(SEC_SUITE_DELEGATED_TOKEN)		\
-							ITERATE(SEC_SUITE_CONTRACT)	\
+							ITERATE(SEC_SUITE_CONTRACT)				\
 
 bool SecuritySuite::SetId(SecSuiteId ss)
 {

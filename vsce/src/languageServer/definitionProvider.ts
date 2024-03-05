@@ -1,18 +1,18 @@
 import * as vscode from 'vscode';
 import * as vscodeLang from 'vscode-languageserver';
-import { PredaListener } from './Preda/PredaListener';
-import { FunctionDeclarationContext, ImportDirectiveContext, ExpressionContext } from './Preda/PredaParser';
+import { PredaListener } from './Lang/LangListener';
+import { FunctionDeclarationContext, ImportDirectiveContext, ExpressionContext } from './Lang/LangParser';
 import { ParseTreeWalker } from 'antlr4ts/tree/ParseTreeWalker';
 import { getCurrentActiveFileAndFolder, isWin } from '../utils/finder';
 import { existsSync, readFileSync } from 'fs-extra';
 import path = require('path');
-import predaStrParser, { getPostionByIdentifierContext } from '../utils/predaParser';
+import predaStrParser, { getPostionByIdentifierContext } from '../utils/langParser';
 
 const fileScheme = isWin ? 'file:\\\\' : 'file://';
 class EnterFunctionListener implements PredaListener {
   // Assuming a parser rule with name: `enterFunctionDeclaration`
 }
-export class PredaDefinitionProvider implements vscode.DefinitionProvider {
+export default class PredaDefinitionProvider implements vscode.DefinitionProvider {
   /**
      * Provide definition for cursor position in Solidity codebase. It calculate offset from cursor position and find the
      * most precise statement in solparse AST that surrounds the cursor. It then deduces the definition of the element based
@@ -47,9 +47,10 @@ export class PredaDefinitionProvider implements vscode.DefinitionProvider {
             const [contractExpression] = ctx.expression();
             const targetTree = globalImportMap.get(contractExpression?.text);
             if(targetTree) {
-              const filepath = path.resolve(currentFolder, contractExpression?.text + '.prd');
+              const fileName = contractExpression?.text + '.prd';
+              const filepath = path.resolve(currentFolder, fileName);
               if (!existsSync(filepath)) {
-                return vscode.window.showErrorMessage(`${filepath} is not found`);
+                return vscode.window.showErrorMessage(`${fileName} is not found`);
               }
               const targetContractUri = vscode.Uri.parse(fileScheme + filepath);
               const listener: PredaListener = new EnterFunctionListener();

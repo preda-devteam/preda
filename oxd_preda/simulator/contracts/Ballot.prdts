@@ -4,6 +4,7 @@ random.reseed
 // allocate some address for the test
 allocate.address $~count$
 
+
 // set gas limit
 chain.gaslimit 256
 
@@ -15,7 +16,7 @@ log.highlight Token test
 log Perparing test transactions
 
 // set state, prepare for the test
-state.set address.Ballot @all { weight:$random(1, 20)$, voted_case:0 } 
+state.set Ballot.address @all { weight:$random(1, 20)$, voted_case:0 } 
  
 log.highlight Ballot test: Step 1 
 

@@ -34,6 +34,13 @@ struct SystemFunctionOpCodes
 	OpCode	GlobalDeploy;
 };
 
+struct NativeTokens
+{
+	virtual uint32_t			GetCount() const = 0;
+	virtual ConstNativeToken	Get(uint32_t idx) const = 0;
+	virtual void				Release() = 0;
+};
+
 struct Interface
 {
 	virtual ConstString			GetName() const = 0;
@@ -126,7 +133,7 @@ struct GlobalStates // only available in global scope
 	virtual ContractVersionId		GetContractByName(const ConstString* dapp_period_contract_name) const = 0; // return rvm::ContractScopeIdInvalid if not found
 	virtual BuildNum				GetContractEffectiveBuild(ContractId contract) const = 0;
 	virtual const DeployedContract*	GetContractDeployed(ContractVersionId contract) const = 0; // return on chain CMID of a contract of specific version
-	virtual bool					IsTokenMintAllowed(TokenId tid, ContractId contract) const = 0;
+	virtual TokenMinterFlag			GetTokenMinterState(TokenId tid, ContractId contract) const = 0;
 };
 
 struct ChainStates: public GlobalStates
@@ -153,6 +160,7 @@ struct InvocationInfo
 	virtual ScopeKey				GetScopeTarget() const = 0;	// return nullptr if current scope is PERSHARD
 	virtual OpCode					GetOpCode() const = 0;
 	virtual ContractInvokeId		GetContractId() const = 0;
+	virtual const NativeTokens*		GetNativeTokenSupplied() const = 0; // normal txn only (InvokeContextType::Normal)
 	virtual uint64_t				GetTimestamp() const = 0;
 	virtual InvokeContextType		GetInvokeType() const = 0;
 	// transaction: normal txn
@@ -173,7 +181,7 @@ struct ExecutionState: public ChainStates
 
 struct ExecutionContext: public ExecutionState
 {
-	virtual uint64_t				GetRandomNumber() = 0;
+	virtual void					Randomize(uint8_t* fill, uint32_t size) = 0;
 
 	// returns null if the state doesn't exist
 	virtual uint8_t*				AllocateStateMemory(uint32_t dataSize) = 0;
@@ -183,6 +191,7 @@ struct ExecutionContext: public ExecutionState
 
 	virtual bool					EmitRelayToScope(ContractInvokeId cid, const ScopeKey* scope_key, OpCode opcode, const ConstData* args_serialized, uint32_t gas_redistribution_weight) = 0;
 	virtual bool					EmitRelayToGlobal(ContractInvokeId cid, OpCode opcode, const ConstData* args_serialized, uint32_t gas_redistribution_weight) = 0;
+	virtual bool					EmitRelayDeferred(ContractInvokeId cid, OpCode opcode, const ConstData* args_serialized, uint32_t gas_redistribution_weight) = 0; // deferred relay to current scope, which can be global/shard/address/uds
 	virtual bool					EmitBroadcastToShards(ContractInvokeId cid, OpCode opcode, const ConstData* args_serialized, uint32_t gas_redistribution_weight) = 0; // global scope to all shards
 
 	// Deploy an unnamed contract
@@ -197,8 +206,8 @@ struct ExecutionContext: public ExecutionState
 	virtual void					SetReturnValueFinalize(uint32_t size_finalized) = 0;
 
 	// native contracts
-	virtual bool					CoreWalletWithdraw(TokenId tid, const rvm::BigNum* amount) = 0;
-	virtual void					CoreWalletDeposit(TokenId tid, const rvm::BigNum* amount) = 0;
+	virtual bool					NativeTokensDeposit(const ConstNativeToken* tokens, uint32_t count) = 0;
+	virtual void					NativeTokensSupplyChange(const ConstNativeToken* tokens, uint32_t count) = 0;
 };
 
 struct BlockchainRuntime: public GlobalStates

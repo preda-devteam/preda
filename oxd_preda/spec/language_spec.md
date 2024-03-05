@@ -272,7 +272,8 @@ A **string** can have up to 65535 characters.
 |  get_id       |    uint64   |         None         |    Yes   |  returns the id of the token stored in token |
 |  get_amount   |    bigint   |         None         |    Yes   |  returns the amount of token stored in type  |
 |  transfer     |     bool    |  token recipient, bigint transfer_amount  |    No    |   transfers a certain amount of token to another token    |
-|  transfer_all |     bool    |  token recipient      |    No    |   transfers all token in the current token to another one    |
+|  transfer_all |     bool    |  token recipient     |    No    |  transfers all token in the current token to another one    |
+|  deposit      |     None    |         None         |    No    |  deposits the token into the built-in wallet |
 
 transfer() and transfer_all() would fail if:
 1. the token id is 0, or
@@ -284,6 +285,14 @@ In addition, transfer() could fail if:
 
 4. the token doesn't have sufficient amount to transfer.
 
+For convenience, **token** also provide the following auxiliary functions for conversion between *ids* and *symbols*.
+|    function   | return type |     arguments    | is const |            description             |
+|:-------------:|:-----------:|:----------------:|:--------:|:----------------------------------:|
+|  id_to_symbol |   string    |     uint64 id    |    N/A   |  Converts the token id to symbol   |
+|  symbol_to_id |   uint64    |   string symbol  |    N/A   |  Converts the token symbol to id   |
+
+> These two functions can only be called on the token type (i.e. `token.id_to_symbol` and `token.symbol_to_id`) instead of on a token instance.
+
 #### 2.3.4 Structures
 
 Users can define custom **struct** types in their code.
@@ -293,7 +302,7 @@ A **struct** is a collection of data grouped together under one name. The member
 **A struct cannot have member functions.**
 
 ```c++
-struct MyStruct{
+struct MyStruct {
  TypeA memberA;
  TypeB memberB;
  TypeC memberC;
@@ -336,6 +345,7 @@ Explicit type conversion is allowed between specific types:
 |  string           |      hash         | Calculate the hash value of a string |
 |  hash             |      address      | Create a custom type address with value equal to the hash |
 |  hash             |      string       | Convert the hash to a string in the same format as a hash literal, but without ":hash" suffix |
+|  hash             |      uint256      | Create a custom type uint256 with value equal to the hash |
 |  address          |      string       | Convert the address to a string in the same format as a address literal |
 
 A couple examples:
@@ -463,12 +473,15 @@ while (condition){
 relay@TargetExpression functionName(params);
 relay@shards functionName(params);
 relay@global functionName(params);
+relay@next functionName(params);
 ```
-  There are 3 types of relay targets, as shown in the above example. The first type is the general form, where **TargetExpression** is an expression that evaluates to a type that matches the function's scope.
+  There are 4 types of relay targets, as shown in the above example. The first type is the general form, where **TargetExpression** is an expression that evaluates to a type that matches the function's scope.
 
   The second type is a broadcast relay, which uses the 'shards' keyword. It relays to all the non-global shards, like a broadcast. In this case, the called function must be defined in the shard scope.
 
-  The last type is a global relay, which uses the 'global' keyword. It relays to the global shard and must be called from a shard- or address- function. The function must be defined in the global scope.
+  The third type is a global relay, which uses the 'global' keyword. It relays to the global shard and cannot be used inside a global function. The function must be defined in the global scope.
+
+  The last type is deferred relay, which uses the 'next' keyword. It relays to the same scope as the current transaction but is executed in the next block of the same shard. This statement cannot be used in shard-functions.
 
   In all types, the function being called must be from the same contract.
 
@@ -476,19 +489,19 @@ relay@global functionName(params);
 
   Alternatively, relay statement define a lambda function inline and relay to it.
   ```c++
-  relay@TargetExpression|'shards'|'global' (['const'] parameterType parameterName = argumentExpression, ...) ['const']{
+  relay@TargetExpression|'shards'|'global'|'next' (['const'] parameterType parameterName = argumentExpression, ...) ['const']{
     // function body
   }
   ```
   The format is quite similar to defining a function except that:
 1. A function name is not needed. The compiler automatically generates a name for it.
-2. The scope of the anonymous function is *TargetExpression*, *shard* or *global*, based on the relay type.
+2. The scope of the anonymous function must match the requirements of the corresponding relay type.
 3. For each parameter, an argument must be provided as well.
 4. It is possible to use the 'auto' keyword as parameter type. In this case, the type is taken from the corresponding argument expression.
 
 Be aware that the relay function body is executed on the per-address context of TargetAddress, the per-shard context of the target shards, or the global context. It is not to be mixed with the current context on which the relay statement is invoked.
 
-To simplify the code, there's another way to specify a parameter in the relay lambda:
+To simplify code, there's another way to specify a parameter in the relay lambda:
 ```c++
 relay@someAddress (..., ^identifier, ...){
 }
@@ -936,7 +949,7 @@ contract C {
   }
 }
 ```
-In the code above, a variable of interface type *A.Addable* is defined. Interface types can be initialized with a contract id. Here, it is initialized with *B*'s id using the build-in function *__id()* that is automatically generated for each contract. Once a interface variable is initialized, it can be used to call any function defined in the interface and routed to the corresponding implementation in contract B.
+In the code above, a variable of interface type *A.Addable* is defined. Interface types can be initialized with a contract id. Here, it is initialized with *B*'s id using the build-in function *__id()* that is automatically generated for each contract. Once an interface variable is initialized, it can be used to call any function defined in the interface and is routed to the corresponding implementation in contract B.
 
 With interfaces, a contract can interact with any other contract that implements the interface without knowing them. For example:
 ```c++
@@ -963,8 +976,9 @@ An unnamed contract is deployed using the deploy statement:
 ```c++
 deploy contractName(parameters);
 ```
-Here `contractName` is the alias name of an imported contract and `parameters` should match the argument list of the imported contract's `on_deploy` function. It can be thought of as and create a new contract using the code of `contractName` but with fresh new contract state.
-The deploy statement returns a **uint64** value as the contract id of the newly deployed contract, which could be used to reference it using a contract type variable.
+Here `contractName` is the alias name of an imported contract and `parameters` should match the argument list of the imported contract's `on_deploy` function. It can be thought of as creating a new contract using the code of `contractName` but with fresh new contract state.
+
+The deploy statement returns a **uint64** value as the newly deployed contract's id, which could be used to reference it using a contract type variable.
 ```c++
 contract ContractA{
 	int32 value;
@@ -992,17 +1006,26 @@ contract ContractB {
 	}
 }
 ```
-Deploy statements are only allowed inside a non-constant global scope function.
+
+Similar to interface types, contract types have the following built-in functions:
+| function | return type | arguments | is const |                  description                 |
+|:--------:|:-----------:|:---------:|:--------:|:--------------------------------------------:|
+|   __id   |   uint64    |   None    |   Yes    |  Returns id of the current bound contract    |
+|  __valid |    bool     |   None    |   Yes    |  Checks if the bound contract was deployed from this named contract    |
+
+These two functions could be called directly on the contract type instead of instance. In this case, it would be referencing the named contract itself. (As shown on the last line of the example above.)
+
+> Deploy statements are only allowed inside a non-constant global scope function.
 
 
 ### 5.10 Supply Tokens from a Contract
 A contract can supply its own type of token using built-in functions *__mint* and *__burn* that are automatically generated for each contract.
-| function     | return type |     arguments     | is const |                  description                 |
-|:------------:|:-----------:|:-----------------:|:--------:|:--------------------------------------------:|
-|  __mint      |    token    |   bigint amount   |   Yes    |  mint the amount of token                    |
-|  __burn      |    None     |   token tk        |   Yes    |  burn the tokens stored in tk                |
+| function   | return type |     arguments                | is const |           description             |
+|:----------:|:-----------:|:----------------------------:|:--------:|:---------------------------------:|
+|  __mint    |    token    |   uint64 id, bigint amount   |   Yes    |  mint amount token of id          |
+|  __burn    |    None     |   token tk                   |   Yes    |  burn the tokens stored in tk     |
 
-The *id* of the token returned by *__mint* is the same as the *id* of the contract. *tk* passed to *__burn* must contain token with the same *id* of the contract, otherwise the function would do nothing.
+The execution engine would communicate with the underlying chain to verify if the current contract is allowed to mint / burn token of the corresponding *id*, otherwise the functions would do nothing. (i.e. no tokens would be minted / burnt.)
 
 ## 6 Runtime Environment
 ### 6.1 Contexts
@@ -1031,12 +1054,13 @@ enum transaction_type{
 | get_self_address()           | `() -> address`            | The address of `this` (not accessible from shard functions) | X | X | X | X |
 | get_sender()                 | `() -> address`            | Returns the first signer of the transaction or the contract that called the current contract | X | X | X | X |
 | get_timestamp()              | `() -> uint64`             | Timestamp of the transaction             | X | X | X | X |
-| get_signers()                | `() -> array<address>`     | the number of signers                    | X |   |   |   |
-| verify_signer()              | `(uint32) -> bool`         | check the signature of a signer          | X |   |   |   |
-| verify_signer()              | `(address) -> bool`        | check the signature of a signer          | X |   |   |   |
+| get_signers()                | `() -> array<address>`     | get the list of signers                  | X |   |   |   |
+| verify_signer()              | `(uint32) -> bool`         | verify the signature of a signer         | X |   |   |   |
+| verify_signer()              | `(address) -> bool`        | verify the signature of a signer         | X |   |   |   |
 | get_originated_shard_index() | `() -> uint32`             | Index of the originate shard             |   | X |   |   |
 | get_originated_shard_order() | `() -> uint32`             | Order of the originate shard             |   | X |   |   |
 | get_initiator_address()      | `() -> address`            | Target address of originate transaction  |   | X |   |   |
+| get_supplied_tokens()        | `() -> array<token>`       | Returns the tokens supplied with the transaction | X |   |   |   |
 
 
 #### 6.1.2 Block Context

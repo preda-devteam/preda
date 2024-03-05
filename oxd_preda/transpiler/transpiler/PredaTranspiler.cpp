@@ -80,11 +80,17 @@ namespace transpiler{
 			// add member functions
 			{
 				FunctionSignature signature;
+
+				signature.flags = uint32_t(FunctionFlags::IsConst);
 				signature.returnType = QualifiedConcreteType(GetBuiltInIntegerType(16, false), false, false);
 				res = res && (m_builtInStringType->DefineMemberFunction("length", signature, false) != nullptr);
+
+				signature.flags = 0;
 				signature.returnType = QualifiedConcreteType(nullptr, true, false);
 				signature.parameters.push_back(Allocator::New<DefinedIdentifier>(GetBuiltInStringType(), true, true, "value", 0));
 				res = res && (m_builtInStringType->DefineMemberFunction("set", signature, false) != nullptr);
+
+				signature.flags = 0;
 				signature.returnType = QualifiedConcreteType(GetBuiltInStringType(), false, false);
 				res = res && (m_builtInStringType->DefineMemberFunction("append", signature, false) != nullptr);
 			}
@@ -225,6 +231,16 @@ namespace transpiler{
 				signature.parameters[0] = (Allocator::New<DefinedIdentifier>(m_builtInHashType, true, true, "src", 0));
 				res = res && (m_builtInAddressType->DefineMemberFunction("@constructor", signature, false) != nullptr);
 			}
+			// Create conversion functions to uint256
+			{
+				FunctionSignature signature;
+				signature.flags = uint32_t(FunctionFlags::IsConst);
+				signature.parameters.resize(1);
+				signature.returnType = QualifiedConcreteType(GetBuiltInIntegerType(256, false), true, false);
+
+				signature.parameters[0] = (Allocator::New<DefinedIdentifier>(m_builtInHashType, true, true, "src", 0));
+				res = res && (GetBuiltInIntegerType(256, false)->DefineMemberFunction("@constructor", signature, false) != nullptr);
+			}
 			assert(res);
 		}
 	}
@@ -279,6 +295,32 @@ namespace transpiler{
 			signature.parameters.push_back(Allocator::New<DefinedIdentifier>(m_builtInTokenType, false, true, "recipient", 0));
 			signature.flags = 0;
 			bool res = (m_builtInTokenType->DefineMemberFunction("transfer_all", signature, false) != nullptr);
+			assert(res);
+		}
+		// add member function deposit
+		{
+			FunctionSignature signature;
+			signature.returnType = QualifiedConcreteType(nullptr, true, false);
+			signature.flags = uint32_t(ScopeType::Address);
+			bool res = (m_builtInTokenType->DefineMemberFunction("deposit", signature, false) != nullptr);
+			assert(res);
+		}
+		// add static member function id_to_symbol
+		{
+			FunctionSignature signature;
+			signature.returnType = QualifiedConcreteType(GetBuiltInStringType(), true, false);
+			signature.parameters.push_back(Allocator::New<DefinedIdentifier>(GetBuiltInIntegerType(64, false), true, true, "id", 0));
+			signature.flags = 0;
+			bool res = (m_builtInTokenType->DefineMemberFunction("id_to_symbol", signature, true) != nullptr);
+			assert(res);
+		}
+		// add static member function symbol_to_id
+		{
+			FunctionSignature signature;
+			signature.returnType = QualifiedConcreteType(GetBuiltInIntegerType(64, false), true, false);
+			signature.parameters.push_back(Allocator::New<DefinedIdentifier>(GetBuiltInStringType(), true, true, "symbol", 0));
+			signature.flags = 0;
+			bool res = (m_builtInTokenType->DefineMemberFunction("symbol_to_id", signature, true) != nullptr);
 			assert(res);
 		}
 

@@ -459,10 +459,20 @@ void ErrorPortal::AddUseCurrentContractTypeError()
 	AddError(ErrorCode::UseCurrentContractType, "using current contract type is not supported.");
 }
 
+void ErrorPortal::AddRelayNextFromShardError()
+{
+	AddError(ErrorCode::RelayNextFromShard, "relay@next is not allowed inside a shard function.");
+}
+
+void ErrorPortal::AddMemberOnlyAccessibleViaTypeName(const std::string& identifierName, const std::string& typeName)
+{
+	AddError(ErrorCode::MemberOnlyAccessibleViaTypeName, "\"" + identifierName + "\" cannot be accessed via an instance, use \"" + typeName + "." + identifierName + "\" instead.");
+}
+
 
 void ErrorPortal::AddSyntaxError(uint32_t line, uint32_t pos, const std::string &msg)
 {
-	m_errors.emplace_back(line, pos, ErrorCode::SyntaxError, msg);
+	m_errors.emplace_back(line, pos, ErrorCode::SyntaxError, "syntax error: " + msg);
 }
 void ErrorPortal::AddInternalError(uint32_t line, uint32_t pos, const std::string &msg)
 {

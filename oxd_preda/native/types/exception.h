@@ -60,7 +60,7 @@ auto& _RVM_REQUIRED(T&& x, const char* file, const char* func, uint32_t line)
 template<typename T>
 auto& _RVM_REQUIRED(T&& x)
 {
-	if (x) {}
+	if(x) {}
 	else
 	{
 #ifdef PLATFORM_DEBUG_BUILD

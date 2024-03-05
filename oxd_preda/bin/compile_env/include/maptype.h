@@ -4,6 +4,8 @@
 #include <map>
 #include <memory>
 #include <algorithm>
+#include "gascost.h"
+#include <cmath>
 
 namespace prlrt {
 
@@ -324,42 +326,69 @@ namespace prlrt {
 		}
 		void operator=(const __prlt_map<key_type, value_type> &rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_MAP_ASSIGN]);
 			ptr = rhs.ptr;
 		}
 
 		value_type& operator[](const key_type &key)
 		{
-			return (*(ptr.get()))[key];
+			uint64_t len = ptr->length();
+			double gas_co = len > 1 ? log2(len) : 1.0;
+			burn_gas((uint64_t)((double)gas_costs[PRDOP_MAP_OP_SIMPLE] * (gas_co + 1)));
+			disable_burn_gas();
+			value_type& ret = (*(ptr.get()))[key];
+			enable_burn_gas();
+			return ret;
 		}
 
 		const value_type& operator[](const key_type &key) const
 		{
-			return (*((const implementation_type*)ptr.get()))[key];
+			uint64_t len = ptr->length();
+			double gas_co = len > 1 ? log2(len) : 1.0;
+			burn_gas((uint64_t)((double)gas_costs[PRDOP_MAP_OP_SIMPLE] * (gas_co + 1)));
+			disable_burn_gas();
+			const value_type& ret = (*((const implementation_type*)ptr.get()))[key];
+			enable_burn_gas();
+			return ret;
 		}
 
 		__prlt_bool __prli_has(const key_type &key) const
 		{
-			return __prlt_bool(ptr->has(key));
+			uint64_t len = ptr->length();
+			double gas_co = len > 1 ? log2(len) : 1.0;
+			burn_gas((uint64_t)((double)gas_costs[PRDOP_MAP_OP_SIMPLE] * (gas_co + 1)));
+			disable_burn_gas();
+			__prlt_bool ret = __prlt_bool(ptr->has(key));
+			enable_burn_gas();
+			return ret;
 		}
 
 		void __prli_erase(const key_type &key) const
 		{
-			return ptr->erase(key);
+			uint64_t len = ptr->length();
+			double gas_co = len > 1 ? log2(len) : 1.0;
+			burn_gas((uint64_t)((double)gas_costs[PRDOP_MAP_OP_SIMPLE] * (gas_co + 1)));
+			disable_burn_gas();
+			ptr->erase(key);
+			enable_burn_gas();
 		}
 
 		// serialization-related interface
 		serialize_size_type get_serialize_size() const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_SIZE]);
 			return ptr->get_serialize_size();
 		}
 
 		void serialize_out(uint8_t *buffer, bool for_debug) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_OUT_STATIC]);
 			ptr->serialize_out(buffer, for_debug);
 		}
 
 		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_MAP_STATIC]);
 			return ptr->map_from_serialized_data(buffer, bufferSize, bDeep);
 		}
 	};

@@ -25,11 +25,11 @@ namespace prlrt {
 			preda_exception::throw_exception("interface call error", prlrt::ExceptionType(crossCallRes >> 8));
 	}
 
-	bool interface_is_implemented(uint64_t contractId, int64_t interfaceContractImportSlot, uint32_t interfaceSlot)
+	bool contract_implements_interface(uint64_t contractId, int64_t interfaceContractImportSlot, uint32_t interfaceSlot)
 	{
 		if (contractId == 0)
 			return false;
-		return PREDA_CALL(InterfaceIsImplemented, contractId, interfaceContractImportSlot, interfaceSlot);
+		return PREDA_CALL(ContractImplementsInterface, contractId, interfaceContractImportSlot, interfaceSlot);
 	}
 
 	struct interface_struct {

@@ -25,7 +25,7 @@ $ npm install -g @vscode/vsce
   - or right click the Text Editor and then click `PREDA: Set Args` in editor context menu
   - or click `PREDA: Set Args` button in context menu of file explorer
   - the arguments will be stored in a local file `scriptArgs.json` and be reused for further execution
-    ![Alt text](https://github.com/preda-devteam/preda/blob/main/vsce/resource/images/edit.png?raw=true "Set Args")
+    ![Alt text](https://github.com/preda-devteam/preda/blob/main/vsce/resource/images/edit.png?raw=true "SetArgs")
 
 - To run PREDA script (.prdts):
 
@@ -40,7 +40,7 @@ $ npm install -g @vscode/vsce
   - use shortcut `Ctrl+8` / `Command + 8`
   - or right click the Text Editor and then click `PREDA: deploy` in editor context menu
 
-## Snippets
+<!-- ## Snippets
 
 You can use those snippets in `.prdts`.
 
@@ -61,4 +61,4 @@ You can use those snippets in `.prdts`.
 | viz:p             | viz.profiling                                    |
 | viz:trace         | viz.trace {txn}                                  |
 | viz:section       | viz.section {txn}                                |
-| stopwatch         | stopwatch.restart + emptyline + stopwatch.report |
+| stopwatch         | stopwatch.restart + emptyline + stopwatch.report | -->

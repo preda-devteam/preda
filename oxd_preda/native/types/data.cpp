@@ -42,7 +42,13 @@ ConstData Data::GetRuntimeData() const
 void DataMutable::Reset()
 {
 	_Flag = 0;
-	rt::BufferEx<BYTE>::ChangeSize(0);
+	ChangeSize(0);
+}
+
+void DataMutable::SetSize(uint32_t size) // for Data::TYPE_RUNTIME only
+{
+	VERIFY(ChangeSize(size));
+	_Flag = Data::TYPE_RUNTIME;
 }
 
 void DataMutable::Set(const rt::String_Ref& x, UINT data_type)
@@ -52,7 +58,7 @@ void DataMutable::Set(const rt::String_Ref& x, UINT data_type)
 
 	if(x.GetLength() < 128)
 	{
-		SetSize(x.GetLength());
+		rt::BufferEx<BYTE>::SetSize(x.GetLength());
 		CopyFrom(x.Begin());
 		return;
 	}
@@ -72,7 +78,7 @@ void DataMutable::Set(const rt::String_Ref& x, UINT data_type)
 	}
 	else
 	{
-		SetSize(x.GetLength());
+		rt::BufferEx<BYTE>::SetSize(x.GetLength());
 		CopyFrom(x.Begin());
 	}
 }

@@ -3,6 +3,10 @@
 
 namespace rvm
 {
+namespace _details
+{
+thread_local BigNumMutable AmountTemp;
+}
 
 const BigNum& CoinsWallet::GetAmount(TokenId aid) const
 {
@@ -38,15 +42,54 @@ void CoinsWalletMutable::Deposit(const Coins& x)
 	if(!x.IsZero())
 	{
 		auto* exi = Get(x.GetId());
-		if(exi)
+		if(exi && !exi->IsZero())
 		{
-			BigNumMutable res_amount;
-			res_amount.Add(*exi, x.GetAmount());
-			Set(x.GetId(), res_amount);
+			_details::AmountTemp.Add(*exi, x.GetAmount());
+			Set(x.GetId(), _details::AmountTemp);
 		}
 		else
 			Set(x.GetId(), x.GetAmount());
 	}
+}
+
+void CoinsWalletMutable::Deposit(const ConstNativeToken &x)
+{
+	if(x.Token != rvm::TokenIdInvalid && x.Amount.BlockCount)
+	{
+		auto* exi = Get(x.Token);
+
+		if(exi && !exi->IsZero())
+		{
+			_details::AmountTemp.Add(*exi, BigNumRef(x.Amount.Blocks, x.Amount.BlockCount));
+			
+		}
+		else
+		{
+			_details::AmountTemp = BigNumRef(x.Amount.Blocks, x.Amount.BlockCount);
+		}
+
+		Set(x.Token, _details::AmountTemp);
+	}
+}
+
+bool CoinsWalletMutable::Withdraw(const Coins &x)
+{
+	if(!x.IsZero())
+	{
+		auto* exi = Get(x.GetId());
+		if(exi)
+		{
+			if(*exi < x.GetAmount())return false;
+			_details::AmountTemp.Sub(*exi, x.GetAmount());
+
+			Set(x.GetId(), _details::AmountTemp);
+			return true;
+		}
+
+		return false;
+	}	
+
+	return true;
 }
 
 void CoinsWalletMutable::Deposit(CoinsMutable &x)
@@ -56,9 +99,8 @@ void CoinsWalletMutable::Deposit(CoinsMutable &x)
 		auto* exi = Get(x.GetId());
 		if(exi)
 		{
-			BigNumMutable res_amount;
-			res_amount.Add(*exi, x.GetAmount());
-			Set(x.GetId(), res_amount);
+			_details::AmountTemp.Add(*exi, x.GetAmount());
+			Set(x.GetId(), _details::AmountTemp);
 		}
 		else
 			Set(x.GetId(), x.GetAmount());

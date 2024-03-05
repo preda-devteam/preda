@@ -59,13 +59,13 @@ static uint64_t get_round_constant(uint8_t round) {
 
     //uint8_t roundInfo = pgm_read_byte(&round_constant_info[round]);
     uint8_t roundInfo = getConstant(TYPE_ROUND_INFO, round);
-    if (roundInfo & (1 << 6)) { result |= ((uint64_t)1 << 63); }
-    if (roundInfo & (1 << 5)) { result |= ((uint64_t)1 << 31); }
-    if (roundInfo & (1 << 4)) { result |= ((uint64_t)1 << 15); }
-    if (roundInfo & (1 << 3)) { result |= ((uint64_t)1 << 7); }
-    if (roundInfo & (1 << 2)) { result |= ((uint64_t)1 << 3); }
-    if (roundInfo & (1 << 1)) { result |= ((uint64_t)1 << 1); }
-    if (roundInfo & (1 << 0)) { result |= ((uint64_t)1 << 0); }
+    if(roundInfo & (1 << 6)) { result |= ((uint64_t)1 << 63); }
+    if(roundInfo & (1 << 5)) { result |= ((uint64_t)1 << 31); }
+    if(roundInfo & (1 << 4)) { result |= ((uint64_t)1 << 15); }
+    if(roundInfo & (1 << 3)) { result |= ((uint64_t)1 << 7); }
+    if(roundInfo & (1 << 2)) { result |= ((uint64_t)1 << 3); }
+    if(roundInfo & (1 << 1)) { result |= ((uint64_t)1 << 1); }
+    if(roundInfo & (1 << 0)) { result |= ((uint64_t)1 << 0); }
 
     return result;
 }
@@ -178,14 +178,14 @@ void keccak_update(SHA3_CTX *ctx, const unsigned char *msg, uint16_t size)
 {
     uint16_t idx = (uint16_t)ctx->rest;
 
-    //if (ctx->rest & SHA3_FINALIZED) return; /* too late for additional input */
+    //if(ctx->rest & SHA3_FINALIZED) return; /* too late for additional input */
     ctx->rest = (unsigned)((ctx->rest + size) % BLOCK_SIZE);
 
     /* fill partial block */
-    if (idx) {
+    if(idx) {
         uint16_t left = BLOCK_SIZE - idx;
         memcpy((char*)ctx->message + idx, msg, (size < left ? size : left));
-        if (size < left) return;
+        if(size < left) return;
 
         /* process partial block */
         sha3_process_block(ctx->hash, ctx->message);
@@ -195,7 +195,7 @@ void keccak_update(SHA3_CTX *ctx, const unsigned char *msg, uint16_t size)
 
     while (size >= BLOCK_SIZE) {
         uint64_t* aligned_message_block;
-        if (IS_ALIGNED_64(msg)) {
+        if(IS_ALIGNED_64(msg)) {
             // the most common case is processing of an already aligned message without copying it
             aligned_message_block = (uint64_t*)(void*)msg;
         } else {
@@ -208,7 +208,7 @@ void keccak_update(SHA3_CTX *ctx, const unsigned char *msg, uint16_t size)
         size -= BLOCK_SIZE;
     }
 
-    if (size) {
+    if(size) {
         memcpy(ctx->message, msg, size); /* save leftovers */
     }
 }
@@ -223,7 +223,7 @@ void keccak_final(SHA3_CTX *ctx, unsigned char* result)
 {
     uint16_t digest_length = 100 - BLOCK_SIZE / 2;
 
-//    if (!(ctx->rest & SHA3_FINALIZED)) {
+//    if(!(ctx->rest & SHA3_FINALIZED)) {
         /* clear the rest of the data queue */
         memset((char*)ctx->message + ctx->rest, 0, BLOCK_SIZE - ctx->rest);
         ((char*)ctx->message)[ctx->rest] |= 0x01;
@@ -234,7 +234,7 @@ void keccak_final(SHA3_CTX *ctx, unsigned char* result)
 //        ctx->rest = SHA3_FINALIZED; /* mark context as finalized */
 //    }
 
-    if (result) {
+    if(result) {
          me64_to_le_str(result, ctx->hash, digest_length);
     }
 }

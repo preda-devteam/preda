@@ -11,8 +11,9 @@ enum SecSuiteId: uint8_t
 
 	SEC_SUITE_CRYPTOGRAPHY = 1,	// address is a public key, signing by private key
 	SEC_SUITE_ETHEREUM = SEC_SUITE_CRYPTOGRAPHY,	// ethereum
-	SEC_SUITE_SM2,				// 
+	SEC_SUITE_BITCOIN_P2PKH,	// bitcoin v1
 	SEC_SUITE_ED25519,			// default
+	SEC_SUITE_SM2,				// 
 	SEC_SUITE_CRYPTOGRAPHY_MAX,
 
 	SEC_SUITE_DELEGATED	= 8,	// address is not based on a public key, signing is delegated
@@ -45,7 +46,7 @@ namespace _details
 
 typedef bool (*FUNC_VerifySignature)(LPCVOID pk, LPCVOID signature, LPCVOID pMessage, UINT MessageLen);
 typedef bool (*FUNC_Sign)(LPCVOID sk, LPCVOID pMessage, UINT MessageLen, LPVOID signature_out);
-typedef void (*FUNC_GenerateKeypair)(LPVOID pk, LPVOID sk);
+typedef void (*FUNC_GenerateKeypair)(LPVOID pk, LPVOID sk, LPCVOID seed_32bytes_opt);
 typedef bool (*FUNC_DerivePublicKey)(LPCVOID sk, LPVOID out);
 typedef void (*FUNC_DeriveAddress)(LPCVOID pk, LPVOID out);
 
@@ -107,6 +108,7 @@ struct SecureAddress: public SecDataBlock<36>
 	void			Random(SecSuiteId ssid, UINT seed);
 	bool			FromString(const rt::String_Ref& str);
 	void			ToString(rt::String& append) const;
+	void			ToDialectString(rt::String& append) const;
 	void			Jsonify(rt::Json& append) const;
 
 	static bool		ValidateDelegatedName(SecSuiteId ssid, const rt::String_Ref& name);
@@ -158,7 +160,7 @@ public:
 
 	bool	VerifySignature(LPCVOID pk, LPCVOID signature, LPCVOID pMessage, UINT MessageLen) const { return _pEntry->VerifySignature(pk, signature, pMessage, MessageLen); }
 	bool	Sign(LPCVOID sk, LPCVOID pMessage, UINT MessageLen, LPVOID signature_out) const { return _pEntry->Sign(sk, pMessage, MessageLen, signature_out); }
-	void	GenerateKeypair(LPVOID pk, LPVOID sk) const { _pEntry->GenerateKeypair(pk, sk); }
+	void	GenerateKeypair(LPVOID pk, LPVOID sk, LPCVOID seed_32bytes = nullptr) const { _pEntry->GenerateKeypair(pk, sk, seed_32bytes); }
 	bool	DerivePublicKey(LPCVOID sk, LPVOID out) const { return _pEntry->DerivePublicKey(sk, out); }
 	void	DeriveAddress(LPCVOID pk, SecureAddress* out) const { _pEntry->DeriveAddress(pk, out); }
 	bool	DeriveAddressFromPrivateKey(LPCVOID sk, SecureAddress* out) const;

@@ -327,15 +327,15 @@ public:
 					if(r.end() < x.end() || x.begin() < r.begin() || x.end() < r.begin())return false;
 					if(r.begin() == x.begin() && r.Count == x.Count){ 
 						Ranged.erase(i);
-						_AdjustTotalCount((int)(-(x.Count)));
+						_AdjustTotalCount(-int(x.Count));
 						return true;
 					}
-					if(r.begin() == x.begin()){ r = { x.end(), r.Count - x.Count }; _AdjustTotalCount((int)(-(x.Count))); return true; }
-					if(r.end() == x.end()){ r.Count -= x.Count; _AdjustTotalCount((int)(-(x.Count))); return true; }
+					if(r.begin() == x.begin()){ r = { x.end(), r.Count - x.Count }; _AdjustTotalCount(-int(x.Count)); return true; }
+					if(r.end() == x.end()){ r.Count -= x.Count; _AdjustTotalCount(-int(x.Count)); return true; }
 					T_RANGE temp({ x.end(), (T_COUNT)(Ranged[i].end() - x.end()) });
 					Ranged.insert(i + 1, temp);
 					Ranged[i].Count = x.begin() - Ranged[i].begin();
-					_AdjustTotalCount((int)-(x.Count));
+					_AdjustTotalCount(-int(x.Count));
 					return true;
 				}
 				return false;

@@ -4,18 +4,19 @@ import { existsSync, writeFileSync } from "fs";
 
 import {
   getCurrentActiveFileAndFolder,
-  findTSByPrdName,
+  findTSByName,
   getConfigName
 } from "../utils/finder";
 import { outputToChannel } from "../utils/chsimu";
 
 export default async (uri: vscode.Uri, context: vscode.ExtensionContext) => {
   try {
+    vscode.commands.executeCommand('workbench.action.files.save');
     const { currentFolder } = getCurrentActiveFileAndFolder(uri);
-    let { currentFileName, currentFilePath, exist } = findTSByPrdName(uri);
+    let { currentFileName, currentFilePath, exist } = findTSByName(uri);
 
     if (!exist) {
-      vscode.window.showErrorMessage(`${currentFilePath} not exist`);
+      vscode.window.showErrorMessage(`./${currentFileName} not exist`);
       return;
     }
 
@@ -37,6 +38,8 @@ export default async (uri: vscode.Uri, context: vscode.ExtensionContext) => {
       inputBox.onDidAccept(async () => {
         if (inputBox) {
           const contractScriptArg = inputBox.value;
+          configJson[currentFileName] = contractScriptArg;
+          writeFileSync(configPath, JSON.stringify(configJson, null, 2));
           // close input
           inputBox.hide();
           try {
@@ -51,8 +54,7 @@ export default async (uri: vscode.Uri, context: vscode.ExtensionContext) => {
             vscode.window.showErrorMessage(ex.message);
           }
 
-          configJson[currentFileName] = contractScriptArg;
-          writeFileSync(configPath, JSON.stringify(configJson, null, 2));
+          
         }
       });
     } else {

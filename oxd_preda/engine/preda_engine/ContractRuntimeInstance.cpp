@@ -4,7 +4,7 @@
 
 class ContractModuleDLL : public ContractModule {
 public:
-	typedef void* (*FNCreateContractInstance)(prlrt::IRuntimeInterface* ____pInterface, uint64_t contractId, const uint64_t *importedContractIds, uint32_t numImportedContracts);
+	typedef void* (*FNCreateContractInstance)(prlrt::IRuntimeInterface* ____pInterface, uint64_t contractId, const uint64_t *importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit);
 	typedef void* (*FNDestroyContractInstance)(void* pContractInstancce);
 	typedef bool(*FNMapContractContextToInstance)(void* pInstance, prlrt::ContractContextType type, const uint8_t* buffer, uint32_t bufferSize);
 	typedef uint32_t(*FNTransactionCall)(void* pContractInstance, uint32_t functionId, const uint8_t* args, uint32_t args_size);
@@ -12,6 +12,9 @@ public:
 	typedef uint32_t(*FNGetContactStateSize)(void* pContractInstance, prlrt::ContractContextType type);
 	typedef uint32_t(*FNGetContractContextSerializeSize)(void* pContractInstance, prlrt::ContractContextType type);
 	typedef uint32_t(*FNSerializeOutContractContext)(void* pContractInstance, prlrt::ContractContextType type, uint8_t* buffer);
+	typedef uint32_t (*FNInitGasTable)(uint16_t* gas_cost_tbl, uint8_t gas_tble_size);
+	typedef uint64_t(*FNGetRemainingGas)();
+	typedef uint32_t (*FNSetRemainingGas)(uint64_t remainingGas);
 
 	FNCreateContractInstance fnCreateInstance;
 	FNDestroyContractInstance fnDestroyContractInstance;
@@ -20,6 +23,9 @@ public:
 	FNContractCall fnContractCall;
 	FNGetContractContextSerializeSize fnGetContractContextSerializeSize;
 	FNSerializeOutContractContext fnSerializeOutContractContext;
+	FNInitGasTable fnInitGasTable;
+	FNGetRemainingGas fnGetRemainingGas;
+	FNSetRemainingGas fnSetRemainingGas;
 
 	std::unique_ptr<ContractModuleLoaded> LoadToEngine(CExecutionEngine&) override;
 };
@@ -29,7 +35,7 @@ private:
 	ContractModuleDLL& m_dll;
 public:
 	ContractModuleDLLLoaded(ContractModuleDLL& dll) : m_dll(dll) {}
-	std::unique_ptr<ContractRuntimeInstance> NewInstance(CExecutionEngine& engine, rvm::ContractVersionId contractId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts) override;
+	std::unique_ptr<ContractRuntimeInstance> NewInstance(CExecutionEngine& engine, rvm::ContractVersionId contractId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit) override;
 };
 
 std::unique_ptr<ContractModuleLoaded> ContractModuleDLL::LoadToEngine(CExecutionEngine&) {
@@ -55,13 +61,19 @@ std::unique_ptr<ContractModule> ContractModule::FromLibrary(const ContractDataba
 	dllModule->fnContractCall = (ContractModuleDLL::FNContractCall)os::GetDynamicLibrarySymbol(mod, ("Contract_" + exportUniqueStr + "_ContractCallEntry").c_str());
 	dllModule->fnGetContractContextSerializeSize = (ContractModuleDLL::FNGetContractContextSerializeSize)os::GetDynamicLibrarySymbol(mod, ("Contract_" + exportUniqueStr + "_GetContractContextSerializeSize").c_str());
 	dllModule->fnSerializeOutContractContext = (ContractModuleDLL::FNSerializeOutContractContext)os::GetDynamicLibrarySymbol(mod, ("Contract_" + exportUniqueStr + "_SerializeOutContractContext").c_str());
+	dllModule->fnInitGasTable = (ContractModuleDLL::FNInitGasTable)os::GetDynamicLibrarySymbol(mod, ("Contract_" + exportUniqueStr + "_InitGasTable").c_str());
+	dllModule->fnGetRemainingGas = (ContractModuleDLL::FNGetRemainingGas)os::GetDynamicLibrarySymbol(mod, ("Contract_" + exportUniqueStr + "_GetRemainingGas").c_str());
+	dllModule->fnSetRemainingGas = (ContractModuleDLL::FNSetRemainingGas)os::GetDynamicLibrarySymbol(mod, ("Contract_" + exportUniqueStr + "_SetRemainingGas").c_str());
 	if (dllModule->fnCreateInstance == nullptr
 		|| dllModule->fnDestroyContractInstance == nullptr
 		|| dllModule->fnMapContractContextToInstance == nullptr
 		|| dllModule->fnTransactionCall == nullptr
 		|| dllModule->fnContractCall == nullptr
 		|| dllModule->fnGetContractContextSerializeSize == nullptr
-		|| dllModule->fnSerializeOutContractContext == nullptr)
+		|| dllModule->fnSerializeOutContractContext == nullptr
+		|| dllModule->fnInitGasTable == nullptr
+		|| dllModule->fnGetRemainingGas == nullptr
+		|| dllModule->fnSetRemainingGas == nullptr)
 		return nullptr;
 	return dllModule;
 }
@@ -97,13 +109,32 @@ public:
 	uint32_t SerializeOutContractContext(prlrt::ContractContextType type, uint8_t* buffer, uint32_t size) override {
 		return m_mod.fnSerializeOutContractContext(m_instance, type, buffer);
 	}
+
+	uint32_t TransactionCallWithoutInstance(uint32_t functionId, const uint8_t* args, uint32_t args_size) override {
+		return m_mod.fnTransactionCall(nullptr, functionId, args, args_size);
+	}
+
+	uint32_t InitGasTable(uint16_t* gas_cost_tbl, uint8_t gas_tbl_size) override
+	{
+		return m_mod.fnInitGasTable(gas_cost_tbl, gas_tbl_size);
+	}
+
+	uint64_t GetRemainingGas() override
+	{
+		return m_mod.fnGetRemainingGas();
+	}
+
+	uint32_t SetRemainingGas(uint64_t remainingGas) override
+	{
+		return m_mod.fnSetRemainingGas(remainingGas);
+	}
 };
 
 
-std::unique_ptr<ContractRuntimeInstance> ContractModuleDLLLoaded::NewInstance(CExecutionEngine& engine, rvm::ContractVersionId contractId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts)
+std::unique_ptr<ContractRuntimeInstance> ContractModuleDLLLoaded::NewInstance(CExecutionEngine& engine, rvm::ContractVersionId contractId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit)
 {
 	static_assert(sizeof(uint64_t) == sizeof(rvm::ContractVersionId), "rvm::ContractVersionId is no longer a 64-bit integer, need to change contract CreateInstance() argument type");
-	void* pInstance = m_dll.fnCreateInstance(&engine.runtimeInterface(), uint64_t(contractId), (const uint64_t*)importedContractIds, numImportedContracts);
+	void* pInstance = m_dll.fnCreateInstance(&engine.runtimeInterface(), uint64_t(contractId), (const uint64_t*)importedContractIds, numImportedContracts, gas_limit);
 	if (!pInstance) {
 		return nullptr;
 	}
@@ -115,13 +146,16 @@ struct WASMEntryPoints {
 
 	wasmtime::Instance wasmInstance;
 
-	wasmtime::TypedFunc<std::tuple<WasmPtrT, uint64_t, WasmPtrT, uint32_t>, WasmPtrT> fnCreateContract;
+	wasmtime::TypedFunc<std::tuple<WasmPtrT, uint64_t, WasmPtrT, uint32_t, uint64_t>, WasmPtrT> fnCreateContract;
 	wasmtime::TypedFunc<WasmPtrT, std::monostate> fnDestroyContract;
 	wasmtime::TypedFunc<std::tuple<WasmPtrT, uint32_t, WasmPtrT, uint32_t>, uint32_t> fnMapContractContextToInstance;
 	wasmtime::TypedFunc<std::tuple<WasmPtrT, uint32_t, WasmPtrT, uint32_t>, uint32_t> fnTransactionCall;
 	wasmtime::TypedFunc<std::tuple<WasmPtrT, uint32_t, WasmPtrT, uint32_t>, uint32_t> fnContractCall;
 	wasmtime::TypedFunc<std::tuple<WasmPtrT, uint32_t>, uint32_t> fnGetContractSerializeSize;
 	wasmtime::TypedFunc<std::tuple<WasmPtrT, uint32_t, WasmPtrT>, uint32_t> fnSerializeOutContract;
+	wasmtime::TypedFunc<std::tuple<WasmPtrT, uint32_t>, uint32_t> fnInitGasTable; 
+	wasmtime::TypedFunc<std::tuple<>, uint64_t> fnGetRemainingGas; 
+	wasmtime::TypedFunc<std::tuple<uint64_t>, uint32_t> fnSetRemainingGas; 
 
 	using FnInitTables = wasmtime::TypedFunc<std::monostate, std::monostate>;
 };
@@ -140,7 +174,7 @@ private:
 	WASMEntryPoints m_entry_points;
 public:
 	ContractModuleWASMLoaded(WASMEntryPoints entry_points) : m_entry_points(std::move(entry_points)) {}
-	std::unique_ptr<ContractRuntimeInstance> NewInstance(CExecutionEngine&, rvm::ContractVersionId contractId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts) override;
+	std::unique_ptr<ContractRuntimeInstance> NewInstance(CExecutionEngine&, rvm::ContractVersionId contractId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit) override;
 };
 
 class WASMMemory {
@@ -158,6 +192,17 @@ public:
 
 	bool Valid() {
 		return m_ptr != 0;
+	}
+
+	bool Resize(uint32_t size)
+	{
+		free();
+		auto r = m_rt.malloc().call(m_rt.wasm_store(), { (uint32_t)size });
+		if (r) {
+			m_ptr = r.unwrap();
+			return true;
+		}
+		return false;
 	}
 
 	WasmPtrT Ptr() {
@@ -227,6 +272,9 @@ std::unique_ptr<ContractModuleLoaded> ContractModuleWASM::LoadToEngine(CExecutio
 	auto fnSerializeOutContract = TypedFuncExtract<decltype(WASMEntryPoints::fnSerializeOutContract)>::Get(ctx, instance, ("Contract_" + exportUniqueStr + "_SerializeOutContractContext"));
 
 	auto fnInitTables = TypedFuncExtract<WASMEntryPoints::FnInitTables>::Get(ctx, instance, ("Contract_" + exportUniqueStr + "_InitTables"));
+	auto fnInitGasTable = TypedFuncExtract<decltype(WASMEntryPoints::fnInitGasTable)>::Get(ctx, instance, ("Contract_" + exportUniqueStr + "_InitGasTable"));
+	auto fnGetRemainingGas = TypedFuncExtract<decltype(WASMEntryPoints::fnGetRemainingGas)>::Get(ctx, instance, ("Contract_" + exportUniqueStr + "_GetRemainingGas"));
+	auto fnSetRemainingGas = TypedFuncExtract<decltype(WASMEntryPoints::fnSetRemainingGas)>::Get(ctx, instance, ("Contract_" + exportUniqueStr + "_SetRemainingGas"));
 
 	if (
 		!fnCreateContract ||
@@ -236,7 +284,10 @@ std::unique_ptr<ContractModuleLoaded> ContractModuleWASM::LoadToEngine(CExecutio
 		!fnContractCall ||
 		!fnGetContractSerializeSize ||
 		!fnSerializeOutContract ||
-		!fnInitTables)
+		!fnInitTables ||
+		!fnInitGasTable ||
+		!fnGetRemainingGas ||
+		!fnSetRemainingGas)
 		return nullptr;
 
 	{
@@ -255,6 +306,9 @@ std::unique_ptr<ContractModuleLoaded> ContractModuleWASM::LoadToEngine(CExecutio
 		fnContractCall.value(),
 		fnGetContractSerializeSize.value(),
 		fnSerializeOutContract.value(),
+		fnInitGasTable.value(),
+		fnGetRemainingGas.value(),
+		fnSetRemainingGas.value()
 	};
 
 	return std::make_unique<ContractModuleWASMLoaded>(std::move(pEntryPoints));
@@ -273,6 +327,7 @@ class ContractRuntimeInstanceWASM: public ContractRuntimeInstance
 	WASMRuntime& m_rt;
 	WASMEntryPoints &m_entry_points;
 	WasmPtrT m_wasm_contract = 0;
+	WASMMemory m_gas_table;
 	// Copy of the input states in wasm memory. Released after invocation.
 	std::vector<std::shared_ptr<WASMMemory>> m_input_state_copy;
 
@@ -295,6 +350,13 @@ public:
 
 	uint32_t SerializeOutContractContext(prlrt::ContractContextType type, uint8_t* buffer, uint32_t size) override;
 
+	uint32_t TransactionCallWithoutInstance(uint32_t functionId, const uint8_t* args, uint32_t args_size) override;
+
+	uint32_t InitGasTable(uint16_t* gas_cost_tbl, uint8_t gas_tbl_size) override;
+
+	uint64_t GetRemainingGas() override;
+
+	uint32_t SetRemainingGas(uint64_t remainingGas) override;
 
 };
 
@@ -302,7 +364,7 @@ ContractRuntimeInstanceWASM::ContractRuntimeInstanceWASM(
 	CExecutionEngine& engine,
 	WASMRuntime& rt,
 	WASMEntryPoints &entry_points,
-	WasmPtrT contract): m_engine(engine), m_rt(rt), m_entry_points(entry_points), m_wasm_contract(contract)
+	WasmPtrT contract): m_engine(engine), m_rt(rt), m_entry_points(entry_points), m_wasm_contract(contract), m_gas_table(rt, 0)
 {
 }
 
@@ -417,12 +479,40 @@ uint32_t ContractRuntimeInstanceWASM::SerializeOutContractContext(prlrt::Contrac
 	return r.unwrap();
 }
 
+uint32_t ContractRuntimeInstanceWASM::TransactionCallWithoutInstance(uint32_t functionId, const uint8_t* args, uint32_t args_size)
+{
+	wasmtime::Store::Context ctx = m_entry_points.store.context();
+	WASMMemory mem(m_rt, args_size);
+
+	if (!mem.Valid()) {
+		return (uint32_t)prlrt::ExecutionError::WASMTrapError;
+	}
+
+	std::copy(args, args + args_size, mem.HostPtr());
+
+	m_engine.runtimeInterface().PushExecStack();
+	auto r = m_entry_points.fnTransactionCall.call(ctx, {
+		0, (uint32_t)functionId, mem.Ptr(), args_size
+		});
+	prlrt::ExceptionType exc = m_engine.runtimeInterface().PopExecStack();
+
+	if (exc != prlrt::ExceptionType::NoException) {
+		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(exc) << 8);
+	}
+	if (!r) {
+		std::string msg = r.err().message();
+		return uint32_t(prlrt::ExecutionError::WASMTrapError);
+	}
+
+	return r.unwrap();
+}
+
 template <typename T>
 inline T WasmPtrToPtr(wasmtime::Span<uint8_t> mem, WasmPtrT offset) {
 	return offset == 0 ? nullptr : (T)(mem.begin() + offset);
 }
 
-std::unique_ptr<ContractRuntimeInstance> ContractModuleWASMLoaded::NewInstance(CExecutionEngine& engine, rvm::ContractVersionId contractId, const rvm::ContractVersionId *importedContractIds, uint32_t numImportedContracts)
+std::unique_ptr<ContractRuntimeInstance> ContractModuleWASMLoaded::NewInstance(CExecutionEngine& engine, rvm::ContractVersionId contractId, const rvm::ContractVersionId *importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit)
 {
 	WASMRuntime *rt = engine.wasm_runtime();
 	if (!rt) {
@@ -439,7 +529,7 @@ std::unique_ptr<ContractRuntimeInstance> ContractModuleWASMLoaded::NewInstance(C
 		mem.forget();
 	}
 
-	auto maybe_contractInstance = m_entry_points.fnCreateContract.call(m_entry_points.store, { 0, uint64_t(contractId), importedContractIds_offset, numImportedContracts });
+	auto maybe_contractInstance = m_entry_points.fnCreateContract.call(m_entry_points.store, { 0, uint64_t(contractId), importedContractIds_offset, numImportedContracts, gas_limit });
 	if (!maybe_contractInstance) {
 		std::string msg = maybe_contractInstance.err().message();
 		return nullptr;
@@ -450,4 +540,41 @@ std::unique_ptr<ContractRuntimeInstance> ContractModuleWASMLoaded::NewInstance(C
 	}
 
 	return std::make_unique<ContractRuntimeInstanceWASM>(engine, *rt, m_entry_points, contractInstance);
+}
+
+uint32_t ContractRuntimeInstanceWASM::InitGasTable(uint16_t* gas_cost_tbl, uint8_t gas_tbl_size) 
+{
+	wasmtime::Store::Context ctx = m_entry_points.store.context();
+	std::vector<uint8_t> data(gas_tbl_size * 2);
+	std::copy((uint8_t*)gas_cost_tbl, (uint8_t*)gas_cost_tbl + gas_tbl_size * 2, data.begin());
+	m_gas_table.Resize(data.size());
+
+	if (!m_gas_table.Valid()) {
+		return (uint32_t)prlrt::ExecutionError::WASMTrapError;
+	}
+	std::copy(data.begin(), data.end(), m_gas_table.HostPtr());
+
+	auto r = m_entry_points.fnInitGasTable.call(ctx, { m_gas_table.Ptr(), gas_tbl_size});
+	if (!r) {
+		std::string msg = r.err().message();
+		return uint32_t(prlrt::ExecutionError::WASMTrapError);
+	}
+	return r.unwrap();
+}
+
+uint64_t ContractRuntimeInstanceWASM::GetRemainingGas()
+{
+	auto r = m_entry_points.fnGetRemainingGas.call(m_entry_points.store.context(), {});
+	if(!r) return 0;
+	return r.unwrap();
+}
+
+uint32_t ContractRuntimeInstanceWASM::SetRemainingGas(uint64_t remainingGas)
+{
+	auto r = m_entry_points.fnSetRemainingGas.call(m_entry_points.store.context(), {remainingGas});
+	if (!r) {
+		std::string msg = r.err().message();
+		return uint32_t(prlrt::ExecutionError::WASMTrapError);
+	}
+	return r.unwrap();
 }

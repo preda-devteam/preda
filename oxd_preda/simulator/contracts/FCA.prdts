@@ -1,0 +1,17 @@
+allocate.address 10
+chain.gaslimit 128
+chain.deploy @0 FCA.prd
+
+state.token mint BTC by FCA
+
+FCA.mint @0 {symbol:"BTC", amount:"1000"}
+chain.run
+
+FCA.transfer @0 {to:"$@1$"} <= (100BTC)
+chain.run
+
+FCA.burn @0 {} <= (50BTC)
+chain.run
+
+viz.addr @0
+viz.addr @1

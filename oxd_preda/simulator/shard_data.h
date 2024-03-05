@@ -1,11 +1,14 @@
 #pragma once
+#include <deque>
+#include "../../SFC/core/ext/bignum/ttmath/ttmath.h"
 #include "../../SFC/core/ext/sparsehash/sparsehash.h"
 #include "../../SFC/core/ext/concurrentqueue/async_queue.h"
 #include "../../SFC/core/ext/exprtk/exprtk.h"
 #include "../native/abi/vm_interfaces.h"
+#include "../native/types/array.h"
+#include "../native/types/coins.h"
 #include "../native/types/abi_def_impl.h"
 #include "../../oxd_libsec/oxd_libsec.h"
-
 
 namespace oxd
 {
@@ -13,6 +16,9 @@ class Simulator;
 
 static const uint32_t		SIMU_BLOCK_INTERVAL = 5000; // msec
 static const rvm::BuildNum	BUILD_NUM_INIT = rvm::BuildNumInit;
+
+extern bool					RvmStateJsonify(rvm::ContractRepository* engine, rvm::ContractInvokeId contract, const rvm::ConstData* contract_state, rvm::StringStream* json_out);
+extern const rvm::Contract* RvmDeployedContract(rvm::RvmEngine* engine, rvm::ContractVersionId cvid);
 
 struct ShardStateKeyObj;
 struct ShardStateKey
@@ -65,13 +71,15 @@ struct EngineEntry
 
 enum SimuTxnFlag: uint16_t
 {
-	TXN_RELAY = 0x01,
-	TXN_BROADCAST = 0x02  // to all shards
+	TXN_RELAY		= 1<<0,
+	TXN_DEFERRED	= 1<<1,
+	TXN_BROADCAST	= 1<<2// to all shards
 };
 
 #pragma pack(push, 1)
 struct ScopeTarget
 {
+	uint8_t target_size;
 	union {
 		rvm::Address		addr;
 		uint32_t			u32;
@@ -80,18 +88,38 @@ struct ScopeTarget
 		rvm::UInt128		u128;
 		rvm::UInt160		u160;
 		rvm::UInt256		u256;
+		rvm::UInt336		u336;
 		rvm::UInt512		u512;
 	};
-	uint8_t target_size;
 	ScopeTarget(){ rt::Zero(*this); target_size = sizeof(rvm::Address); }
-	explicit ScopeTarget(const rvm::Address& v) : ScopeTarget() { addr = v; target_size = sizeof(v); }
-	explicit ScopeTarget(const uint32_t& v)		: ScopeTarget() { u32 = v; target_size = sizeof(v); }
-	explicit ScopeTarget(const uint64_t& v)		: ScopeTarget() { u64 = v; target_size = sizeof(v); }
-	explicit ScopeTarget(const rvm::UInt96& v)  : ScopeTarget() { u96 = v; target_size = sizeof(v); }
-	explicit ScopeTarget(const rvm::UInt128& v) : ScopeTarget() { u128 = v; target_size = sizeof(v); }
-	explicit ScopeTarget(const rvm::UInt160& v) : ScopeTarget() { u160 = v; target_size = sizeof(v); }
-	explicit ScopeTarget(const rvm::UInt256& v) : ScopeTarget() { u256 = v; target_size = sizeof(v); }
-	explicit ScopeTarget(const rvm::UInt512& v) : ScopeTarget() { u512 = v; target_size = sizeof(v); }
+	auto& operator = (const ScopeTarget& x){ memcpy(this, &x, 1 + x.target_size); return x; }
+
+	ScopeTarget(const rvm::Address& v) : ScopeTarget() { addr = v; target_size = sizeof(v); }
+	ScopeTarget(const uint32_t& v)	   : ScopeTarget() { u32 = v; target_size = sizeof(v); }
+	ScopeTarget(const uint64_t& v)	   : ScopeTarget() { u64 = v; target_size = sizeof(v); }
+	ScopeTarget(const rvm::UInt96& v)  : ScopeTarget() { u96 = v; target_size = sizeof(v); }
+	ScopeTarget(const rvm::UInt128& v) : ScopeTarget() { u128 = v; target_size = sizeof(v); }
+	ScopeTarget(const rvm::UInt160& v) : ScopeTarget() { u160 = v; target_size = sizeof(v); }
+	ScopeTarget(const rvm::UInt256& v) : ScopeTarget() { u256 = v; target_size = sizeof(v); }
+	ScopeTarget(const rvm::UInt336& v) : ScopeTarget() { u336 = v; target_size = sizeof(v); }
+	ScopeTarget(const rvm::UInt512& v) : ScopeTarget() { u512 = v; target_size = sizeof(v); }
+	ScopeTarget(const rvm::ScopeKey& v) : ScopeTarget()
+	{
+		switch (v.Size)
+		{
+		case 36:
+		case 4:
+		case 8:
+		case 12:
+		case 16:
+		case 32:
+		case 42:
+		case 64:
+			target_size = uint8_t(v.Size);
+			memcpy(&u512, v.Data, v.Size);
+			break;
+		}
+	}
 
 	TYPETRAITS_DECLARE_POD;
 };
@@ -100,8 +128,8 @@ struct SimuTxn
 {
 	rvm::HashValue			Hash;
 	rvm::InvokeContextType	Type;
-	ScopeTarget				Target;		// available if GetScope() is not global or shard
-	int64_t				    TargetIndex;   //Users[TargetIndex] or -1 if target is not an existing user
+	ScopeTarget				Target;			// available if GetScope() is not global or shard
+	int64_t				    TargetIndex;	//Users[TargetIndex] or -1 if target is not an existing user
 
 	uint64_t				Height; // height of the block including this txn
 	uint16_t				ShardIndex; // shard index
@@ -113,30 +141,39 @@ struct SimuTxn
 	uint16_t				OriginateShardOrder; // available if IsRelay()
 
 	uint64_t				Timestamp;
+	uint64_t				Gas;
+	uint32_t				GasRedistributionWeight;
+	static constexpr uint64_t DefaultGas = 10000000;
 
 	rvm::ContractInvokeId	Contract;  // Contract with scope
 	rvm::OpCode				Op;
 	SimuTxnFlag				Flag;
 
+	uint32_t				TokensSerializedSize;	// rvm::Array<rvm::Coins>, normal txn only
 	uint32_t				ArgsSerializedSize;
-	uint8_t					ArgsSerializedData[1];
+	uint8_t					SerializedData[1];		// [TokensSerializedData][ArgsSerializedData]
 
-	bool					IsRelay() const { return TXN_RELAY&Flag; }
+	bool					IsDeferred() const { return TXN_DEFERRED&Flag; }
+	bool					IsRelay() const { return (TXN_RELAY | TXN_DEFERRED) &Flag; }		// regard deferred as relay, otherwise there'll be a lot of assertion failures
 	bool					IsBroadcast() const { return TXN_BROADCAST&Flag; }
 	rvm::Scope				GetScope() const 
 	{
-		if (Type == rvm::InvokeContextType::System)
+		if(Type == rvm::InvokeContextType::System)
 		{
 			return rvm::Scope::Global;
 		}
-		return rvm::CONTRACT_SCOPE(Contract); 
+		return rvm::CONTRACT_SCOPE(Contract);
 	}
-	uint32_t				GetSize() const { return ArgsSerializedSize + offsetof(SimuTxn, ArgsSerializedData); }
+	bool					HasNativeTokensSupplied() const { return TokensSerializedSize; }
+	auto&					GetNativeTokenSupplied() const { ASSERT(HasNativeTokensSupplied()); return *(const rvm::Array<rvm::Coins>*)SerializedData; }
+	rvm::ConstData			GetArguments() const { return { SerializedData + TokensSerializedSize, ArgsSerializedSize }; }
+
+	uint32_t				GetSize() const { return ArgsSerializedSize + TokensSerializedSize + offsetof(SimuTxn, SerializedData); }
 	void					Release(){ _SafeFree8AL_ConstPtr(this); }
-	static SimuTxn*			Create(uint32_t args_size);
+	static SimuTxn*			Create(uint32_t args_size, uint32_t assets_size);
 	SimuTxn*				Clone() const;
 	rvm::EngineId			GetEngineId() const { return rvm::CONTRACT_ENGINE(Contract); }
-	void					Jsonify(rvm::RvmEngine* engine, rt::Json& append, rvm::InvokeResult* result) const;
+	void					Jsonify(rvm::RvmEngine* engine, rt::Json& append) const;
 };
 
 struct ConfirmTxn
@@ -144,14 +181,26 @@ struct ConfirmTxn
 	SimuTxn*			Txn;
 	uint64_t			GasBurnt;
 	rvm::InvokeResult	Result;
-#ifdef _VIZ
+	rt::BufferEx<std::pair<rvm::TokenId, ext::BigNumMutable>> Residual;
 	void Jsonify(rvm::RvmEngine* engine, rt::Json& append) const
 	{
 		auto s1 = append.ScopeAppendingElement();
-		append.Object(J(InvokeResult) = rt::EnumStringify(Result.Code));
-		Txn->Jsonify(engine, append, nullptr);
+		Txn->Jsonify(engine, append);
+		append << ((J(InvokeResult) = rt::EnumStringify(Result.Code), J(GasBurnt) = Result.GasBurnt)); 
+		if (Residual.GetSize())
+		{
+			rt::String tokenStr;
+			auto walletBody = append.ScopeAppendingKey("TokenResidual");
+			append.Array();
+			for (uint32_t j = 0; j < Residual.GetSize(); j++)
+			{
+				Residual[j].second.ToString(tokenStr);
+				tokenStr += ':' + rt::DS(Residual[j].first).GetLengthRecalculated();
+				append.AppendElement(tokenStr);
+				tokenStr.Empty();
+			}
+		}
 	}
-#endif
 };
 
 struct SimuBlock
@@ -180,27 +229,74 @@ struct SimuState
 };
 #pragma pack(pop)
 
+template<typename StateType>
+class ConstState
+{
+	const StateType*	_p;
+public:
+	ConstState(const rvm::ConstStateData& data)
+	{	_p = (const StateType*)data.DataPtr;
+		if(_p)ASSERT(_p->GetEmbeddedSize() == data.DataSize);
+	}
+	ConstState(const SimuState* s)
+	{	if (s && s->DataSize > 0)
+		{
+			_p = (const StateType*)s->Data;
+			ASSERT(_p->GetEmbeddedSize() == s->DataSize);
+		}
+		else _p = nullptr;
+	}
+	bool				IsEmpty() const { return _p == nullptr; }
+	operator const		StateType& () const { return *_p; }
+	const StateType*	operator ->() const { return _p; }
+
+	typedef typename rvm::TypeTraits<StateType>::Mutable Mutable;
+	Mutable				DeriveMutable() const { return _p?Mutable(*_p):Mutable(); }
+	static auto*		CreateState(const Mutable& m, rvm::BuildNum v)
+	{	uint32_t sz = StateType::GetEmbeddedSize(m);
+		auto* s = SimuState::Create(sz, v);
+		VERIFY(((StateType*)s->Data)->Embed(m) == sz);
+		return s;
+	}
+};
+
+
 
 class PendingTxns
 {
 protected:
-	typedef SimuTxn* LPSIMUTXN;
-	ext::AsyncDataQueueInfinite<SimuTxn*, false, 64, true> _Queue;
+	std::deque<SimuTxn*> _Queue;
+	mutable std::mutex _Mutex;				// this class is only used in multiple producer, single consumer cases. Hence there's no need to use a shared_mutex for better performance.
 
 public:
 	PendingTxns() = default;
 	~PendingTxns();
-	bool		Push(SimuTxn* tx);  // true if queue was empty
-	bool		Push(SimuTxn** txns, uint32_t count);  // true if queue was empty, for relay only
-	SimuTxn*	Pop();
-	bool		IsEmpty() const { return _Queue.GetSize() == 0; }
-	size_t		GetSize() const { return _Queue.GetSize(); }
+	bool		Push(SimuTxn* tx);							// push a txn to the back of the queue, returns true if queue was empty
+	bool		Push(SimuTxn** txns, uint32_t count);		// push multiple txns to the back of the queue, returns true if queue was empty
+	bool		Push_Front(SimuTxn* txn);					// push a txn to the front of the queue, returns true if queue was empty
+	SimuTxn*	Pop();										// pop a txn from the front of the queue
+	bool		IsEmpty() const
+	{
+		std::lock_guard<std::mutex> lock(_Mutex);
+		return _Queue.size() == 0;
+	}
+	size_t		GetSize() const
+	{
+		std::lock_guard<std::mutex> lock(_Mutex);
+		return _Queue.size();
+	}
 };
 
-namespace _details
+#pragma pack(push, 1)
+struct SimuAddressContract
 {
-extern const rvm::Contract* GetDeployedContract(rvm::RvmEngine* engine, rvm::ContractVersionId cid);
-} // namespace _details
+	ScopeTarget				Address;
+	rvm::ContractScopeId	Id;			// contractid with scope
+	bool operator == (const SimuAddressContract& x) const { return rt::IsEqual(*this, x); }
+
+	TYPETRAITS_DECLARE_POD;
+};
+#pragma pack(pop)
 
 template<typename KEY>
 class SimuChainState
@@ -240,12 +336,11 @@ public:
 	SimuChainState() = default;
 	~SimuChainState(){ Empty(); }
 
-#ifdef _VIZ
 	bool ShardStateJsonify(const EngineEntry* engine, rt::Json& append, rvm::ContractId target_cid, uint64_t shard_index) const
 	{
 		auto s = append.ScopeAppendingElement();
 		append.Object();
-		if(shard_index == 65535)
+		if(shard_index == rvm::GlobalShard)
 		{
 			append << ((J(ShardIndex) = "#g"));
 		}
@@ -259,37 +354,19 @@ public:
 		bool empty = true;
 		for(auto it : _State)
 		{
-			rvm::ContractId cid = rvm::CONTRACT_UNSET_SCOPE(it.first);
-			if(target_cid != rvm::ContractIdInvalid && cid != target_cid)
+			rvm::ContractScopeId csid = it.first;
+			rvm::ContractId cid = rvm::CONTRACT_UNSET_SCOPE(csid);
+			if ((uint64_t)target_cid != 0 && cid != target_cid)
 				continue;
-
 			empty = false;
-			auto s = append.ScopeAppendingElement();
-
-			int engine_id = (int)rvm::CONTRACT_ENGINE(it.first);
-			const rvm::Contract* contract = _details::GetDeployedContract(engine[engine_id].pEngine, rvm::CONTRACT_SET_BUILD(cid, it.second->Version));
-			if(!contract)
-			{
-				append.Empty();
-				return false;
-			}
-
-			append.Object(J(Contract) = contract->GetName().Str());
-			auto ss = append.ScopeAppendingKey("State");
-			rvm::StringStreamImpl str_out(append.GetInternalString());
-			rvm::ConstData data{it.second->Data, it.second->DataSize};
-
-			if(!engine[engine_id].pEngine->StateJsonify(rvm::CONTRACT_SET_BUILD(it.first, it.second->Version), &data, &str_out))
-			{
-				_LOG("[PRD]: Unable to jsonify state")
-				append.Empty();
-				return false;
-			}
+			SimuState* s = it.second;
+			int engine_id = (int)rvm::CONTRACT_ENGINE(cid);
+			JsonifyState(csid, append, s, engine[engine_id].pEngine);
 		}
 
 		if((uint64_t)target_cid != 0 && empty)
 		{
-			const rvm::Contract* contract = _details::GetDeployedContract(engine[(int)rvm::CONTRACT_ENGINE(target_cid)].pEngine, rvm::CONTRACT_SET_BUILD(target_cid, 1));
+			const rvm::Contract* contract = RvmDeployedContract(engine[(int)rvm::CONTRACT_ENGINE(target_cid)].pEngine, rvm::CONTRACT_SET_BUILD(target_cid, 1));
 			if(contract)
 			{
 				append << ((rt::_JTag(contract->GetName().Str()) = rt::SS("null")));
@@ -303,101 +380,147 @@ public:
 			return memcmp(a._, b._, sizeof(rvm::Address::_)) < 0;
 		}
 	};
+	void ContractStateJsonify(const EngineEntry* engine, rt::Json& append, rvm::ContractId target_cid) const
+	{
+		for (auto it : _State)
+		{
+			rvm::ContractId cid = rvm::CONTRACT_UNSET_SCOPE(it.first.Id);
+			if ((uint64_t)target_cid != 0 && cid != target_cid)
+				continue;
+			auto ss = append.ScopeAppendingElement();
+			append.Object(
+				J(Address) = oxd::SecureAddress::String(it.first.Address.addr)
+			);
+			SimuState* s = it.second;
+			int engine_id = (int)rvm::CONTRACT_ENGINE(cid);
+			auto sss = append.ScopeAppendingKey("States");
+			append.Array();
+			JsonifyState(it.first.Id, append, s, engine[engine_id].pEngine);
+		}
+	}
 
-	void AllAddressStateJsonify(const EngineEntry* engine, rt::Json& append, const rt::BufferEx<User>& Users, rvm::ContractId target_cid, int shard_index)
+	void AddressStateJsonify(const EngineEntry* engine, rt::Json& append, const rt::BufferEx<User>& Users, rvm::ContractId target_cid, int shard_index,const rvm::Address* targetAddr)
 	{
 		std::map<rvm::Address, rt::BufferEx<std::pair<rvm::ContractScopeId, SimuState*>>, cmpAddress> states_per_addr;
 		GroupAddrState(states_per_addr);
-		for(auto it : states_per_addr)
+		for (auto it : states_per_addr)
 		{
 			rvm::Address addr = it.first;
 			rt::BufferEx<std::pair<rvm::ContractScopeId, SimuState*>> state_arr = it.second;
 			auto s = append.ScopeAppendingElement();
-
-			User a({addr, rvm::ADDRESS_SHARD_DWORD(addr)});
-			append.Object((
-				J(Address) = oxd::SecureAddress::String(addr),
-				J(AddressIndex) = rt::SS() + ('@') + Users.Find(a),
-				J(ShardIndex) = rt::SS() + ('#') + shard_index
-			));
-			auto ss = append.ScopeAppendingKey("States");
-			append.Array();
-			for(std::pair<rvm::ContractScopeId, SimuState*> p : state_arr)
-			{
-				auto arr_sec = append.ScopeAppendingElement();
-				rvm::ContractScopeId csid = p.first;
-				rvm::ContractId cid = rvm::CONTRACT_UNSET_SCOPE(csid);
-				if((uint64_t)target_cid != 0 &&  cid != target_cid)
-					continue;
-
-				SimuState* s = p.second;
-				int engine_id = (int)rvm::CONTRACT_ENGINE(cid);
-				const rvm::Contract* contract = _details::GetDeployedContract(engine[engine_id].pEngine, rvm::CONTRACT_SET_BUILD(cid, s->Version));
-				if(!contract)
-				{
-					append.Empty();
-					return;
-				}
-
-				append.Object(J(Contract) = contract->GetName().Str());
-				auto sss = append.ScopeAppendingKey("State");
-				rvm::StringStreamImpl str_out(append.GetInternalString());
-				rvm::ConstData data{ s->Data, s->DataSize };
-				engine[engine_id].pEngine->StateJsonify(rvm::CONTRACT_SET_BUILD(csid, s->Version), &data, &str_out);
-			}
-		}
-	}
-
-	void AddressStateJsonify(const EngineEntry* engine, rvm::Address& Address, rt::Json& append, const rt::BufferEx<User>& Users, rvm::ContractId target_cid, int shard_index)
-	{
-		auto s = append.ScopeAppendingElement();
-		std::map<rvm::Address, rt::BufferEx<std::pair<rvm::ContractScopeId, SimuState*>>, cmpAddress> states_per_addr;
-		GroupAddrState(states_per_addr);
-		for(auto it : states_per_addr)
-		{
-			rvm::Address addr = it.first;
-			rt::BufferEx<std::pair<rvm::ContractScopeId, SimuState*>> state_arr = it.second;
-			if(memcmp(&addr._, &Address._, sizeof(rvm::Address)) != 0)
+			if (targetAddr != nullptr && memcmp(&addr._, &(targetAddr->_), sizeof(rvm::Address)) != 0)
 			{
 				continue;
 			}
 
-			User a({ Address, rvm::ADDRESS_SHARD_DWORD(Address) });
+			User a({ addr, rvm::ADDRESS_SHARD_DWORD(addr) });
 			append.Object((
-					J(Address) = oxd::SecureAddress::String(Address),
-					J(AddressIndex) = rt::SS() + ('@') + Users.Find(a),
-					J(ShardIndex) = rt::SS() + ('#') + shard_index
-			));
+				J(Address) = oxd::SecureAddress::String(addr),
+				J(AddressIndex) = rt::SS() + ('@') + Users.Find(a),
+				J(ShardIndex) = rt::SS() + ('#') + shard_index
+				));
 			auto ss = append.ScopeAppendingKey("States");
 			append.Array();
-			for(std::pair<rvm::ContractScopeId, SimuState*> p : state_arr)
+			for (std::pair<rvm::ContractScopeId, SimuState*> p : state_arr)
 			{
-				auto arr_sec = append.ScopeAppendingElement();
-				rvm::ContractScopeId csid = p.first;
-				rvm::ContractId cid = rvm::CONTRACT_UNSET_SCOPE(csid);
-				if((uint64_t)target_cid != 0 && cid != target_cid)
+				rvm::ContractId cid = rvm::CONTRACT_UNSET_SCOPE(p.first);
+				if (target_cid != rvm::ContractIdInvalid && cid != target_cid)
 					continue;
-
-				int engine_id = (int)rvm::CONTRACT_ENGINE(cid);
 				SimuState* s = p.second;
-				const rvm::Contract* contract = _details::GetDeployedContract(engine[engine_id].pEngine, rvm::CONTRACT_SET_BUILD(cid, s->Version));
-
-				if(!contract)
-				{
-					append.Empty();
-					return;
-				}
-
-				append.Object(J(Contract) = contract->GetName().Str());
-				auto sss = append.ScopeAppendingKey("State");
-				rvm::StringStreamImpl str_out(append.GetInternalString());
-				rvm::ConstData data{ s->Data, s->DataSize };
-				engine[engine_id].pEngine->StateJsonify(rvm::CONTRACT_SET_BUILD(csid, s->Version), &data, &str_out);
+				int engine_id = (int)rvm::CONTRACT_ENGINE(cid);
+				JsonifyState(p.first, append, s, engine[engine_id].pEngine);
+			}
+			if (targetAddr != nullptr)
+			{
+				return;
 			}
 		}
 	}
+
+	bool ScopeStateJsonify(const EngineEntry* engine, rt::Json& append, SimuAddressContract key, uint32_t shardIndex, bool allState) const
+	{
+		if(allState)
+		{
+			for (auto it : _State)
+			{
+				if(it.first.Address.target_size == key.Address.target_size && rvm::CONTRACT_UNSET_SCOPE(key.Id) == rvm::CONTRACT_UNSET_SCOPE(it.first.Id))
+				{
+					SimuState* s = it.second;
+					JsonifyScopeState(append, s, it.first, shardIndex, engine[(int)rvm::CONTRACT_ENGINE(it.first.Id)].pEngine);
+				}
+			}
+		}
+		else
+		{
+			SimuState* s = _State.get(key);
+			if(!s)
+			{
+				return false;
+			}
+			JsonifyScopeState(append, s, key, shardIndex, engine[(int)rvm::CONTRACT_ENGINE(key.Id)].pEngine);
+		}
+		return true;
+	}
+
 private:
-	void GroupAddrState(std::map<rvm::Address, rt::BufferEx<std::pair<rvm::ContractScopeId, SimuState*>>, cmpAddress>& m)
+	void JsonifyScopeState(rt::Json& append, SimuState* s, const SimuAddressContract& key, uint32_t shardIndex, rvm::RvmEngine* pEngine) const
+	{
+		auto ss = append.ScopeAppendingElement();
+		rt::String keyStr = ResolveScopeTargetName(key.Address);
+		append.Object((
+			J(Scope_Target) = keyStr,
+			J(ShardIndex) = rt::SS() + ('#') + shardIndex
+			));
+		auto sss = append.ScopeAppendingKey("States");
+		append.Array();
+		JsonifyState(key.Id, append, s, pEngine);
+	}
+	rt::String ResolveScopeTargetName(const ScopeTarget& target) const
+	{
+		std::string tmp;
+		switch (target.target_size)
+		{
+		case 4:
+			tmp = std::to_string(target.u32);
+			break;
+		case 8:
+			tmp = std::to_string(target.u64);
+			break;
+#pragma warning(push)
+#pragma warning(disable:4244)
+		case 16:
+			((ttmath::UInt<TTMATH_BITS(128)>*) & target.u128)->ToString(tmp);
+			break;
+		case 32:
+			((ttmath::UInt<TTMATH_BITS(256)>*) & target.u256)->ToString(tmp);
+			break;
+		case 64:
+			((ttmath::UInt<TTMATH_BITS(512)>*) & target.u512)->ToString(tmp);
+			break;
+#pragma warning(pop)
+		}
+		return rt::String(tmp.c_str());
+	}
+
+	void JsonifyState(rvm::ContractScopeId csid, rt::Json& append, SimuState* s, rvm::RvmEngine* pEngine) const
+	{
+		rvm::ContractId cid = rvm::CONTRACT_UNSET_SCOPE(csid);
+		const rvm::Contract* contract = RvmDeployedContract(pEngine, rvm::CONTRACT_SET_BUILD(cid, s->Version));
+		if(!contract)
+		{
+			append.Empty();
+			return;
+		}
+		auto arr_sec = append.ScopeAppendingElement();
+		append.Object((J(Contract) = contract->GetName().Str(),
+			J(CVID) = (uint64_t)rvm::CONTRACT_SET_BUILD(cid, s->Version)));
+		auto sss = append.ScopeAppendingKey("State");
+		rvm::StringStreamImpl str_out(append.GetInternalString());
+		rvm::ConstData data{ s->Data, s->DataSize };
+		RvmStateJsonify(pEngine, rvm::CONTRACT_SET_BUILD(csid, s->Version), &data, &str_out);
+	}
+
+	void GroupAddrState(std::map<rvm::Address, rt::BufferEx<std::pair<rvm::ContractScopeId, SimuState*>>, cmpAddress>& m) const
 	{
 		for(auto it : _State)
 		{
@@ -413,19 +536,8 @@ private:
 			m[it.first.Address.addr] = current;
 		}
 	}
-#endif
-};
 
-#pragma pack(push, 1)
-struct SimuAddressContract
-{
-	ScopeTarget				Address;
-	rvm::ContractScopeId	Id;			// contractid with scope
-	bool operator == (const SimuAddressContract& x) const { return rt::IsEqual(*this, x); }
-
-	TYPETRAITS_DECLARE_POD;
 };
-#pragma pack(pop)
 
 struct JsonLogError: public rvm::LogMessageOutput
 {
@@ -440,6 +552,8 @@ class InputParametrized
 	Simulator&	_Simulator;
 	auto&		_TempString(){ thread_local rt::String _; return _; }
 	auto&		_TempBuffer(){ thread_local rvm::DataBufferImpl _; return _; }
+
+	rt::BufferEx<uint8_t>	_TokensSupplied;  // rvm::Array<rvm::Coins>
 
 public:
 	struct Symbols: public ext::ExpressionSymbols<int64_t>
@@ -495,7 +609,7 @@ public:
 	bool	Parse(const rt::String_Ref& s);
 	void	Empty();
 	void	Evaluate(rt::String& out, int loop_index = 0) const;
-	auto	ComposeState(rvm::ContractInvokeId cid, int loop_index = 0) -> rvm::ConstData;
+	bool	ComposeState(rvm::ConstData &out_buf, rvm::ContractInvokeId cid, int loop_index = 0, const rt::String_Ref& existing_state = nullptr);
 	auto	ComposeTxn(rvm::ContractInvokeId cid, rvm::OpCode opcode, int loop_index = 0) -> SimuTxn*;
 	bool	IsError() const { return _Segments.GetSize() && _Segments.last().IsError(); }
 	bool	IsParameterized() const { return _bIsParametrized; }

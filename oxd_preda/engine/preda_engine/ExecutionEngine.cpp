@@ -9,19 +9,6 @@
 #include "PredaCompiledContracts.h"
 
 
-struct AutoReleaseExecutionIntermediateData
-{
-	CExecutionEngine *_p;
-	AutoReleaseExecutionIntermediateData(CExecutionEngine *p)
-		: _p(p)
-	{}
-
-	~AutoReleaseExecutionIntermediateData()
-	{
-		_p->ReleaseExecutionIntermediateData();
-	}
-};
-
 CExecutionEngine::CExecutionEngine(CContractDatabase *pDB)
 	: m_pDB(pDB), m_runtimeInterface(pDB), 
 	m_wasm_runtime(
@@ -40,22 +27,23 @@ CExecutionEngine::CExecutionEngine(CContractDatabase *pDB)
 
 void CExecutionEngine::ReleaseExecutionIntermediateData()
 {
-	// do not report orphan token when destroying contract instances.
-	// contract instances are serialized after execution, hence also the tokens in them.
-	// The only exception is a const call. In this case serialization of the token shouldn't expected anyway.
 	m_runtimeInterface.TurnOhphanTokenReportOnOff(false);
 	for (auto itor : m_intermediateContractInstances)
 		itor.second->DestroyContractInstance();
-	m_runtimeInterface.TurnOhphanTokenReportOnOff(true);
 	m_intermediateContractInstances.clear();
+	m_runtimeInterface.TurnOhphanTokenReportOnOff(true);
+
 	m_runtimeInterface.ClearStateModifiedFlags();
 	m_runtimeInterface.ClearContractStack();
 	m_runtimeInterface.ClearBigInt();
+	m_runtimeInterface.ClearOrphanTokens();
+	m_runtimeInterface.ClearDepositTokens();
+	m_runtimeInterface.ClearTokensSupplyChange();
 
 	m_inputStateCopies.clear();
 }
 
-ContractRuntimeInstance* CExecutionEngine::CreateContractInstance(const rvm::ContractModuleID &moduleId, rvm::ContractVersionId cvId, const rvm::ContractVersionId *importedCvId, uint32_t numImportedContracts)
+ContractRuntimeInstance* CExecutionEngine::CreateContractInstance(const rvm::ContractModuleID &moduleId, rvm::ContractVersionId cvId, const rvm::ContractVersionId *importedCvId, uint32_t numImportedContracts, uint64_t gas_limit)
 {
 	{
 		auto itor = m_intermediateContractInstances.find(cvId);
@@ -89,13 +77,14 @@ ContractRuntimeInstance* CExecutionEngine::CreateContractInstance(const rvm::Con
 		return nullptr;
 	}
 
-	ContractRuntimeInstance* pContractInstance = loaded_mod->NewInstance(*this, cvId, importedCvId, numImportedContracts).release();
+	ContractRuntimeInstance* pContractInstance = loaded_mod->NewInstance(*this, cvId, importedCvId, numImportedContracts, gas_limit).release();
 	if (!pContractInstance) {
 		return nullptr;
 	}
 	pContractInstance->mId = moduleId;
 	pContractInstance->cvId = cvId;
 	pContractInstance->currentMappedContractContextLevel = prlrt::ContractContextType::None;
+	pContractInstance->InitGasTable(prlrt::gasCostTbl.data(), prlrt::gasCostTbl.size());
 
 	m_intermediateContractInstances.try_emplace(cvId, pContractInstance);
 
@@ -170,12 +159,17 @@ uint32_t CExecutionEngine::InvokeContractCall(rvm::ExecutionContext *executionCo
 		|| (pContractEntry->compileData.functions[opCode].flags & uint32_t(transpiler::FunctionFlags::CallableFromOtherContract)) == 0)
 		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallFunctionNotFound) << 8);
 
+	if(m_intermediateContractInstances.find(m_runtimeInterface.GetContractTopCvid()) == m_intermediateContractInstances.end())
+		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallContractNotFound) << 8);
+
+	ContractRuntimeInstance* pCallerInstance = m_intermediateContractInstances[m_runtimeInterface.GetContractTopCvid()];
+
 	m_runtimeInterface.PushContractStack(deployedContract->Module, cvId, pContractEntry->compileData.functions[opCode].flags, (const rvm::ContractVersionId*)deployedContract->Stub, deployedContract->StubSize / sizeof(rvm::ContractVersionId));
 	// no need to call m_runtimeInterface.SetExecutionContext() here, contract call is only possible after a transaction call, therefore execution context is already set
 
 	if (deployedContract->StubSize % sizeof(rvm::ContractVersionId) != 0 || deployedContract->StubSize / sizeof(rvm::ContractVersionId) != pContractEntry->compileData.importedContracts.size())
 		return uint32_t(ExecutionResult::CannotCreateContractInstance);
-	ContractRuntimeInstance* pContractInstance = CreateContractInstance(deployedContract->Module, cvId, (const rvm::ContractVersionId*)deployedContract->Stub, deployedContract->StubSize / sizeof(rvm::ContractVersionId));
+	ContractRuntimeInstance* pContractInstance = CreateContractInstance(deployedContract->Module, cvId, (const rvm::ContractVersionId*)deployedContract->Stub, deployedContract->StubSize / sizeof(rvm::ContractVersionId), pCallerInstance->GetRemainingGas());
 	if (pContractInstance == nullptr)
 		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallContractNotFound) << 8);
 
@@ -183,6 +177,8 @@ uint32_t CExecutionEngine::InvokeContractCall(rvm::ExecutionContext *executionCo
 		return uint32_t(ExecutionResult::MapContractStateError);
 
 	uint32_t ret = pContractInstance->ContractCall(opCode, ptrs, numPtrs);
+
+	pCallerInstance->SetRemainingGas(pContractInstance->GetRemainingGas());
 
 	m_runtimeInterface.PopContractStack();
 
@@ -194,16 +190,42 @@ rvm::InvokeResult CExecutionEngine::Invoke(rvm::ExecutionContext *executionConte
 	rvm::InvokeResult ret;
 	ret.SubCodeHigh = 0;
 	ret.SubCodeLow = 0;
+	ret.TokenResidual = nullptr;
 
 	// TODO: get gas from executionContext once it's implemented.
-	m_runtimeInterface.SetGas(1000000);
+	m_runtimeInterface.SetGas(gas_limit);
 	m_runtimeInterface.SetChainState(executionContext);
 
 	rvm::ContractVersionId cvId = rvm::CONTRACT_UNSET_SCOPE(contract);
 	const rvm::DeployedContract* deployedContract = executionContext->GetContractDeployed(cvId);
-	uint32_t internalRet = Invoke_Internal(executionContext, cvId, deployedContract, opCode, args_serialized, gas_limit);
+	uint32_t internalRet = Invoke_Internal(executionContext, cvId, deployedContract, opCode, args_serialized, gas_limit, &ret.TokenResidual);
+	ret.GasBurnt = gas_limit - m_runtimeInterface.GetRemainingGas();
 
-	ret.GasBurnt = rvm::RVM_GAS_BURNT_DEFAULT;
+	// in case of execution failure, collect tokens on the txn arguments and report as residual
+	if ((internalRet & 0xff) != uint32_t(ExecutionResult::NoError))
+	{
+		// collect token residual from arguments
+		// skip normal transactions because they can't have tokens in arguments
+		// skip transactions without initiator because there would be no place to return the residual to
+		if (executionContext->GetInvokeType() != rvm::InvokeContextType::Normal && executionContext->GetInitiator() != nullptr)
+		{
+			// Even though transaction execution didn't succeed, there might already be collected token residual. Clear that here
+			m_runtimeInterface.ClearOrphanTokens();
+			// By calling the transaction without an instance, the arguments are deserialized to temporary variables which are not touched.
+			// The tokens are then collected when these variables are destructed.
+			ContractRuntimeInstance* pContractInstance = CreateContractInstance(deployedContract->Module, cvId, (const rvm::ContractVersionId*)deployedContract->Stub, deployedContract->StubSize / sizeof(rvm::ContractVersionId), 0);
+			// the following operation doesn't calculate gas, thus giving it enough gas to make right
+			pContractInstance->SetRemainingGas(10000000);
+			uint32_t ret_no_instance = pContractInstance->TransactionCallWithoutInstance(enum_to_underlying(opCode), args_serialized->DataPtr, args_serialized->DataSize);
+			if ((ret_no_instance & 0xff) == uint8_t(prlrt::ExecutionError::NoError))
+			{
+				_SafeRelease(ret.TokenResidual);			// in case ret.TokenResidual was set inside Invoke_Internal()
+				ret.TokenResidual = m_runtimeInterface.GetOrphanTokens();
+			}
+		}
+	}
+	ReleaseExecutionIntermediateData();
+
 	ret.SubCodeHigh = internalRet & 0xff;
 	switch (ExecutionResult(ret.SubCodeHigh))
 	{
@@ -252,10 +274,9 @@ rvm::InvokeResult CExecutionEngine::Invoke(rvm::ExecutionContext *executionConte
 			return ret;
 		}
 	}
-	//case ExecutionResult::ContractStateExceedsSizeLimit:
-	//case ExecutionResult::SerializeOutContractStateError:
-	//	ret.Code = rvm::InvokeErrorCode::SaveStateFailure;
-	//	return ret;
+	case ExecutionResult::InsufficientGas:
+		ret.Code = rvm::InvokeErrorCode::RunOutOfGas;
+		break;
 	case ExecutionResult::CannotLoadLibrary:
 	case ExecutionResult::CannotCreateContractInstance:
 		ret.Code = rvm::InvokeErrorCode::InternalError;
@@ -270,10 +291,8 @@ rvm::InvokeResult CExecutionEngine::Invoke(rvm::ExecutionContext *executionConte
 	return ret;
 }
 
-uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionContext, rvm::ContractVersionId cvId, const rvm::DeployedContract *deployedContract, rvm::OpCode opCode, const rvm::ConstData* args_serialized, uint32_t gas_limit)
+uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionContext, rvm::ContractVersionId cvId, const rvm::DeployedContract *deployedContract, rvm::OpCode opCode, const rvm::ConstData* args_serialized, uint32_t gas_limit, rvm::NativeTokens** out_token_residual)
 {
-	AutoReleaseExecutionIntermediateData autoRelease(this);
-
 	if (deployedContract == nullptr)
 		return uint32_t(ExecutionResult::ContractNotFound);
 
@@ -292,12 +311,16 @@ uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionConte
 			return uint32_t(ExecutionResult::FunctionSignatureMismatch);
 	}
 
+	// burn intrinsic gas for orign txn
+	if(executionContext->GetInvokeType() == rvm::InvokeContextType::Normal && !m_runtimeInterface.BurnGas(m_intrinsic_gas))
+		return uint32_t(ExecutionResult::InsufficientGas);
+
 	m_runtimeInterface.PushContractStack(deployedContract->Module, cvId, pContractEntry->compileData.functions[opCodeReal].flags, (const rvm::ContractVersionId*)deployedContract->Stub, deployedContract->StubSize / sizeof(rvm::ContractVersionId));
 	m_runtimeInterface.SetExecutionContext(executionContext);
 
 	if (deployedContract->StubSize % sizeof(rvm::ContractVersionId) != 0 || deployedContract->StubSize / sizeof(rvm::ContractVersionId) != pContractEntry->compileData.importedContracts.size())
 		return uint32_t(ExecutionResult::CannotCreateContractInstance);
-	ContractRuntimeInstance *pContractInstance = CreateContractInstance(deployedContract->Module, cvId, (const rvm::ContractVersionId *)deployedContract->Stub, deployedContract->StubSize / sizeof(rvm::ContractVersionId));
+	ContractRuntimeInstance *pContractInstance = CreateContractInstance(deployedContract->Module, cvId, (const rvm::ContractVersionId *)deployedContract->Stub, deployedContract->StubSize / sizeof(rvm::ContractVersionId), m_runtimeInterface.GetRemainingGas());
 	if (pContractInstance == nullptr)
 		return uint32_t(ExecutionResult::CannotCreateContractInstance);
 
@@ -312,6 +335,7 @@ uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionConte
 
 	// TODO: pass gas_limit into contract
 	uint32_t ret = pContractInstance->TransactionCall(opCodeReal, args_serialized->DataPtr, args_serialized->DataSize);
+	m_runtimeInterface.SetGas(pContractInstance->GetRemainingGas());
 
 	m_runtimeInterface.PopContractStack();
 
@@ -357,12 +381,26 @@ uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionConte
 
 					if (pModifiedFlags[i])
 					{
+						uint64_t remainingGas = m_runtimeInterface.GetRemainingGas();
+						itor.second->SetRemainingGas(remainingGas);
 						uint32_t csSize = itor.second->GetContractContextSerializeSize(prlrt::ContractContextType(i));
-						if (csSize == 0)
-							continue;
+						m_runtimeInterface.BurnGas(remainingGas - itor.second->GetRemainingGas());
+						if (csSize == 0) continue;
+						if (0xffffffff == csSize) return uint32_t(ExecutionResult::InsufficientGas);
+						
+						rvm::Scope scope = _details::PredaScopeToRvmScope(_details::RuntimeContextTypeToPredaScope(prlrt::ContractContextType(i)));
+						rvm::ConstStateData state = executionContext->GetState(rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(cvId), scope));
+						uint32_t orignSize = state.DataSize;
+						// burn state memory expandsion gas
+						if(csSize > orignSize && !m_runtimeInterface.BurnGas((csSize - orignSize) * 100))
+							return uint32_t(ExecutionResult::InsufficientGas);
 
 						uint8_t *pStateData = executionContext->AllocateStateMemory(csSize);
+						remainingGas = m_runtimeInterface.GetRemainingGas();
+						itor.second->SetRemainingGas(remainingGas);
 						uint32_t serializeRes = itor.second->SerializeOutContractContext(prlrt::ContractContextType(i), pStateData, csSize);
+						m_runtimeInterface.BurnGas(remainingGas - itor.second->GetRemainingGas());
+
 						if ((serializeRes & 0xff) != uint8_t(prlrt::ExecutionError::NoError))
 						{
 							for (auto &it : pendingStates)
@@ -377,7 +415,68 @@ uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionConte
 			}
 		}
 
-		for (auto &it : pendingStates)
+		{
+			// residual on txns without initiator is not allowed
+			rvm::NativeTokens* residual = m_runtimeInterface.GetOrphanTokens();
+			if (residual && residual->GetCount() > 0 && executionContext->GetInitiator() == nullptr)
+			{
+				for (auto& it : pendingStates)
+					executionContext->DiscardStateMemory(std::get<2>(it));
+
+				return (uint8_t(prlrt::ExecutionError::ResidualNotAllowed) << 8) | uint32_t(ExecutionResult::ExecutionError);
+			}
+
+			if (out_token_residual)
+				*out_token_residual = residual;
+		}
+
+		{
+			const std::map<uint64_t, rvm::BigNumMutable>& depositTokens = m_runtimeInterface.GetDepositTokens();
+			if (depositTokens.size() > 0)
+			{
+				std::vector<rvm::ConstNativeToken> tokens(depositTokens.size());
+				{
+					int i = 0;
+					for (const auto& itor : depositTokens)
+					{
+						tokens[i].Token = rvm::TokenId(itor.first);
+						tokens[i].Amount.BlockCount = itor.second.GetLength();
+						tokens[i].Amount.Blocks = itor.second._Data;
+						tokens[i].Amount.Sign = itor.second.GetSign();
+						i++;
+					}
+				}
+				if (!executionContext->NativeTokensDeposit(&tokens[0], uint32_t(tokens.size())))
+				{
+					for (auto& it : pendingStates)
+						executionContext->DiscardStateMemory(std::get<2>(it));
+
+					return (uint8_t(prlrt::ExecutionError::DepositTokenError) << 8) | uint32_t(ExecutionResult::ExecutionError);
+				}
+			}
+		}
+
+		{
+			const std::map<uint64_t, rvm::BigNumMutable>& tokensSupplyChange = m_runtimeInterface.GetTokensSupplyChange();
+			if (tokensSupplyChange.size() > 0)
+			{
+				std::vector<rvm::ConstNativeToken> tokens(tokensSupplyChange.size());
+				{
+					int i = 0;
+					for (const auto& itor : tokensSupplyChange)
+					{
+						tokens[i].Token = rvm::TokenId(itor.first);
+						tokens[i].Amount.BlockCount = itor.second.GetLength();
+						tokens[i].Amount.Blocks = itor.second._Data;
+						tokens[i].Amount.Sign = itor.second.GetSign();
+						i++;
+					}
+				}
+				executionContext->NativeTokensSupplyChange(&tokens[0], uint32_t(tokens.size()));
+			}
+		}
+
+		for (auto& it : pendingStates)
 			executionContext->CommitNewState(rvm::CONTRACT_SET_SCOPE(std::get<0>(it), std::get<1>(it)), std::get<2>(it));
 	}
 
@@ -407,6 +506,7 @@ rvm::InvokeResult CExecutionEngine::InitializeContracts(rvm::ExecutionContext* e
 	}
 
 	const std::vector<uint32_t>& compileOrder = pCompiledContracts->GetCompileOrder();
+	uint32_t remainingGas = gas_limit;
 	for (uint32_t i = 0; i < uint32_t(compileOrder.size()); i++)
 	{
 		uint32_t slot = compileOrder[i];
@@ -415,18 +515,25 @@ rvm::InvokeResult CExecutionEngine::InitializeContracts(rvm::ExecutionContext* e
 		if (opCodes.GlobalDeploy != rvm::OpCodeInvalid)
 		{
 			// TODO: design a mechanism to distribute gas among multiple contracts
-			rvm::InvokeResult result = Invoke(executionContext, gas_limit, rvm::CONTRACT_SET_SCOPE(ids[slot], rvm::Scope::Global), opCodes.GlobalDeploy, &ctor_args[slot]);
+			rvm::InvokeResult result = Invoke(executionContext, remainingGas, rvm::CONTRACT_SET_SCOPE(ids[slot], rvm::Scope::Global), opCodes.GlobalDeploy, &ctor_args[slot]);
 			if (result.Code != rvm::InvokeErrorCode::Success)
 				return result;
+			remainingGas = result.GasBurnt > remainingGas ? 0 : remainingGas - result.GasBurnt;
 		}
 	}
 
-	//return { 0, 0, rvm::InvokeErrorCode::Success, rvm::RVM_GAS_BURNT_DEFAULT };
-	return { 0, 0, rvm::InvokeErrorCode::Success, 0 };
+	return { 0, 0, rvm::InvokeErrorCode::Success, gas_limit - remainingGas, nullptr };
 }
 
 void CExecutionEngine::GetExceptionMessage(uint16_t except, rvm::StringStream* str) const
 {
 	rt::EnumStringify ExceptionEnumString((prlrt::ExceptionType)except);
 	str->Append(ExceptionEnumString._p, (uint32_t)ExceptionEnumString._len);
+}
+
+ContractRuntimeInstance* CExecutionEngine::GetIntermediateContractInstanceFromCvid(rvm::ContractVersionId cvid)
+{
+	if (m_intermediateContractInstances.find(cvid) == m_intermediateContractInstances.end())
+		return nullptr;
+	else return m_intermediateContractInstances[cvid];
 }

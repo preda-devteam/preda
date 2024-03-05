@@ -3,6 +3,7 @@
 #include "inttypes.h"
 #include "floattypes.h"
 #include <string>
+#include "gascost.h"
 
 namespace prlrt {
 
@@ -212,6 +213,7 @@ namespace prlrt {
 		}
 		void operator=(const __prlt_string &rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_STR_ASSIGN]);
 			ptr = rhs.ptr;
 		}
 		explicit __prlt_string(const char *p)
@@ -220,64 +222,82 @@ namespace prlrt {
 		// string interface
 		__prlt_bool operator ==(const __prlt_string &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_STR_OP_SIMPLE]);
 			return ptr->operator ==(*rhs.ptr.get());
 		}
 
 		__prlt_bool operator !=(const __prlt_string &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_STR_OP_SIMPLE]);
 			return ptr->operator !=(*rhs.ptr.get());
 		}
 
 		__prlt_bool operator <(const __prlt_string &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_STR_OP_SIMPLE]);
 			return ptr->operator <(*rhs.ptr.get());
 		}
 
 		__prlt_bool operator >(const __prlt_string &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_STR_OP_SIMPLE]);
 			return ptr->operator >(*rhs.ptr.get());
 		}
 
 		__prlt_bool operator <=(const __prlt_string &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_STR_OP_SIMPLE]);
 			return ptr->operator <=(*rhs.ptr.get());
 		}
 
 		__prlt_bool operator >=(const __prlt_string &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_STR_OP_SIMPLE]);
 			return ptr->operator >=(*rhs.ptr.get());
 		}
 
 		void __prli_set(const __prlt_string &rhs)
 		{
+			uint32_t expandSize = rhs.ptr->length() > ptr->length() ? rhs.ptr->length() - ptr->length() : 0;
+			burn_gas((uint64_t)gas_costs[PRDOP_STR_OP_SIMPLE] + expandSize);
 			ptr->set(*rhs.ptr.get());
 		}
 
 		__prlt_string __prli_append(const __prlt_string &rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_STR_OP_SIMPLE] + rhs.ptr->length());
 			ptr->append(*rhs.ptr.get());
 			return *this;
 		}
 
 		__prlt_uint16 __prli_length() const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_STR_OP_SIMPLE]);
 			return __prlt_uint16(ptr->length());
 		}
 
 		// serialization-related interface
 		serialize_size_type get_serialize_size() const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_SIZE]);
 			return ptr->get_serialize_size();
 		}
 
 		void serialize_out(uint8_t *buffer, bool for_debug) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_OUT_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * ptr->get_serialize_size());
 			ptr->serialize_out(buffer, for_debug);
 		}
 
 		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_MAP_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * ptr->get_serialize_size());
 			return ptr->map_from_serialized_data(buffer, bufferSize, bDeep);
+		}
+
+		const char* get_c_str() const
+		{
+			return ptr->str.c_str();
 		}
 	};
 

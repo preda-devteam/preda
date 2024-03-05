@@ -45,9 +45,17 @@ protected:
 	static bool _Sign(LPCVOID sk, LPCVOID pMessage, UINT MessageLen, LPVOID signature_out)
 	{	return 0 == crypto_sign_ed25519_detached((LPBYTE)signature_out, NULL, (LPCBYTE)pMessage, MessageLen, (LPCBYTE)sk);
 	}
-	static void _GenerateKeypair(LPVOID pk, LPVOID sk)
-	{	_GetEntropy().Inc();
-		crypto_sign_ed25519_seed_keypair((LPBYTE)pk, (LPBYTE)sk, _GetEntropy().e);
+	static void _GenerateKeypair(LPVOID pk, LPVOID sk, LPCVOID seed_32bytes)
+	{	
+		if(seed_32bytes)
+		{
+			crypto_sign_ed25519_seed_keypair((LPBYTE)pk, (LPBYTE)sk, (LPBYTE)seed_32bytes);
+		}
+		else
+		{
+			_GetEntropy().Inc();
+			crypto_sign_ed25519_seed_keypair((LPBYTE)pk, (LPBYTE)sk, _GetEntropy().e);
+		}
 	}
 	static bool _DerivePublicKey(LPCVOID sk, LPVOID out)
 	{	memcpy(out, &((LPCBYTE)sk)[crypto_sign_ed25519_SEEDBYTES], sizeof(PublicKey));

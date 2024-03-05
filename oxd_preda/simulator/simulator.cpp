@@ -2,6 +2,7 @@
 #include <iostream>
 #include "simulator.h"
 #include "simu_shard.h"
+#include "core_contracts.h"
 #include "../native/types/abi_def_impl.h"
 
 #define VIZ_SECTION_BEGIN(tag)	if(_ScriptVizEnabled)													\
@@ -39,31 +40,37 @@ int SimulatorMain(const os::CommandLine& cmd)
 	if(cmd.HasOption("stdout"))
 		os::_details::SetConsoleLogWriteFunction(StandardOutWriter, nullptr);
 #if defined(PLATFORM_WIN)
-	const char* homeDir = getenv("HOMEPATH");
+#pragma warning(disable: 4996)
+	const char* homeDir;
+	if((homeDir = getenv("USERPROFILE")) == nullptr && ((homeDir = getenv("HOMEPATH")) == nullptr))
+	{
+		_LOG("[PRD]: USERPROFILE/HOMEPATH is not found");
+		return 1;
+	}
 #else
 	const char* homeDir = getenv("HOME");
 #endif
 	rt::String predaHomePath = rt::SS(homeDir, strlen(homeDir)) + rt::String(PREDA_DATA_FOLDER);
 	if(!os::File::CreateDirectories(predaHomePath))
 	{
-		_LOG("Unable to create Preda Home Directory: " << lockPath);
+		_LOG("[PRD]: Unable to create Preda Home Directory: " << lockPath);
 		return 1;
 	}
 	lockPath = predaHomePath + ".preda_lock";
 	os::File lockfile(lockPath, "a+b", true);
 	if(!lockfile.IsOpen())
 	{
-		_LOG("Unable to create lockfile: " << lockPath);
+		_LOG("[PRD]: Unable to create lockfile: " << lockPath);
 		return 1;
 	}
 	else if(!lockfile.Lock())
 	{
-		_LOG("Another chain simulator is runnig. Please wait until the other job is finished");
+		_LOG("[PRD]: Another chain simulator is runnig. Please wait until the other job is finished");
 		return 1;
 	}
 	if(cmd.GetTextCount() == 0)
 	{
-		_LOG("chsimu input_file.(prd|sol|prdts) [-async] [-perftest] [-order:n] [-viz:output_filename] [-viz_templ:webui_template_path]");
+		_LOG("[PRD]: chsimu input_file.(prd|sol|prdts) [-async] [-perftest] [-order:n] [-viz:output_filename] [-viz_templ:webui_template_path]");
 		return 1;
 	}
 
@@ -86,8 +93,7 @@ int SimulatorMain(const os::CommandLine& cmd)
 			}
 		}
 
-		bool viz_to_console = !(cmd.HasOption("viz") && cmd.HasOption("viz_templ"));
-		if(sim.Init(cmd.GetOptionAs<uint32_t>("order", 2), cmd.HasOption("async"), cmd.HasOption("WASM"), viz_to_console))
+		if(sim.Init(cmd))
 		{
 			os::SetProcessPriority(os::PROCPRIO_HIGH);
 
@@ -100,7 +106,7 @@ int SimulatorMain(const os::CommandLine& cmd)
 			sim.Run(fnArr);
 		}
 
-		if(!viz_to_console)
+		if(!sim.IsVizToConsole())
 		{
 			sim.ExportVizHtml(cmd.GetOption("viz_templ"), cmd.GetOption("viz"));
 		}
@@ -147,6 +153,8 @@ bool Simulator::CompleteShardExecution()
 
 bool Simulator::_InitEngine(rvm::EngineId eng, const char* dll_name, const char* repo, const char* engine_config)
 {
+	_Engines[(int)rvm::EngineId::Core] = { INVALID_HANDLE_VALUE, &CoreEngine::Get() };
+
 	auto& ee = _Engines[(int)eng];
 	ASSERT(ee.pEngine == nullptr);
 
@@ -164,56 +172,70 @@ bool Simulator::_InitEngine(rvm::EngineId eng, const char* dll_name, const char*
 			rvm::ConstString initErrorMsg = { nullptr, 0 };
 			if(ee.pEngine && ee.pEngine->Initialize(ALLOCA_C_STRING(rt::String_Ref(dll_name).GetFilePath()), repo, this, &initErrorMsg))
 			{
-				_LOG_HIGHLIGHT("Execution Engine Initialized, <"<<ee.pEngine->GetName().Str()<<"> v"<<ee.pEngine->GetVersion().Str()<<", "<<ee.pEngine->GetVendorInfo().Str());
-				_LOG("Repository: "<<repo<<", Module: "<<dll_name<<" ("<<rt::EnumStringify(eng)<<")\n");
+				if (!_CompileOnly)
+				{
+					_LOGC_HIGHLIGHT("Execution Engine Initialized, <" << ee.pEngine->GetName().Str() << "> v" << ee.pEngine->GetVersion().Str() << ", " << ee.pEngine->GetVendorInfo().Str());
+					_LOGC("Repository: " << repo << ", Module: " << dll_name << " (" << rt::EnumStringify(eng) << ")\n");
+				}
 				return true;
 			}
 			else
 			{
-				_LOG_ERROR("Failed to initialized PREDA engine, db path: " << repo);
+				_LOGC_WARNING("Failed to initialized PREDA engine, db path: " << repo);
 				if(initErrorMsg.StrPtr)
-					_LOG_WARNING("Failed to initialize: "<<initErrorMsg.Str());
+					_LOGC_WARNING("Failed to initialize: "<<initErrorMsg.Str());
 			}
 		}
 		else
 		{
-			_LOG_WARNING("Unable to load engine export symbol")
+			_LOGC_WARNING("Unable to load engine export symbol")
 		}
 	}
 	else
 	{
-		_LOG_WARNING("Unable to load engine module")
+		_LOGC_WARNING("Unable to load engine module")
 	}
 
-	_LOG_WARNING("Failed to mount execution engine: "<<dll_name<<" ("<<rt::EnumStringify(eng)<<") with repository in "<<repo<<'\n');
+	_LOGC_WARNING("Failed to mount execution engine: "<<dll_name<<" ("<<rt::EnumStringify(eng)<<") with repository in "<<repo<<'\n');
 	return false;
 }
 
-
-bool Simulator::Init(uint32_t shard_order, bool async_shard, bool defaultWASM, bool viz_to_console)
+bool Simulator::Init(const os::CommandLine& cmd)
 {
+	uint32_t shard_order = cmd.GetOptionAs<uint32_t>("order", 2);
 	_bChainStepping = true;
-	_bShardAsync = async_shard;
+	_bShardAsync = cmd.HasOption("async");
 	_iShardsExecuted = 0;
-	_ScriptVizEnabled = os::CommandLine::Get().HasOption("viz");
-	_VizToConsole = viz_to_console;
-	_DefaultRTMode = defaultWASM ? "WASM" : "Native";
+	_ScriptVizEnabled = cmd.HasOption("viz");
+	_VizToConsole = !(cmd.HasOption("viz") && cmd.HasOption("viz_templ"));
+	_DefaultRTMode = cmd.HasOption("WASM") ? "WASM" : "Native";
+	rt::String fn = cmd.GetText(0);
+	_CompileOnly = fn.GetExtName() == rt::SS(".prd");
 	rt::String repo_dir("./chsimu_repo");
 #if defined(PLATFORM_WIN)
 	char* homeDir = getenv("HOMEPATH");
 #else
 	char* homeDir = getenv("HOME");
 #endif
-
+	auto _ProcessConfigJson = []()
+	{
+			rt::String jsonStr;
+			//if config.json does not exist, load WASM engine
+			if (!os::File::LoadText("config.json", jsonStr))
+			{
+				return true;
+			}
+			rt::JsonObject jsonObj(jsonStr);
+			return jsonObj.GetValueAs<bool>("wasm");
+	};
 	repo_dir = rt::SS(homeDir, strlen(homeDir)) + PREDA_DATA_FOLDER + "chsimu_repo";
 	os::File::RemovePath(repo_dir);
-
-	_LOG("Physical CPU core: "<<os::GetNumberOfPhysicalProcessors()<<", Logic CPU core: "<<os::GetNumberOfProcessors());
+	if(!_CompileOnly) _LOG("Physical CPU core: "<<os::GetNumberOfPhysicalProcessors()<<", Logic CPU core: "<<os::GetNumberOfProcessors());
 
 	int engine = 0;
 	if(_InitEngine(rvm::EngineId::PREDA_NATIVE, "./preda_engine",	repo_dir + "/native", "-native")) engine++;
-	if(_InitEngine(rvm::EngineId::PREDA_WASM,	"./preda_engine",	repo_dir + "/wasm",	"-wasm")) engine++;
-	if(_InitEngine(rvm::EngineId::SOLIDITY_EVM,	"./preda_engine",	repo_dir + "/evm", "-evm")) engine++;
+	if(_ProcessConfigJson() && _InitEngine(rvm::EngineId::PREDA_WASM,	"./preda_engine",	repo_dir + "/wasm",	"-wasm")) engine++;
+	//if(_InitEngine(rvm::EngineId::SOLIDITY_EVM,	"./preda_engine",	repo_dir + "/evm", "-evm")) engine++;
 	
 	if(engine)
 	{
@@ -247,13 +269,16 @@ void Simulator::Term()
 		if(e.pEngine)
 		{
 			_SafeRelease(e.pEngine);
-			os::UnloadDynamicLibrary(e.hModule);
-			e.hModule = INVALID_HANDLE_VALUE;
+			if(e.hModule != INVALID_HANDLE_VALUE)
+			{
+				os::UnloadDynamicLibrary(e.hModule);
+				e.hModule = INVALID_HANDLE_VALUE;
+			}
 		}
 	}
 }
 
-rvm::EngineId Simulator::ResolveRTEngine(rt::String in, rt::String& filename)
+rvm::EngineId Simulator::_ResolveRTEngine(rt::String in, rt::String& filename)
 {
 	rt::String_Ref segs[2];
 	auto co = in.Split(segs, 2, ':');
@@ -279,7 +304,7 @@ bool Simulator::Compile(rvm::EngineId e, rt::Buffer<rt::String>& sources, rt::Bu
 	auto* engine = GetEngine(e);
 	if(!engine)
 	{
-		_LOG_WARNING("Engine "<<rt::EnumStringify(e)<<" is not available");
+		_LOG_WARNING("[PRD]: Engine "<<rt::EnumStringify(e)<<" is not available");
 		return false;
 	}
 
@@ -375,7 +400,7 @@ bool Simulator::Deploy(ExecutionUnit& exec_units, const rt::String_Ref* fns, con
 	for(uint32_t i=0; i<co; i++)
 	{
 		rt::String cur_fn;
-		rvm::EngineId eid = ResolveRTEngine(fns[i], cur_fn);
+		rvm::EngineId eid = _ResolveRTEngine(fns[i], cur_fn);
 		if(within_script)
 		{
 			os::File::ResolveRelativePath(_ScriptPath + cur_fn, filenames.push_back());
@@ -445,17 +470,17 @@ bool Simulator::Deploy(ExecutionUnit& exec_units, const rt::String_Ref* fns, con
 		auto section = _ScriptVizJson.ScopeAppendingKey("info");
 		_ScriptVizJson.Array();
 		int succ_count = 0;
-		if (solidity.IsCompiled())
+		if(solidity.IsCompiled())
 		{
 			auto section2 = _ScriptVizJson.ScopeMergingArray();
 			solidity.GetContractsInfo(_ScriptVizJson); succ_count++;
 		}
-		if (preda_wasm.IsCompiled())
+		if(preda_wasm.IsCompiled())
 		{
 			auto section2 = _ScriptVizJson.ScopeMergingArray();
 			preda_wasm.GetContractsInfo(_ScriptVizJson); succ_count++;
 		}
-		if (preda_native.IsCompiled())
+		if(preda_native.IsCompiled())
 		{
 			auto section2 = _ScriptVizJson.ScopeMergingArray();
 			preda_native.GetContractsInfo(_ScriptVizJson); succ_count++;
@@ -611,7 +636,8 @@ void Simulator::Run(rt::Buffer<rt::String_Ref>& input_files)
 			}
 
 			auto pos = cmd.FindString("//");
-			if(pos >= 0)
+			// String("//") can exist in a string type parameter
+			if (pos >= 0 && !(cmd.FindCharacter('{') < pos && pos < cmd.FindCharacterReverse('}')))
 			{
 				cmd = cmd.SubStrHead(pos).TrimSpace();
 				if(cmd.IsEmpty())
@@ -632,7 +658,7 @@ void Simulator::Run(rt::Buffer<rt::String_Ref>& input_files)
 	}
 	else
 	{
-		_LOG_ERROR("Failed to load PREDA test script: "<< cur_fn);
+		_LOG_ERROR("[PRD]: Failed to load PREDA test script: "<< cur_fn);
 	}
 }
 
@@ -659,16 +685,20 @@ bool Simulator::ExecuteCommand(const rt::String_Ref& cmd_in)
 {
 	CmdParse cmd(cmd_in, GetLineNum());
 	if(!cmd.Identifier.IsEmpty()){
-		if(_TxnPool.has(cmd.Identifier))
+		if (cmd.L1 == "csv")
 		{
-			_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Identifier \"" << cmd.Identifier << "\" already defined");
-			return false;
+			return _ExecGenerateBatchTxn(cmd);
 		}
-		else
+		else if(!_TxnPool.has(cmd.Identifier))
 		{
 			rt::BufferEx<SimuTxn*> empty_buf;
 			empty_buf.SetSize(0);
 			_TxnPool[cmd.Identifier] = empty_buf;
+		}
+		else
+		{
+			_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Identifier \"" << cmd.Identifier << "\" already defined");
+			return false;
 		}
 	}
 	if(cmd.L1.IsEmpty() || cmd.Repeat == 0)return false;
@@ -677,12 +707,10 @@ bool Simulator::ExecuteCommand(const rt::String_Ref& cmd_in)
 	if(cmd.L1 == "state")return _ExecState(cmd);
 	if(cmd.L1 == "chain")return _ExecChain(cmd);
 	if(cmd.L1 == "log")return _ExecLog(cmd);
-#ifdef _VIZ
 	if(cmd.L1 == "viz")
 	{
 		return _ExecVisualize(cmd, cmd_in);
 	}
-#endif
 	if(cmd.L1 == "random" && cmd.L2 == "reseed")
 	{
 		int seed;
@@ -705,7 +733,7 @@ bool Simulator::ExecuteCommand(const rt::String_Ref& cmd_in)
 	{
 		if(cmd.L2 == "restart")
 		{
-			_LOG("Stopwatch restarted");
+			_LOG("[PRD]: Stopwatch restarted");
 			_ScriptStopWatch.Restart();
 			_ScriptStopWatch.SetOutputMillisecond();
 
@@ -718,8 +746,8 @@ bool Simulator::ExecuteCommand(const rt::String_Ref& cmd_in)
 		{
 			uint64_t lapsed = rt::max<long long>(1LL, _ScriptStopWatch.TimeLapse());
 
-			_LOG_HIGHLIGHT("Stopwatch: "<<lapsed<<" msec\n"
-						   "Order: "<<_ShardOrder<<", "
+			_LOG_HIGHLIGHT("[PRD]: Stopwatch: "<<lapsed<<" msec\n"
+						   "[PRD]: Order: "<<_ShardOrder<<", "
 						   "TPS:"<<(_ScriptStopWatchPendingTxnCount - _PendingTxnCount)*1000/lapsed<<", "
 						   "uTPS:"<<(_ExecutedTxnCount - _ScriptStopWatchExecutedTxnCount)*1000/lapsed
 			);
@@ -730,13 +758,225 @@ bool Simulator::ExecuteCommand(const rt::String_Ref& cmd_in)
 
 	return _ExecIssueTxn(cmd);
 }
-#ifdef _VIZ
+uint32_t Simulator::_AddNewUser(rt::String_Ref addrStr, rvm::Address& addr)
+{
+	auto iter = _NewUserIndex.find(addrStr);
+	((oxd::SecureAddress*)&addr)->FromString(addrStr);
+	if (iter == _NewUserIndex.end())
+	{
+		User newUser;
+		newUser.Addr = addr;
+		newUser.ShardDword = rvm::ADDRESS_SHARD_DWORD(addr);
+		uint32_t index = (uint32_t)_Users.GetSize();
+		_Users.push_back(newUser);
+		_NewUserIndex[addrStr] = index;
+		return index;
+	}
+	else
+	{
+		return iter->second;
+	}
+}
+SimuTxn* Simulator::_ComposeTxnFromStr(const CmdParse& cmd, rvm::ContractInvokeId& cvid, ContractFunction& fi, TargetParse& target, InputParametrized& input)
+{
+	rvm::BuildNum build_num = rvm::BuildNumLatest;
+	rvm::Scope scope;
+
+	{	EnterCSBlock(_CS);
+	if (!_GetContractFunction(cmd, fi))
+	{
+		return nullptr;
+	}
+
+	scope = PrepareTxn(fi.Contract, fi.Op, build_num);
+	ASSERT(scope != rvm::ScopeInvalid);
+	}
+	cvid = rvm::CONTRACT_SET_SCOPE_BUILD(fi.Contract, scope, build_num);
+
+	target = TargetParse(cmd.Args, scope, GetLineNum());
+	if (target.IsError())return nullptr;
+	if (target.Target.GetLength() > 0 && target.Target[0] == '@' && scope == rvm::Scope::Shard)
+	{
+		_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Target of a shard function should begin '#'");
+		return nullptr;
+	}
+	else if (target.Target.GetLength() > 0 && target.Target[0] == '#' && scope == rvm::Scope::Address)
+	{
+		_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Target of a address function should begin '@'");
+		return nullptr;
+	}
+	rt::String argStr = target.ArgsJson;
+	if (rvm::CONTRACT_ENGINE(fi.Contract) == rvm::EngineId::SOLIDITY_EVM && !_ParseSolidityFunc(cmd.L2, argStr))
+	{
+		_LOG_WARNING("[BC] Line " << GetLineNum() << ": Invalid argument json");
+		return nullptr;
+	}
+	if (!input.Parse(target.ArgsJson))
+		return nullptr;
+
+	return input.ComposeTxn(cvid, fi.Op);
+}
+bool Simulator::_ExecGenerateBatchTxn(const CmdParse& cmd)
+{
+	//csv.from("file_path")
+	if (cmd.L2.SubStr(0, 4) == "from")
+	{
+		rt::String_Ref filePath = cmd.L2.SubStr(6);
+		filePath[filePath.GetLength() - 2] = '\0';
+		filePath.SetLength(filePath.GetLength() - 2);
+		os::FileReadLine csvfile;
+		rt::String absoluteFilePath;
+		os::File::ResolveRelativePath(_ScriptPath + filePath, absoluteFilePath);
+		if (absoluteFilePath.GetExtName() != ".csv")
+		{
+			_LOG("[PRD] Line " << GetLineNum() << ": Only CSV files allowed");
+			return false;
+		}
+		else if (!csvfile.Open(absoluteFilePath.GetString()))
+		{
+			_LOG("[PRD] Line " << GetLineNum() << ": Unable to open CSV file, file path: " << filePath);
+			return false;
+		}
+
+		rt::String_Ref line;
+		csvfile.GetNextLine(line);
+		if (!line.GetLength())
+		{
+			_LOG("[PRD] Line " << GetLineNum() << ": Unable to open CSV file");
+			return false;
+		}
+		rt::String_Ref fields;
+		int32_t contractPos = -1;
+		int32_t funcPos = -1;
+		int32_t senderAddrPos = -1;
+		int32_t parametersPos = -1;
+		rt::String_Ref seg[64];
+		uint32_t co = line.Split(seg, 64, ",");
+		if (co < 4)
+		{
+			_LOG("[PRD] Line " << GetLineNum() << ": Invalid input file format. At least 4 fields (contract_name, contract_function, sender, parameters) are required");
+			return false;
+		}
+		for (int i = 0; i < (int32_t)co; i++)
+		{
+			rt::String_Ref field = seg[i];
+			if (field == "contract_name") contractPos = i;
+			else if (field == "contract_function") funcPos = i;
+			else if (field == "sender") senderAddrPos = i;
+			else if (field == "parameters") parametersPos = i;
+		}
+		if (contractPos == -1 || funcPos == -1 || senderAddrPos == -1 || parametersPos == -1)
+		{
+			_LOG("[PRD] Line " << GetLineNum() << ": Invalid input file format. At least 4 fields (contract_name, contract_function, sender, parameters) are required");
+			return false;
+		}
+		std::vector<rt::String_Ref> txnSeg(co);
+		auto iter = _batchImportTxns.find(cmd.Identifier);
+		rt::BufferEx<SimuTxn*> txnList;
+		if (iter != _batchImportTxns.end())
+		{
+			txnList = iter->second;
+		}
+		while (csvfile.GetNextLine(line))
+		{
+			uint32_t lineElementCo = line.Split(&txnSeg[0], co, ",");
+			if (lineElementCo < co)
+			{
+				_LOG("[PRD] Line " << GetLineNum() << ": Invalid data format: " << line);
+				continue;
+			}
+			//using Split on json object produce incorrect result
+			SSIZE_T openBracketPos = line.FindCharacter('{');
+			SSIZE_T closeBracketPos = line.FindCharacterReverse('}');
+			if (openBracketPos < 0 || closeBracketPos < 0)
+			{
+				_LOG("Invalid CSV input: " << line);
+				continue;
+			}
+			rt::String_Ref tmp = line.SubStr(openBracketPos, closeBracketPos - openBracketPos + 1);
+			//json in CSV contains two quotation marks for example:{""amount"":1}, codes below replace two quotation marks with one
+			std::string str(tmp.Begin(), tmp.GetLength());
+			auto strIter = str.begin() + 1;
+			bool isP = false;
+			while (strIter != str.end())
+			{
+				char p = '"';
+				if (*strIter == p)
+				{
+					if (isP)
+					{
+						str.erase(strIter);
+						isP = false;
+					}
+					else
+					{
+						isP = true;
+					}
+				}
+				else
+				{
+					isP = false;
+				}
+				strIter++;
+			}
+			rt::String_Ref param =  rt::String_Ref(str.c_str());
+			rvm::Address addr;
+			uint32_t index = 0;
+			rt::String commandStr(txnSeg[contractPos]);
+			rt::String_Ref targetStr = txnSeg[senderAddrPos];
+			//global function: empty, shard function: #shard_index, address function: user_index or address
+			bool isAddrTxn = false;
+			if (targetStr.GetLength() > 0)
+			{
+				if (targetStr[0] == '#' && targetStr.TrimLeft(1).HasOnlyNumbers())
+				{
+					commandStr += rt::SS(".") + txnSeg[funcPos] + rt::SS(" ") + targetStr + rt::SS(" ") + rt::String_Ref(str.c_str());
+				}
+				else
+				{
+					isAddrTxn = true;
+					index = targetStr.HasOnlyNumbers() ? targetStr.ToNumber<uint32_t>() : _AddNewUser(targetStr, addr);
+					commandStr += rt::SS(".") + txnSeg[funcPos] + rt::SS(" @") + index + rt::SS(" ") + rt::String_Ref(str.c_str());
+				}
+			}
+			else
+			{
+				commandStr += rt::SS(".") + txnSeg[funcPos] + rt::SS(" ") + rt::String_Ref(str.c_str());
+			}
+			CmdParse cmd(commandStr, GetLineNum());
+			ContractFunction fi;
+			TargetParse target;
+			thread_local InputParametrized input(*this);
+			rvm::ContractInvokeId cvid;
+			SimuTxn* txn = _ComposeTxnFromStr(cmd, cvid, fi, target, input);
+			if (!txn)
+			{
+				_LOG("Invalid CSV input: " << line);
+				continue;
+			}
+			if (isAddrTxn)
+			{
+				txn->TargetIndex = index;
+				txn->Target = ScopeTarget(addr);
+			}
+			else
+			{
+				txn->ShardIndex = targetStr.TrimLeft(1).ToNumber<uint16_t>();
+			}
+			txnList.push_back(txn);
+		}
+		_batchImportTxns[cmd.Identifier] = txnList;
+	}
+	return true;
+}
+
 bool Simulator::_ExecVisualize(const CmdParse& cmd, const rt::String_Ref& cmd_in)
 {
 	bool result = false;
 	rt::Json json;
 	if(cmd.L2 == "block")
 	{
+
 		result = _ExecBlocksLog(cmd, json);
 	}
 	else if(cmd.L2 == "addr")
@@ -773,7 +1013,14 @@ bool Simulator::_ExecVisualize(const CmdParse& cmd, const rt::String_Ref& cmd_in
 		_ExecProfileLog(json);
 		result = true;
 	}
-
+	else if(cmd.L2 == "all_uint_scope")
+	{
+		result = _ExecAllKeyedScopeLog(cmd, json);
+	}
+	else if(cmd.L2.SubStr(0, 4) == "uint")
+	{
+		result = _ExecKeyedScopeLog(cmd, json);
+	}
 	if(result)
 	{
 		rt::String cap_cmd = cmd.L2;
@@ -879,8 +1126,6 @@ bool Simulator::_ExecTraceLog(const CmdParse& cmd, rt::Json& json)
 		json.Object((J(tx_id) = id));
 		{
 			auto s = json.ScopeAppendingKey("tx_info");
-			json.Object();
-
 			if(current_pair.first->Type == rvm::InvokeContextType::RelayInbound && current_pair.first->GetScope() == rvm::Scope::Address)
 			{
 				User a;
@@ -888,8 +1133,7 @@ bool Simulator::_ExecTraceLog(const CmdParse& cmd, rt::Json& json)
 				a.ShardDword = rvm::ADDRESS_SHARD_DWORD(a.Addr);
 				current_pair.first->TargetIndex = (int64_t)_Users.Find(a);
 			}
-
-			current_pair.first->Jsonify(GetEngine(current_pair.first->GetEngineId()), json, nullptr);
+			current_pair.first->Jsonify(GetEngine(current_pair.first->GetEngineId()), json);
 		}
 		json << ((J(father)=current_pair.second));
 		for(SimuShard* sh:all_shard)
@@ -907,17 +1151,140 @@ bool Simulator::_ExecTraceLog(const CmdParse& cmd, rt::Json& json)
 	}
 	return true;
 }
-rvm::InvokeResult* Simulator::_GetTxnResult(const SimuTxn* txn)
+bool Simulator::_ExecAllKeyedScopeLog(const CmdParse& cmd, rt::Json& json)
 {
-	if(txn->ShardIndex == 65535)
+	rt::String contract = DAPP_NAME + rt::SS(".") + cmd.Args;
+	if(!_pGlobalShard->_Contracts.has(contract))
 	{
-		return _pGlobalShard->GetConfirmTxn(txn);
+		_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Contract does not exist")
+			return false;
 	}
-	else if(txn->ShardIndex >= _Shards.GetSize())
+	rvm::ContractVersionId cvid = _pGlobalShard->_Contracts.get(contract);
+	json.Array();
+	rvm::ContractScopeId csid = rvm::ContractScopeIdInvalid;
+	rt::BufferEx<SimuAddressContract> key_buf;
+	rvm::ScopeKeySized keysize[5] = { rvm::ScopeKeySized::UInt32, rvm::ScopeKeySized::UInt64, rvm::ScopeKeySized::UInt128, rvm::ScopeKeySized::UInt256, rvm::ScopeKeySized::UInt512 };
+	uint32_t index = 0;
+	for (uint32_t scopeLen = 32; scopeLen <= 512; scopeLen *= 2)
 	{
-		return nullptr;
+		ScopeTarget tar;
+		tar.target_size = (uint8_t)(scopeLen / sizeof(uint64_t));
+		csid = rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(cvid), rvm::SCOPE_MAKE(rvm::ScopeType::Contract, keysize[index++], 0));
+		key_buf.push_back({ tar , csid });
 	}
-	return _Shards[txn->ShardIndex]->GetConfirmTxn(txn);
+	for (uint32_t sh = 0; sh < _Shards.GetSize(); sh++)
+	{
+		for (uint32_t i = 0; i < key_buf.GetSize(); i++)
+		{
+			_Shards[sh]->JsonifyScopeState(json, key_buf[i], true);
+		}
+	}
+	return true;
+}
+bool Simulator::_ExecKeyedScopeLog(const CmdParse& cmd, rt::Json& json)
+{
+	rt::String_Ref segs[2];
+	auto co = cmd.Args.Split(segs, 2, ' ');
+	if(co < 2)
+	{
+		_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Invalid viz.keyscope format");
+		return false;
+	}
+	rt::String contract = DAPP_NAME + rt::SS(".") + rt::String_Ref(segs[1].Begin(), cmd.Args.End());
+	rt::String scopeTarget = segs[0];
+	if(scopeTarget != "all" && !scopeTarget.HasOnlyNumbers())
+	{
+		_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Invalid scope target");
+		return false;
+	}
+	uint32_t scopeLen = cmd.L2.SubStr(4).ToNumber<uint32_t>();
+	if(!_pGlobalShard->_Contracts.has(contract))
+	{
+		_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Contract does not exist")
+		return false;
+	}
+	rvm::ContractVersionId cvid = _pGlobalShard->_Contracts.get(contract);
+	json.Array();
+	rvm::ContractScopeId csid = rvm::ContractScopeIdInvalid;
+	std::vector<uint8_t> buf(sizeof(rvm::UInt512));
+	ScopeTarget tar;
+	//res > 0 means constant out of range
+	uint32_t res = 0;
+	uint32_t uint32_buf = 0;
+	if(scopeTarget != "all")
+	{
+		switch (scopeLen)
+		{
+		case 32:
+			res = scopeTarget.ToNumber<uint32_t>(uint32_buf) == -1 ? 1 : 0;
+			tar = ScopeTarget(uint32_buf);
+			csid = rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(cvid), rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt32, 0));
+			break;
+		case 64:
+			res = (uint32_t)((ttmath::UInt<TTMATH_BITS(64)>*) & buf[0])->FromString(scopeTarget);
+			tar = ScopeTarget(*(rvm::UInt64*)&buf[0]);
+			csid = rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(cvid), rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt64, 0));
+			break;
+		case 128:
+			res = (uint32_t)((ttmath::UInt<TTMATH_BITS(128)>*) & buf[0])->FromString(scopeTarget);
+			tar = ScopeTarget(*(rvm::UInt128*)&buf[0]);
+			csid = rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(cvid), rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt128, 0));
+			break;
+		case 256:
+			res = (uint32_t)((ttmath::UInt<TTMATH_BITS(256)>*) & buf[0])->FromString(scopeTarget);
+			tar = ScopeTarget(*(rvm::UInt256*)&buf[0]);
+			csid = rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(cvid), rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt256, 0));
+			break;
+		case 512:
+			res = (uint32_t)((ttmath::UInt<TTMATH_BITS(512)>*) & buf[0])->FromString(scopeTarget);
+			tar = ScopeTarget(*(rvm::UInt512*)&buf[0]);
+			csid = rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(cvid), rvm::SCOPE_MAKE(rvm::ScopeType::Contract, rvm::ScopeKeySized::UInt512, 0));
+			break;
+		default:
+			return false;
+		}
+	}
+	else
+	{
+		tar.target_size = (uint8_t)(scopeLen / sizeof(uint64_t));
+		csid = rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(cvid), rvm::ScopeInvalid);
+	}
+
+	if(res > 0)
+	{
+		_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Scope target is out of range");
+		return false;
+	}
+	SimuAddressContract key{ tar, csid };
+	if(scopeTarget == "all")
+	{
+		for (uint32_t sh = 0; sh < _Shards.GetSize(); sh++)
+		{
+			_Shards[sh]->JsonifyScopeState(json, key, true);
+		}
+	}
+	else
+	{
+		uint32_t shardIndex = GetShardIndex(tar);
+		if(!_Shards[shardIndex]->JsonifyScopeState(json, key, false))
+		{
+			_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Scope target does not exist");
+			return false;
+		}
+	}
+	return true;
+}
+bool Simulator::_ConfirmedTxnJsonify(const SimuTxn* txn, rt::Json& append) const
+{
+	if (txn->ShardIndex == rvm::GlobalShard)
+	{
+		return _pGlobalShard->ConfirmedTxnJsonify(txn, append);
+	}
+	else if (txn->ShardIndex >= _Shards.GetSize())
+	{
+		return false;
+	}
+	return _Shards[txn->ShardIndex]->ConfirmedTxnJsonify(txn, append);
 }
 
 bool Simulator::_ExecTxnLog(const CmdParse& cmd, rt::Json& json)
@@ -931,19 +1298,15 @@ bool Simulator::_ExecTxnLog(const CmdParse& cmd, rt::Json& json)
 	json.Array();
 	if(index >= 0)
 	{
-		auto s = json.ScopeAppendingElement();
-		json.Object();
 		SimuTxn* txn = _TxnPool.get(no_bracket)[index];
-		txn->Jsonify(GetEngine(txn->GetEngineId()), json, _GetTxnResult(txn));
+		if (!_ConfirmedTxnJsonify(txn, json)) txn->Jsonify(GetEngine(txn->GetEngineId()), json);
 	}
 	else
 	{
 		rt::BufferEx<SimuTxn*> vec = _TxnPool.get(no_bracket);
 		for(auto txn_ptr: vec)
 		{
-			auto s = json.ScopeAppendingElement();
-			json.Object();
-			txn_ptr->Jsonify(GetEngine(txn_ptr->GetEngineId()), json, _GetTxnResult(txn_ptr));
+			if (!_ConfirmedTxnJsonify(txn_ptr, json)) txn_ptr->Jsonify(GetEngine(txn_ptr->GetEngineId()), json);
 		}
 	}
 	return true;
@@ -1004,13 +1367,32 @@ bool Simulator::_ExecBlocksLog(const CmdParse& cmd, rt::Json& json)
 	}
 	return true;
 }
+int32_t Simulator::_GetIndexFromAddrStr(const rt::String& target)
+{
+	int32_t s;
+	rvm::Address addr;
+	((oxd::SecureAddress*)&addr)->FromString(target);
+	if (((oxd::SecureAddress*)&addr)->IsValid())
+	{
+		s = _AddNewUser(target, addr);
+	}
+	else if (target == "random")
+	{
+		s = GetScriptRandomAddressIndex();
+	}
+	else if (target.ToNumber<int32_t>(s) < 0)
+	{
+		return -1;
+	}
+	return s;
+}
 
 bool Simulator::_ExecAddrStateLog(const CmdParse& cmd, rt::Json& json)
 {
 	rt::String_Ref segs[2];
 	auto co = cmd.Args.Split(segs, 2, ' ');
 	rt::String contract = co > 1 ? rt::String_Ref(segs[1].Begin(), cmd.Args.End()) : rt::String();
-	if (contract.FindCharacter('.') == -1)
+	if(contract.FindCharacter('.') == -1)
 		contract = DAPP_NAME + '.' + contract;
 	rt::String target = segs[0];
 	if(!_ProcessTargetRequest(target, GetLineNum(), false))
@@ -1024,11 +1406,8 @@ bool Simulator::_ExecAddrStateLog(const CmdParse& cmd, rt::Json& json)
 	}
 	rvm::ContractVersionId cvid = (co > 1) ? _pGlobalShard->_Contracts.get(contract) : rvm::ContractVersionIdInvalid;
 	json.Array();
-	uint32_t s = target.ToNumber<int>();
-	if(target == "random")
-	{
-		s = GetScriptRandomAddressIndex();
-	}
+
+	int32_t s = _GetIndexFromAddrStr(target);
 
 	rvm::ContractId cid = rvm::CONTRACT_UNSET_BUILD(cvid);
 	if(target == "all")
@@ -1041,7 +1420,12 @@ bool Simulator::_ExecAddrStateLog(const CmdParse& cmd, rt::Json& json)
 	else if(s >= 0 && s<_Users.GetSize())
 	{
 		rvm::Address addr = _Users[s].Addr;
-		GetShard(GetShardIndex(addr))->JsonifyAddressState(json, addr, GetUsers(), cid);
+		GetShard(GetShardIndex(addr))->JsonifyAddressState(json, &addr, GetUsers(), cid);
+	}
+	else
+	{
+		_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Invalid viz.addr target");
+		return false;
 	}
 	return true;
 }
@@ -1080,6 +1464,13 @@ bool Simulator::_ProcessTargetRequest(rt::String& target, uint32_t LineNum, bool
 		return true;
 	}
 
+	rvm::Address addr;
+	((oxd::SecureAddress*)&addr)->FromString(trimmed);
+	if (((oxd::SecureAddress*)&addr)->IsValid())
+	{
+		target = trimmed;
+		return true;
+	}
 	if(!trimmed.HasOnlyNumbers())
 	{
 		_LOG_WARNING("[PRD] Line " << LineNum << ": Target index must only contain digits");
@@ -1119,7 +1510,7 @@ bool Simulator::_ExecShardStateLog(const CmdParse& cmd, rt::Json& json)
 	bool succeed = false;
 	rt::String_Ref segs[2];
 	auto co = cmd.Args.Split(segs, 2, ' ');
-	rt::String contract = co > 1 ? rt::String_Ref(segs[1].Begin(), cmd.Args.End()) : rt::String();
+	rt::String contract = co > 1 ? DAPP_NAME + rt::SS(".") + rt::String_Ref(segs[1].Begin(), cmd.Args.End()) : rt::String();
 	rt::String target = segs[0];
 	if(!_ProcessTargetRequest(target, GetLineNum(), true))
 	{
@@ -1158,7 +1549,6 @@ bool Simulator::_ExecShardStateLog(const CmdParse& cmd, rt::Json& json)
 	}
 	return true;
 }
-#endif
 bool Simulator::_ExecLog(const CmdParse& cmd)
 {
 	if(cmd.L2 == "highlight"){ _LOG_HIGHLIGHT(rt::String("[HIGHLIGHT] ") + cmd.Args); }
@@ -1193,7 +1583,11 @@ bool Simulator::_ExecChain(const CmdParse& cmd)
 				p->Step();
 		}
 		else
+		{
+			_ChainIdle.Reset();
 			_pGlobalShard->Step();
+			WaitUntilIdle();
+		}
 
 		return true;
 	}
@@ -1211,53 +1605,88 @@ bool Simulator::_ExecChain(const CmdParse& cmd)
 		_pGlobalShard->LogInfo();
 		for(auto p : _Shards)
 			p->LogInfo();
-		_LOG("Total Txn:"<<_PendingTxnCount<<'/'<<_ExecutedTxnCount);
+		_LOG("[PRD]: Total Txn:"<<_PendingTxnCount<<'/'<<_ExecutedTxnCount);
 	}
-	else if(cmd.L2 == "gaslimit")
+	else if (cmd.L2 == "gaslimit" || cmd.L2 == "gaslimit.global")
 	{
-		int succeed = cmd.Args.ToNumber<uint64_t>(_ScriptGasLimit);
-		if(!cmd.Args.HasOnlyNumbers() || _ScriptGasLimit == 0 || succeed < 0)
-		{
-			_LOG("[PPD] Line " << GetLineNum() << ": Illeage gaslimit input");
-			_ScriptGasLimit = 10000;
-		}
-		return true;
+			return _SetGasLimit(cmd.Args, cmd.L2 == "gaslimit"? _ScriptGasLimit: _ScriptGlobalGasLimit);
 	}
 	else if(cmd.L2 == "deploy")
 	{
 		_RunDeployAsTxn(cmd);
 		return true;
 	}
-
+	else if (cmd.L2 == "batch_insert_txn")
+	{
+		return _BatchInsertTxn(cmd.Args);
+	}
 	return false;
 }
-
+bool Simulator::_SetGasLimit(const rt::String_Ref& args, uint64_t& gaslimit)
+{
+	int succeed = args.ToNumber<uint64_t>(gaslimit);
+	if (gaslimit == 0 || succeed < 0)
+	{
+		_LOG("[PPD] Line " << GetLineNum() << ": Illeage gaslimit input");
+		gaslimit = 10000;
+		return false;
+	}
+	return true;
+}
+bool Simulator::_BatchInsertTxn(const rt::String_Ref& csvData)
+{
+	auto iter = _batchImportTxns.find(csvData);
+	if (iter == _batchImportTxns.end())
+	{
+		_LOG("[PPD] Line " << GetLineNum() << ": CSV data does not exist");
+		return true;
+	}
+	rt::BufferEx<SimuTxn*>& buf = iter->second;
+	for (uint32_t i = 0; i < buf.GetSize(); i++)
+	{
+		rvm::Scope scope = buf[i]->GetScope();
+		switch (scope)
+		{
+			case rvm::Scope::Shard:
+			{
+				_Shards[buf[i]->ShardIndex]->PushNormalTxn(buf[i]);
+			}
+			break;
+			case rvm::Scope::Global:
+			{
+				GetGlobalShard()->PushNormalTxn(buf[i]);
+			}
+			break;
+			default:
+			{
+				_Shards[ADDRESS_SHARD_DWORD(buf[i]->Target.addr) & _ShardBitmask]->PushNormalTxn(buf[i]);
+			}
+		}
+	}
+	return true;
+}
 bool Simulator::_Step()
 {
-	if (_Users.GetSize() == 0)
+	if(_Users.GetSize() == 0)
 	{
 		_LOG("[PRD]: No address has been allocated. Use \"allocate.address\" to create address");
 		return false;
 	}
 	_bChainStepping = false;
 	_bChainPaused = false;
-#ifdef _VIZ
 	for (int i = 0; i < _Shards.GetSize(); i++)
 	{
 		_ShardPendingTxn[i] = _Shards[i]->GetPendingTxnCount();
 	}
 	_ShardPendingTxn.push_back(GetGlobalShard()->GetPendingTxnCount());
-#endif
-	if (_bShardAsync)
+	if(_bShardAsync)
 	{
 		for (auto p : _Shards)
 			p->Step();
 	}
 	else
 		_pGlobalShard->Step();
-#ifdef _VIZ
 	_ConvertQueueToTxnPool();
-#endif
 	WaitUntilIdle();
 	_bChainPaused = true;
 	return true;
@@ -1267,34 +1696,34 @@ void Simulator::_RunDeployAsTxn(const CmdParse& cmd)
 {
 	SimuTxn* deployTxn;
 	TargetParse target(cmd.Args, rvm::Scope::Address, GetLineNum());
-	uint32_t userIndex = 0;
-	int success = target.Target.TrimLeft(1).ToNumber<uint32_t>(userIndex);
-	deployTxn = SimuTxn::Create((uint32_t)cmd.Args.GetLength());
-	if (success >= 0 && userIndex < _Users.GetSize() && target.Target[0] == '@')
+	int32_t userIndex = _GetIndexFromAddrStr(target.Target.TrimLeft(1));
+	deployTxn = SimuTxn::Create((uint32_t)cmd.Args.GetLength(), 0);
+	if (userIndex >= 0 && userIndex < _Users.GetSize() && target.Target[0] == '@')
 	{
 		deployTxn->Target = ScopeTarget(_Users[userIndex].Addr);
 	}
 	else
 	{
-		_LOG("[PPD] Line " << GetLineNum() << ": Invalid deploy initiator");
+		_LOG("[PRD] Line " << GetLineNum() << ": Invalid deploy initiator");
 		return;
 	}
 	deployTxn->Type = rvm::InvokeContextType::System;
 	deployTxn->Timestamp = os::Timestamp::Get();
 	deployTxn->Flag = (SimuTxnFlag)0;
-	memcpy(deployTxn->ArgsSerializedData, target.ArgsJson.Begin(), target.ArgsJson.GetLength());
+	ASSERT(deployTxn->TokensSerializedSize == 0);
+	memcpy(deployTxn->SerializedData, target.ArgsJson.Begin(), target.ArgsJson.GetLength());
 	deployTxn->ArgsSerializedSize = (uint32_t)target.ArgsJson.GetLength();
 
 	sec::Hash<sec::HASH_SHA256>().Calculate(((char*)deployTxn) + sizeof(rvm::HashValue), deployTxn->GetSize() - sizeof(rvm::HashValue), &deployTxn->Hash);
 
-	GetGlobalShard()->PushTxn(deployTxn);
+	GetGlobalShard()->PushNormalTxn(deployTxn);
 	_Step();
 }
 
 rvm::InvokeResult Simulator::DeployFromStatement(const rt::String_Ref& deployStatement)
 {
-	rvm::InvokeResult ret{ 0, 0, rvm::InvokeErrorCode::Success, 0 };
-	if (deployStatement.IsEmpty())
+	rvm::InvokeResult ret{ 0, 0, rvm::InvokeErrorCode::Success, 0, nullptr };
+	if(deployStatement.IsEmpty())
 	{
 		_LOG("[PPD] Line " << GetLineNum() << ": No deploy target");
 		return ret;
@@ -1314,30 +1743,44 @@ rvm::InvokeResult Simulator::DeployFromStatement(const rt::String_Ref& deploySta
 		rt::String_Ref remain(p, end), filename;
 		auto seg_end = remain.FindCharacter(sep);
 		bool has_argument = false;
-		if (seg_end == 0)
+		if(seg_end == 0)
 		{
 			p++;
 			continue;
 		}
-		if (seg_end < 0)
+		if(seg_end < 0)
 			seg_end = remain.GetLength();
 		else
 			has_argument = remain[seg_end] == '=';
 		fns[co] = filename = rt::String_Ref(p, seg_end).TrimSpace();
 		auto& arg = args[co];
 		co++;
-		if (has_argument && !filename.IsEmpty())
+		if(has_argument && !filename.IsEmpty())
 		{
 			remain = rt::String_Ref(&remain[seg_end + 1], end).TrimLeftSpace();
-			if (!remain.IsEmpty() && remain[0] == '{')
+			if(!remain.IsEmpty() && remain[0] == '{')
 			{
 				arg = rt::JsonObject::GetFirstObject(remain);
-				if (!arg.IsEmpty())
+				if(!arg.IsEmpty())
 				{
 					p = arg.End();
+					SSIZE_T beginPos = arg.FindCharacter('$');
+					SSIZE_T endPos = beginPos == -1 ? -1 : arg.FindCharacter("$", beginPos + 1);
+					if (beginPos != -1 && arg.SubStr(beginPos + 2, endPos - beginPos - 2).HasOnlyNumbers())
+					{
+						InputParametrized input(*this);
+						input.Parse(arg);
+						rt::String newArg;
+						input.Evaluate(newArg);
+						SSIZE_T len = newArg.GetLength();
+						char* addrStr = (char*)_Malloc8AL(char, len + 1);
+						memset(addrStr, '\0', len + 1);
+						memcpy(addrStr, newArg.Begin(), len);
+						args[co - 1] = rt::String_Ref(addrStr, len);
+					}
 					while (p < end && !sep.Has(*p))
 						p++;
-					if (*p != '=')
+					if(*p != '=')
 					{
 						p++;
 						continue;
@@ -1354,13 +1797,13 @@ rvm::InvokeResult Simulator::DeployFromStatement(const rt::String_Ref& deploySta
 		return ret;
 	}
 
-	if (!co)
+	if(!co)
 	{
 		_LOG("[PPD] Line " << GetLineNum() << ": No deploy target");
 		return ret;
 	}
 
-	if (!Deploy(_pGlobalShard->GetExecuteUnits(), fns, args, co, true, ret))
+	if(!Deploy(_pGlobalShard->GetExecuteUnits(), fns, args, co, true, ret))
 		_ScriptAborted = true;
 
 	return ret;
@@ -1385,11 +1828,11 @@ Simulator::CmdParse::CmdParse(const rt::String_Ref& cmd, uint32_t LineNum)
 {
 	int64_t identifier_pos = cmd.FindCharacter('='); // `=` shouldn't parse the entire line, it could be some text containing `=` after the actual command verb
 	bool IDexist = identifier_pos != -1 && identifier_pos < cmd.FindCharacter('.');
-	if (IDexist)
+	if(IDexist)
 	{
 		Identifier = cmd.SubStr(0, identifier_pos - 1);
 		Identifier = Identifier.TrimSpace();
-		if (Identifier.FindCharacter(" @#$%^&*()=+.") != -1)
+		if(Identifier.FindCharacter(" @#$%^&*()=+.") != -1)
 		{
 			_LOG_WARNING("[PRD] Line " << LineNum << ": Transaction identifier contains illegal symbol");
 			return;
@@ -1485,7 +1928,7 @@ bool Simulator::_ExecAllocate(const CmdParse& cmd)
 			}
 		}
 
-		_LOG(add<<" addresses added and evenly distributed in shards");
+		_LOG("[PRD]: " << add << " addresses added and evenly distributed in shards");
 		_UserIndexRandMax = 0xffffffffU/(uint32_t)_Shards.GetSize()*(uint32_t)_Shards.GetSize();
 		return true;
 	}
@@ -1499,7 +1942,7 @@ void Simulator::_InitChain(UINT shard_order)
 	ASSERT(_pGlobalShard == nullptr);
 
 	_ShardOrder = shard_order;
-	_ScriptGasLimit = 10000;
+	_ScriptGasLimit = _ScriptGlobalGasLimit = 100000000;
 	_bChainPaused = true;
 
 	_PendingTxnCount = 0;
@@ -1521,7 +1964,7 @@ void Simulator::_InitChain(UINT shard_order)
 	for(auto p : _Shards)
 		p->Init();
 
-	_LOG("[PRD]: Chain initialized with "<<shard_count<<" shard(s), in "<<(_bShardAsync?"async":"sync")<<"-sharding mode");
+	if(!_CompileOnly) _LOG("[PRD]: Chain initialized with "<<shard_count<<" shard(s), in "<<(_bShardAsync?"async":"sync")<<"-sharding mode");
 }
 
 void Simulator::WaitUntilIdle()
@@ -1558,7 +2001,6 @@ Simulator::TargetParse::TargetParse(const rt::String_Ref& arg_part, rvm::Scope s
 		}
 	}
 }
-#ifdef _VIZ
 void Simulator::_ConvertQueueToTxnPool()
 {
 	rt::BufferEx<SimuTxn*> current_buf;
@@ -1588,135 +2030,187 @@ void Simulator::_ConvertQueueToTxnPool()
 	}
 	_TxnPool[current_id] = current_buf;
 }
-#endif
 
-rvm::ConstData Simulator::_ComposeState(oxd::SimuShard* s, rvm::BuildNum build, rvm::ContractScopeId csid, InputParametrized& input, const rt::String& in_state, rvm::Address* addr)
+bool Simulator::_ModifyState(rvm::ContractInvokeId ciid, InputParametrized& input, const rt::String_Ref& in_state, bool replace, SimuShard* s, const rvm::ScopeKey& sk)
 {
-	rvm::ConstStateData stateData{nullptr, 0 , 0};
-	rvm::Scope scope = rvm::CONTRACT_SCOPE(csid);
-	switch (scope)
+	if(input.Parse(in_state))
 	{
-	case rvm::Scope::Address:
-	{
-		SimuAddressContract k{ ScopeTarget(*addr), csid };
-		const SimuState* state = s->GetAddressState(k);
-		if(state)
-		{
-			stateData = { state->Data, state->DataSize, build };
+		rvm::Scope scope = rvm::CONTRACT_SCOPE(ciid); 
+		rvm::StringStreamImpl state_json;
+		if(!replace)
+		{	// get existing state
+			rvm::ConstStateData stateData{ nullptr, 0 , 0}; 
+			switch (scope) 
+			{ 
+			case rvm::Scope::Global: 
+				stateData = _pGlobalShard->GetState(-ciid);
+				break;
+			case rvm::Scope::Shard:
+				ASSERT(s);
+				stateData = s->GetState(-ciid); 
+				break;
+			default:
+				ASSERT(s);
+				SimuAddressContract k{ ScopeTarget(sk), -ciid };
+				const SimuState* state = s->GetAddressState(k);
+				if (state)
+				{
+					stateData.DataPtr = state->Data;
+					stateData.DataSize = state->DataSize;
+				}
+				break;
+			}
+
+			const rvm::ConstData data { stateData.DataPtr, stateData.DataSize }; 
+			rvm::RvmEngine* pEngine = GetEngine(rvm::CONTRACT_ENGINE(ciid)); 
+			if(!pEngine)return false;
+ 
+			if (!pEngine->StateJsonify(ciid, &data, &state_json))
+				return false;
 		}
-		break;
-	}
-	case rvm::Scope::Shard:
-	case rvm::Scope::Global:
-		stateData = s->GetState(csid);
-		break;
-	default:
-		break;
+
+		auto build = rvm::CONTRACT_BUILD(ciid);
+		rvm::ConstData buf;
+		if (!input.ComposeState(buf, ciid, 0, state_json.GetString().Str()))
+			return false;
+
+		switch(scope)
+		{ 
+		case rvm::Scope::Global: 
+			_pGlobalShard->SetState(-ciid, SimuState::Create(buf.DataSize, build, buf.DataPtr));
+			break;
+		case rvm::Scope::Shard:
+			ASSERT(s);
+			s->SetState(-ciid, SimuState::Create(buf.DataSize, build, buf.DataPtr));
+			break;
+		case rvm::Scope::Address:
+			ASSERT(s);
+			ASSERT(sk.Size == sizeof(rvm::Address));
+			s->SetState(-ciid, *(rvm::Address*)sk.Data, SimuState::Create(buf.DataSize, build, buf.DataPtr));
+			break;
+		default:
+			ASSERT(0);
+		}
+
+		return true;
 	}
 
-	const rvm::ConstData data{ stateData.DataPtr, stateData.DataSize };
-	rvm::StringStreamImpl stateStr;
-	
-	rvm::RvmEngine* pEngine = GetEngine(rvm::CONTRACT_ENGINE(csid));
-	if(!pEngine)return { nullptr, 0 };
-
-	auto ciid = rvm::CONTRACT_SET_BUILD(csid, build);
-	pEngine->StateJsonify(ciid, &data, &stateStr);
-	//in means input from user, might be incomplete state
-	rt::JsonObject injson(in_state);
-	//out means on chain state, is complete
-	rt::JsonObject outjson(stateStr);
-	rt::JsonKeyValuePair p;
-	//it is inconvenient to modify the original state json, therefore I'm constructing a new state
-	rt::String newStateJson("{");
-	while (outjson.GetNextKeyValuePair(p))
-	{
-		rt::String key = p.GetKey();
-		bool exist = false;
-		rt::String newStateVal = injson.GetValueRaw(key, exist);
-		//GetValueRaw does not work properly if '$...$' is present
-		int64_t start_pos = in_state.FindString(key);
-		if(!exist && start_pos >= 0) //GetValueRaw can not find the value but the key exists
-		{
-			start_pos += key.GetLength() + 1;
-			int64_t end_pos = in_state[start_pos] == '$' ? in_state.FindCharacter(",}]", in_state.FindCharacter('$', start_pos + 1)) : in_state.FindCharacter(',', start_pos + 1);
-			newStateVal = in_state.SubStr(start_pos, end_pos - start_pos);
-			exist = true;
-		}
-		//example: input is {weight:$random(1, 20)$}, GetValueRaw will obtain substring from "$r" to the first ',' which results in "$random(1"
-		//need to handle special cases when value is wrapped in non standard json symbol and contains comma in between value
-		if(exist && newStateVal[0] == '$' && newStateVal.Last() != '$')
-		{
-			start_pos = in_state.FindString(key) + key.GetLength() + 1;
-			int64_t end_pos = in_state.FindCharacter("$", start_pos + 1);
-			newStateVal = in_state.SubStr(start_pos, end_pos - start_pos + 1);
-		}
-		rt::String val = exist ? newStateVal : p.GetValueRaw();
-		newStateJson += "\"" + key + "\":" + val + ",";
-	}
-	newStateJson = newStateJson.TrimRight(1) + "}";
-	input.Parse(newStateJson);
-	return input.ComposeState(ciid);
+	return false;
 }
 
+bool Simulator::_ParseInvokeIdentifier(const rt::String_Ref& str, int line_num, InvokeIdentifier& out) const
+{
+	uint32_t co = str.Split(&out.DApp, 3, '.');
+
+	if(co == 1)
+	{
+		out.Scope = "global";
+		out.Contract = out.DApp;
+		out.DApp = DAPP_NAME;
+	}
+	else if(co == 2)
+	{
+		out.Scope = out.Contract;
+		out.Contract = out.DApp;
+		out.DApp = DAPP_NAME;
+	}
+
+	rvm::Scope scope;
+	if(out.Scope == "address"){ scope = rvm::Scope::Address; }
+	else if(out.Scope == "shard"){ scope = rvm::Scope::Shard; }
+	else if(out.Scope == "global"){ scope = rvm::Scope::Global; }
+	else
+	{
+		_LOG("[PRD] Line " << line_num << ": '"<<out.Scope<<" is not a legal scope identifier, which should be `addess/shard/global`");
+		return false;
+	}
+
+	rvm::ContractVersionId cvid = _pGlobalShard->_Contracts.get(out.DApp + '.' + out.Contract, rvm::ContractVersionIdInvalid);
+	bool isUnnameContract = out.Contract.HasOnlyNumbers();
+	rt::String contractName;
+	if ((isUnnameContract && !_ResolveUnnameContract(out.Contract, rt::String_Ref(), contractName, cvid)) || cvid == rvm::ContractVersionIdInvalid)
+	{
+		_LOG("[PRD] Line " << line_num << ": Contract '"<<out.DApp<<'.'<<out.Contract<<"' is not found");
+		return false;
+	}
+
+	out.CIID = cvid + scope;
+	return true;
+}
+bool Simulator::_ResolveUnnameContract(const rt::String_Ref unnameContract, rt::String_Ref contractFunc, rt::String& contractName, rvm::ContractVersionId& originalCvid) const
+{
+	rvm::ContractVersionId cvid = (rvm::ContractVersionId)unnameContract.ToNumber<uint64_t>();
+	oxd::ContractsDatabase::ContractInfo* info = _pGlobalShard->_ContractInfo.get(cvid);
+	if (info)
+	{
+		for (auto& it : _pGlobalShard->_ContractInfo)
+		{
+			if (rt::IsEqual(it.second->Deployment.Module, info->Deployment.Module))
+			{
+				//make sure originalCvid is named
+				bool isNamed = false;
+				for (auto& named_it : _pGlobalShard->_Contracts)
+				{
+					if (named_it.second == it.first)
+					{
+						isNamed = true;
+						contractName = named_it.first + rt::SS(".") + contractFunc;
+					}
+				}
+				originalCvid = cvid;
+				if (isNamed)
+				{
+					return true;
+				}
+			}
+		}
+		if (originalCvid == rvm::ContractVersionIdInvalid)
+		{
+			return false;
+		}
+	}
+	return false;
+}
 bool Simulator::_ExecState(const CmdParse& cmd)
 {
-	if(cmd.L2 == "set")
+	thread_local InputParametrized input(*this);
+
+	if(cmd.L2 == "set" || cmd.L2 == "update")
 	{
-		rt::String_Ref op[2];
-		if(cmd.Args.Split(op, 2, ". \t") != 2)return false;
+		bool replace = cmd.L2 == "set";
 
-		rvm::Scope scope;
-		if(op[0] == "address"){ scope = rvm::Scope::Address; }
-		else if(op[0] == "shard"){ scope = rvm::Scope::Shard; }
-		else if(op[0] == "global"){ scope = rvm::Scope::Global; }
-		else
-		{
-			_LOG("[PRD] Line " << GetLineNum() << ": '"<<op[0]<<" is not a legal state identifier, which should be `addess/shard/global.[ContractName]`");
+		rt::String_Ref contract = cmd.Args.TrimAfter(" \t\r\n");
+
+		InvokeIdentifier iid;
+		if(!_ParseInvokeIdentifier(contract, GetLineNum(), iid))
 			return false;
-		}
 
-		rvm::ContractVersionId cvid = _pGlobalShard->_Contracts.get(DAPP_NAME + rt::SS(".") + op[1], rvm::ContractVersionIdInvalid);
-		if(cvid == rvm::ContractVersionIdInvalid)
-		{
-			_LOG("[PRD] Line " << GetLineNum() << ": Contract '"<<op[1]<<"' is not found");
-			return false;
-		}
+		rvm::Scope scope = rvm::CONTRACT_SCOPE(iid.CIID);
 
-		TargetParse args(rt::String_Ref(op[1].End(), cmd.Args.End()), scope, GetLineNum());
+		TargetParse args(rt::String_Ref(contract.End(), cmd.Args.End()), scope, GetLineNum());
 		if(args.IsError())return false;
-		thread_local InputParametrized input(*this);
-		if(!input.Parse(args.ArgsJson))
-			return false;
-
-		auto build = _pGlobalShard->_GetContractEffectiveBuild(rvm::CONTRACT_UNSET_BUILD(cvid));
-		rvm::ContractScopeId csid = rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(cvid), scope);
+		
+		bool ret;
 		switch(scope)
 		{
 			case rvm::Scope::Global:
-			{
-				rvm::ConstData buf = _ComposeState(_pGlobalShard, build, csid, input, args.ArgsJson);
-				_pGlobalShard->SetState(csid, SimuState::Create(buf.DataSize, build, buf.DataPtr));
-				return true;
-			}
+				ret = _ModifyState(iid.CIID, input, args.ArgsJson, replace);
+				break;
 			case rvm::Scope::Shard:
 			{
 				rt::String target = args.Target;
 				if(!_ProcessTargetRequest(target, GetLineNum(), true))
-				{
 					return false;
-				}
+
 				if(target == "all")
 				{
 					for(auto s: _Shards)
 					{
-						rvm::ConstData buf = _ComposeState(s, build, csid, input, args.ArgsJson);
-						if(!buf.DataPtr)
+						if(!_ModifyState(iid.CIID, input, args.ArgsJson, replace, s))
 						{
-							_LOG("[PRD] Line " << GetLineNum() << ": Failed to Set State");
+							_LOG("[PRD] Line " << GetLineNum() << ": Failed to modify State in shard #"<<s->GetShardIndex());
 							return false;
 						}
-						s->SetState(csid, SimuState::Create(buf.DataSize, build, buf.DataPtr));
 					}
 				}
 				else
@@ -1724,13 +2218,11 @@ bool Simulator::_ExecState(const CmdParse& cmd)
 					uint32_t s = target.ToNumber<int>();
 					if(s>=0 && s<_Shards.GetSize())
 					{
-						rvm::ConstData buf = _ComposeState(_Shards[s], build, csid, input, args.ArgsJson);
-						if(!buf.DataPtr)
+						if(!_ModifyState(iid.CIID, input, args.ArgsJson, replace, _Shards[s]))
 						{
-							_LOG("[PRD] Line " << GetLineNum() << ": Failed to Set State");
+							_LOG("[PRD] Line " << GetLineNum() << ": Failed to modify State in shard #"<<_Shards[s]->GetShardIndex());
 							return false;
 						}
-						_Shards[s]->SetState(csid, SimuState::Create(buf.DataSize, build, buf.DataPtr));
 					}
 					else
 					{
@@ -1745,21 +2237,20 @@ bool Simulator::_ExecState(const CmdParse& cmd)
 			{
 				rt::String target = args.Target;
 				if(!_ProcessTargetRequest(target, GetLineNum(), false))
-				{
 					return false;
-				}
+
 				if(target == "all")
 				{
 					for(auto& a : _Users)
 					{
-						rvm::ConstData buf = _ComposeState(_Shards[a.ShardDword & _ShardBitmask], build, csid, input, args.ArgsJson, &a.Addr);
-						if(!buf.DataPtr)
+						if(!_ModifyState(iid.CIID, input, args.ArgsJson, replace, _Shards[a.ShardDword & _ShardBitmask], ScopeKeyPOD(a.Addr)))
 						{
-							_LOG("[PRD] Line " << GetLineNum() << ": Failed to Set State");
+							_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Failed to modify state of address "<<b32a(a.Addr));
 							return false;
 						}
-						_Shards[a.ShardDword & _ShardBitmask]->SetState(csid, a.Addr, SimuState::Create(buf.DataSize, build, buf.DataPtr));
 					}
+
+					return true;
 				}
 				else if(target == "random")
 				{
@@ -1769,14 +2260,14 @@ bool Simulator::_ExecState(const CmdParse& cmd)
 						last = (_ScriptRand.GetNext() + last)%_Users.GetSize();
 
 						auto& a = _Users[last];
-						rvm::ConstData buf = _ComposeState(_Shards[a.ShardDword & _ShardBitmask], build, csid, input, args.ArgsJson, &a.Addr);
-						if(!buf.DataPtr)
+						if(!_ModifyState(iid.CIID, input, args.ArgsJson, replace, _Shards[a.ShardDword & _ShardBitmask], ScopeKeyPOD(a.Addr)))
 						{
-							_LOG("[PRD] Line " << GetLineNum() << ": Failed to Set State");
+							_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Failed to modify state "<<b32a(a.Addr));
 							return false;
 						}
-						_Shards[a.ShardDword&_ShardBitmask]->SetState(csid, a.Addr, SimuState::Create(buf.DataSize, build, buf.DataPtr));
 					}
+
+					return true;
 				}
 				else
 				{
@@ -1784,13 +2275,7 @@ bool Simulator::_ExecState(const CmdParse& cmd)
 					if(s>=0 && s<_Users.GetSize())
 					{
 						auto& a = _Users[s];
-						rvm::ConstData buf = _ComposeState(_Shards[a.ShardDword & _ShardBitmask], build, csid, input, args.ArgsJson, &a.Addr);
-						if(!buf.DataPtr)
-						{
-							_LOG("[PRD] Line " << GetLineNum() << ": Failed to Set State");
-							return false;
-						}
-						_Shards[a.ShardDword&_ShardBitmask]->SetState(csid, a.Addr, SimuState::Create(buf.DataSize, build, buf.DataPtr));
+						ret = _ModifyState(iid.CIID, input, args.ArgsJson, replace, _Shards[a.ShardDword & _ShardBitmask], ScopeKeyPOD(a.Addr));
 					}
 					else
 					{
@@ -1798,16 +2283,74 @@ bool Simulator::_ExecState(const CmdParse& cmd)
 						return false;
 					}
 				}
-				return true;
 			}
 		}
-	}
 
+		if(ret)return true;
+		_LOG("[PRD] Line " << GetLineNum() << ": Failed to modify State");
+	}
+	else if(cmd.L2 == "token")
+	{
+		rt::String_Ref segs[10];
+		uint32_t co = cmd.Args.Split<true>(segs, sizeofArray(segs), " \t\r\n");
+		if(segs[0] == "mint" && segs[2] == "by")
+		{
+			InvokeIdentifier iid;
+			if(!_ParseInvokeIdentifier(segs[3], GetLineNum(), iid))
+				return false;
+
+			rvm::TokenId token = rvm::TokenIdFromSymbol(segs[1]);
+			if(token == rvm::TokenIdInvalid)
+			{
+				_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Token symbol `"<<segs[1]<<"` is ill-formatted");
+				return false;
+			}
+
+			// add supplier
+			{
+				CoreContractState<CORE_TOKEN_SUPPLIERS> state = _pGlobalShard->GetState(-CORE_TOKEN_SUPPLIERS);
+				auto m = state.DeriveMutable();
+				m.Set(rvm::UInt128{ (uint64_t)token, (uint64_t)-~iid.CIID }, rvm::TokenMinterFlag::Allowed);
+				_pGlobalShard->SetState(-CORE_TOKEN_SUPPLIERS, state.CreateState(m, rvm::CONTRACT_BUILD(iid.CIID)));
+			}
+
+			// assign token default
+			{
+				CoreContractState<CORE_CONTRACT_DEFAULT> state = _pGlobalShard->GetState(-CORE_CONTRACT_DEFAULT);
+				if(state.IsEmpty() || !state->Has(-~iid.CIID))
+				{
+					auto m = state.DeriveMutable();
+					m.Set(-~iid.CIID, token);
+					_pGlobalShard->SetState(-CORE_CONTRACT_DEFAULT, state.CreateState(m, rvm::CONTRACT_BUILD(iid.CIID)));
+				}
+			}
+
+			return true;
+		}
+	}
+	else if (cmd.L2 == "load" || cmd.L2 == "save")
+	{
+		rt::String_Ref segs[2];
+		int co = cmd.Args.Split(segs, 2, ' ');
+		rt::String_Ref targetSegs[2];
+		segs[0].Split(targetSegs, 2, '.');
+		if (cmd.L2 == "load")
+		{
+			return _ReadStateFromFile(segs[1], targetSegs);
+		}
+		else
+		{
+			rvm::ContractVersionId cvid = targetSegs[1] != rt::SS("all") ? _pGlobalShard->_Contracts.get(DAPP_NAME + rt::SS(".") + targetSegs[1]) : rvm::ContractVersionIdInvalid;
+			_SaveStateToFile(segs[1], targetSegs[0], cvid);
+			return true;
+		}
+	}
 	return false;
 }
 
 uint32_t Simulator::GetScriptRandomAddressIndex() const
 {
+	EnterCSBlock(_RandScriptCS);
 	for(;;)
 	{
 		uint32_t r = _ScriptRand.GetNext();
@@ -1823,7 +2366,7 @@ bool Simulator::_ParseSolidityFunc(const rt::String& functionName, rt::String& a
 	rt::Json args;
 	args.Object();
 	args.MergeObject(argument);
-	if (!args.GetLength())
+	if(!args.GetLength())
 	{
 		return false;
 	}
@@ -1834,7 +2377,15 @@ bool Simulator::_ParseSolidityFunc(const rt::String& functionName, rt::String& a
 
 bool Simulator::_GetContractFunction(const CmdParse& cmd, ContractFunction& fi) const
 {
-	rt::BufferEx<ContractFunction> buf = rt::_CastToConst(_pGlobalShard->_ContractFunctions).get(rt::SS(DAPP_NAME) + rt::SS(".") + rt::String_Ref(cmd.L1.Begin(), cmd.L2.End()), rt::BufferEx<ContractFunction>());
+	bool isUnnameContract = cmd.L1.HasOnlyNumbers();
+	rvm::ContractVersionId cvid = rvm::ContractVersionIdInvalid;
+	rt::String contractName(cmd.L1.Begin(), cmd.L2.End());
+	contractName = rt::SS(DAPP_NAME) + rt::SS(".") + contractName;
+	if (isUnnameContract && !_ResolveUnnameContract(cmd.L1, cmd.L2, contractName, cvid))
+	{
+		return false;
+	}
+	rt::BufferEx<ContractFunction> buf = rt::_CastToConst(_pGlobalShard->_ContractFunctions).get(contractName, rt::BufferEx<ContractFunction>());
 	if(buf.GetSize() == 0)
 	{
 		_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Contract function '" << rt::String_Ref(cmd.L1.Begin(), cmd.L2.End()) << "' is not found");
@@ -1856,7 +2407,8 @@ bool Simulator::_GetContractFunction(const CmdParse& cmd, ContractFunction& fi) 
 		if(funcSignature.GetLength() == 0 && args_json.IsEmptyObject()) //empty json won't enter the while loop below
 		{
 			fi = buf[i];
-			return true;
+			maxVarMatched++;
+			break;
 		}
 		rt::BufferEx<rt::String_Ref> args_sets;
 		args_sets.ExpandSize(1024);
@@ -1899,54 +2451,26 @@ bool Simulator::_GetContractFunction(const CmdParse& cmd, ContractFunction& fi) 
 		_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Invalid function argument/s");
 		return false;
 	}
+	if (isUnnameContract)
+	{
+		fi.Contract = rvm::CONTRACT_UNSET_BUILD(cvid);
+	}
 	return true;
 }
 bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 {
 	ContractFunction fi;
-	rvm::BuildNum build_num = rvm::BuildNumLatest;
-	rvm::Scope scope;
-
-	{	EnterCSBlock(_CS);
-		if(!_GetContractFunction(cmd, fi))
-		{
-			return false;
-		}
-
-		scope = PrepareTxn(fi.Contract, fi.Op, build_num);
-		ASSERT(scope != rvm::ScopeInvalid);
-	}
-
-	TargetParse target(cmd.Args, scope, GetLineNum());
-	if(target.IsError())return false;
-	if(target.Target.GetLength() > 0 && target.Target[0] == '@' && scope == rvm::Scope::Shard)
-	{
-		_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Target of a shard function should begin '#'");
-		return false;
-	}
-	else if(target.Target.GetLength() > 0 && target.Target[0] == '#' && scope == rvm::Scope::Address)
-	{
-		_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Target of a address function should begin '@'");
-		return false;
-	}
+	TargetParse target;
 	thread_local InputParametrized input(*this);
-	rt::String argStr = target.ArgsJson;
-	if (rvm::CONTRACT_ENGINE(fi.Contract) == rvm::EngineId::SOLIDITY_EVM && !_ParseSolidityFunc(cmd.L2, argStr))
+	rvm::ContractInvokeId cvid;
+	auto* txn = _ComposeTxnFromStr(cmd, cvid, fi, target, input);
+	if (!txn)
 	{
-		_LOG_WARNING("[BC] Line " << GetLineNum() << ": Invalid argument json");
+		_LOG_WARNING("[PRD] Line " << GetLineNum() << ": Unable to compose transaction");
 		return false;
 	}
-	if(!input.Parse(argStr))
-		return false;
-
-	auto* txn = input.ComposeTxn(rvm::CONTRACT_SET_SCOPE_BUILD(fi.Contract, scope, build_num), fi.Op);
-	if(!txn)
-	{
-		return false;
-	}
-
 	bool identifier_exist = !cmd.Identifier.IsEmpty();
-	switch(scope)
+	switch(txn->GetScope())
 	{
 	case rvm::Scope::Global:
 	{
@@ -1958,19 +2482,17 @@ bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 				return false;
 			}
 			auto* param = &input; // input in this thread should be used in all loop threads
-			auto loop = [this,&cmd,txn,fi,scope,build_num,param,identifier_exist](int i) {
+			auto loop = [this,&cmd,txn,cvid,fi,param,identifier_exist](int i) {
 				if(i >= _Users.GetSize())return false;
 				for(int repeat = 0; repeat < cmd.Repeat; repeat++)
 				{
-					SimuTxn* t = param->IsParameterized() ? param->ComposeTxn(rvm::CONTRACT_SET_SCOPE_BUILD(fi.Contract, scope, build_num), fi.Op, i) : txn->Clone();
+					SimuTxn* t = param->IsParameterized() ? param->ComposeTxn(cvid, fi.Op, i) : txn->Clone();
 					if(!t)
 					{
 						return false;
 					}
-					_pGlobalShard->PushTxn(t);
-#ifdef _VIZ
+					_pGlobalShard->PushNormalTxn(t);
 					if(identifier_exist) _IdTxnQueue.Push({ cmd.Identifier, t });
-#endif
 				}
 				return true;
 			};
@@ -1982,11 +2504,9 @@ bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 		{
 			for(int repeat = 0; repeat < cmd.Repeat; repeat++)
 			{
-				SimuTxn* duplicates = input.IsParameterized() ? input.ComposeTxn(rvm::CONTRACT_SET_SCOPE_BUILD(fi.Contract, scope, build_num), fi.Op, repeat) : txn->Clone();
-				_pGlobalShard->PushTxn(duplicates);
-#ifdef _VIZ
+				SimuTxn* duplicates = input.IsParameterized() ? input.ComposeTxn(cvid, fi.Op, repeat) : txn->Clone();
+				_pGlobalShard->PushNormalTxn(duplicates);
 				if(identifier_exist) _IdTxnQueue.Push({ cmd.Identifier, duplicates });
-#endif
 			}
 		}
 		break;
@@ -2008,15 +2528,13 @@ bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 			for(uint32_t i = 0; i < _Shards.GetSize(); i++) {
 				for(int repeat = 0; repeat < cmd.Repeat; repeat++)
 				{
-					SimuTxn* t = input.IsParameterized() ? input.ComposeTxn(rvm::CONTRACT_SET_SCOPE_BUILD(fi.Contract, scope, build_num), fi.Op, i) : txn->Clone();
+					SimuTxn* t = input.IsParameterized() ? input.ComposeTxn(cvid, fi.Op, i) : txn->Clone();
 					if(!t)
 					{
 						return false;
 					}
-					_Shards[i]->PushTxn(t);
-#ifdef _VIZ
+					_Shards[i]->PushNormalTxn(t);
 					if(identifier_exist) _IdTxnQueue.Push({ cmd.Identifier, t });
-#endif
 				}
 			}
 		}
@@ -2027,11 +2545,9 @@ bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 			{
 				for(int repeat = 0; repeat < cmd.Repeat; repeat++)
 				{
-					SimuTxn* duplicates = input.IsParameterized() ? input.ComposeTxn(rvm::CONTRACT_SET_SCOPE_BUILD(fi.Contract, scope, build_num), fi.Op, repeat) : txn->Clone();;
-					_Shards[s]->PushTxn(duplicates);
-#ifdef _VIZ
+					SimuTxn* duplicates = input.IsParameterized() ? input.ComposeTxn(cvid, fi.Op, repeat) : txn->Clone();;
+					_Shards[s]->PushNormalTxn(duplicates);
 					if(identifier_exist) _IdTxnQueue.Push({ cmd.Identifier, duplicates });
-#endif
 				}
 			}
 			else
@@ -2052,7 +2568,7 @@ bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 		if(addr_target == "random")
 		{
 			auto* param = &input; // input in this thread should be used in all loop threads
-			auto loop = [this,&cmd,txn,fi,scope,build_num,param,identifier_exist](int i) {
+			auto loop = [this,&cmd,txn,fi,cvid,param,identifier_exist](int i) {
 				if(i >= cmd.Repeat)return false;
 
 				uint32_t last;
@@ -2060,17 +2576,15 @@ bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 
 				auto& a = _Users[last];
 
-				SimuTxn* t = param->IsParameterized()?param->ComposeTxn(rvm::CONTRACT_SET_SCOPE_BUILD(fi.Contract, scope, build_num), fi.Op, i):txn->Clone();
+				SimuTxn* t = param->IsParameterized()?param->ComposeTxn(cvid, fi.Op, i):txn->Clone();
 				if(!t)
 				{
 					return false;
 				}
 				t->Target = ScopeTarget(a.Addr);
 				t->TargetIndex = last;
-				_Shards[a.ShardDword&_ShardBitmask]->PushTxn(t);
-#ifdef _VIZ
+				_Shards[a.ShardDword&_ShardBitmask]->PushNormalTxn(t);
 				if(identifier_exist) _IdTxnQueue.Push({cmd.Identifier, t});
-#endif
 				return true;
 			};
 
@@ -2085,11 +2599,11 @@ bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 				return false;
 			}
 			auto* param = &input; // input in this thread should be used in all loop threads
-			auto loop = [this,&cmd,txn,fi,scope,build_num,param,identifier_exist](int i) {
+			auto loop = [this,&cmd,txn,fi,cvid,param,identifier_exist](int i) {
 				if(i >= _Users.GetSize())return false;
 				for(int repeat = 0; repeat < cmd.Repeat; repeat++)
 				{
-					SimuTxn* t = param->IsParameterized() ? param->ComposeTxn(rvm::CONTRACT_SET_SCOPE_BUILD(fi.Contract, scope, build_num), fi.Op, i) : txn->Clone();
+					SimuTxn* t = param->IsParameterized() ? param->ComposeTxn(cvid, fi.Op, i) : txn->Clone();
 					if(!t)
 					{
 						return false;
@@ -2097,10 +2611,8 @@ bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 					auto& a = _Users[i];
 					t->Target = ScopeTarget(a.Addr);
 					t->TargetIndex = i;
-					_Shards[a.ShardDword & _ShardBitmask]->PushTxn(t);
-#ifdef _VIZ
+					_Shards[a.ShardDword & _ShardBitmask]->PushNormalTxn(t);
 					if(identifier_exist) _IdTxnQueue.Push({ cmd.Identifier, t });
-#endif
 				}
 				return true;
 			};
@@ -2110,7 +2622,7 @@ bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 		}
 		else
 		{
-			uint32_t s = addr_target.ToNumber<int>();
+			int32_t s = _GetIndexFromAddrStr(addr_target);
 			if(s>=0 && s<_Users.GetSize())
 			{
 				auto& a = _Users[s];
@@ -2118,20 +2630,18 @@ bool Simulator::_ExecIssueTxn(const CmdParse& cmd)
 				txn->TargetIndex = s;
 
 				auto* param = &input; // input in this thread should be used in all loop threads
-				auto loop = [this,&cmd,txn,&a,fi,scope,build_num,param,identifier_exist, s](int i) {
+				auto loop = [this,&cmd,txn,&a,fi,cvid,param,identifier_exist, s](int i) {
 					if(i >= cmd.Repeat)return false;
 
-					SimuTxn* t = param->IsParameterized()?param->ComposeTxn(rvm::CONTRACT_SET_SCOPE_BUILD(fi.Contract, scope, build_num), fi.Op, i):txn->Clone();
+					SimuTxn* t = param->IsParameterized()?param->ComposeTxn(cvid, fi.Op, i):txn->Clone();
 					if(!t)
 					{
 						return false;
 					}
 					t->Target = ScopeTarget(a.Addr);
 					t->TargetIndex = s;
-					_Shards[a.ShardDword&_ShardBitmask]->PushTxn(t);
-#ifdef _VIZ
+					_Shards[a.ShardDword&_ShardBitmask]->PushNormalTxn(t);
 					if(identifier_exist) _IdTxnQueue.Push({cmd.Identifier, t});
-#endif
 					return true;
 				};
 
@@ -2183,5 +2693,109 @@ bool Simulator::ExportVizHtml(const rt::String_Ref& templ, const rt::String_Ref&
 
 	return true;
 }
+void Simulator::_SaveStateToFile(const rt::String_Ref& filename, const rt::String& scope, rvm::ContractVersionId cvid)
+{
+	os::File stateFile;
+	rt::String absoluteFilePath;
+	os::File::ResolveRelativePath(_ScriptPath + filename, absoluteFilePath);
+	stateFile.Open(absoluteFilePath.Begin(), os::File::Normal_Write, true);
+	rt::Json json;
+	json.Array();
+	if (scope == "address")
+	{
+		for (uint32_t i = 0; i < _Shards.GetSize(); i++)
+		{
+			_Shards[i]->JsonifyAddressStateWithoutGrouping(json, rvm::CONTRACT_UNSET_BUILD(cvid));
+		}
+		_LOG("[PRD]: Address states Written to: " << filename)
+	}
+	else
+	{
+		for (uint32_t i = 0; i < _Shards.GetSize(); i++)
+		{
+			_Shards[i]->JsonifyShardState(json, rvm::CONTRACT_UNSET_BUILD(cvid));
+		}
+		_pGlobalShard->JsonifyShardState(json, rvm::CONTRACT_UNSET_BUILD(cvid));
+		_LOG("[PRD]: Shard states Written to: " << filename)
+	}
+	stateFile.Write(json.GetInternalString());
+	stateFile.Close();
+}
+bool Simulator::_GenerateSetStateCmd(const rt::String_Ref& line, const rt::String_Ref& scope, const rt::String_Ref& target_contract)
+{
+	rt::JsonObject obj(line);
+	rt::JsonArray stateArr(obj.GetValueRaw("States"));
+	rt::String_Ref stateStr;	
+	rt::String cmdStr;
+	bool exist = false;
+	rt::String_Ref target;
+	while (stateArr.GetNextObject(stateStr))
+	{
+		rt::JsonObject stateObj(stateStr);
+		bool CIDexist = false;
+		rt::String_Ref CVIDStr = stateObj.GetValue("CVID");
+		if (target_contract != rt::SS("all") && target_contract != stateObj.GetValue("Contract"))
+		{
+			return false;
+		}
+		if (scope == "address")
+		{
+			rvm::Address addr;
+			target = obj.GetValue("Address", exist);
+			if (!exist)
+			{
+				_LOG("[PRD] Line " << GetLineNum() << ": Invalid address state");
+				return false;
+			}
+			uint32_t index = _AddNewUser(target, addr);
+			cmdStr = "state.update ";
+			cmdStr += CVIDStr + ".address" + rt::SS(" @") + index + rt::SS(" ") + stateObj.GetValue("State");
 
+		}
+		else
+		{
+			cmdStr = "state.update ";
+			target = obj.GetValue("ShardIndex", exist);
+			if(!exist)
+			{
+				_LOG("[PRD] Line " << GetLineNum() << ": Invalid shard state");
+				return false;
+			}
+			bool IsGlobal = target == "#g";
+			cmdStr += CVIDStr + rt::SS(".") + (IsGlobal ? rt::SS("global") : scope) + rt::SS(" ") + (IsGlobal ? rt::SS("#global") : obj.GetValue("ShardIndex"))  + rt::SS(" ") + stateObj.GetValue("State");
+		}
+		CmdParse cmd(cmdStr, GetLineNum());
+		_ExecState(cmd);
+	}
+	return true;
+}
+bool Simulator::_ReadStateFromFile(const rt::String_Ref& filename, const rt::String_Ref* TargetSeg)
+{
+	rt::String_Ref scope = TargetSeg[0];
+	rt::String_Ref target_contract = TargetSeg[1];
+	os::File statefile;
+	rt::String absoluteFilePath;
+	os::File::ResolveRelativePath(_ScriptPath + filename, absoluteFilePath);
+	if (!statefile.Open(absoluteFilePath.GetString()))
+	{
+		_LOG("[PRD] Line" << GetLineNum() << ": Unable to open state file, file path: " << filename);
+		return false;
+	}
+	rt::String text;
+	os::File::LoadText(absoluteFilePath, text);
+	rt::JsonArray allStateArr(text);
+	if (allStateArr.IsEmpty())
+	{
+		_LOG("[PRD] Line" << GetLineNum() << ": Unable to parse state file, file path: " << filename);
+		return false;
+	}
+	rt::String_Ref line;
+	uint64_t count = 0;
+	rt::String cmdStr;
+	while (allStateArr.GetNextObject(line))
+	{
+		if(!_GenerateSetStateCmd(line, scope, target_contract)) return false;
+	}
+	return true;
+}
 } // namespace oxd

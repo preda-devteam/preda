@@ -1,5 +1,7 @@
 #pragma once
 #include "inttypes.h"
+#include "gascost.h"
+#include <algorithm>
 
 #define EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(oper)\
 	void operator oper##=(const this_type &rhs)\
@@ -38,6 +40,16 @@ namespace prlrt {
 		BigintPtr _v = 0;
 		uint8_t *mapped_data = nullptr;
 
+		inline uint32_t gas_coefficient() const
+		{
+			return PREDA_CALL(BigintGetEmbeddedSize, _v) / 8;
+		}
+
+		inline uint32_t bigger_gas_coefficient(const this_type& rhs) const
+		{
+			return std::max(gas_coefficient(), rhs.gas_coefficient());
+		}
+
 		__prlt_bigint()
 		{
 			_v = PREDA_CALL(CreateBigint);
@@ -45,6 +57,7 @@ namespace prlrt {
 		}
 		__prlt_bigint(const char *rhs, uint32_t len)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_ASSIGN_STATIC] + (uint64_t)gas_costs[PRDOP_BIGINT_ASSIGN_DYNAMIC] * len);
 			_v = PREDA_CALL(CreateBigint);
 			PREDA_CALL(BigintAssignString, _v, rhs, len);
 			test_overflow();
@@ -54,9 +67,11 @@ namespace prlrt {
 			_v = PREDA_CALL(CreateBigint);
 			PREDA_CALL(BigintAssignInt64, _v, rhs);
 		}
+		__prlt_bigint(BigintPtr v, uint8_t* data): _v(v), mapped_data(data) {}
 		template<typename T_OtherInternal>
 		__prlt_bigint(____uint<T_OtherInternal> rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_ASSIGN_STATIC]);
 			_v = PREDA_CALL(CreateBigint);
 			PREDA_CALL(BigintAssignUint64, _v, rhs._v);
 			//TODO: check global memory overflow
@@ -64,6 +79,7 @@ namespace prlrt {
 		template<typename T_OtherInternal>
 		__prlt_bigint(____int<T_OtherInternal> rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_ASSIGN_STATIC]);
 			_v = PREDA_CALL(CreateBigint);
 			PREDA_CALL(BigintAssignInt64, _v, rhs._v);
 			//TODO: check global memory overflow
@@ -71,6 +87,7 @@ namespace prlrt {
 		template<short Size>
 		__prlt_bigint(const ____longint<Size>& rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_ASSIGN_STATIC] * rhs.gas_coefficient);
 			_v = PREDA_CALL(CreateBigint);
 			bool sign = false;
 			____ulongint<Size> tmpLongInt;
@@ -112,6 +129,7 @@ namespace prlrt {
 		template<short Size>
 		__prlt_bigint(const ____ulongint<Size>& rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_ASSIGN_STATIC] * rhs.gas_coefficient);
 			_v = PREDA_CALL(CreateBigint);
 			constexpr uint8_t len = Size / 64;
 			for(uint8_t i = 0; i < len; i++)
@@ -145,21 +163,26 @@ namespace prlrt {
 
 		void operator=(const this_type &rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_ASSIGN_STATIC] * rhs.gas_coefficient());
 			PREDA_CALL(BigintAssign, _v, rhs._v);
 			//TODO: check global memory overflow
 		}
 
 		void operator++()
 		{
-			this_type t(__prlt_uint8(1));
-			PREDA_CALL(BigintAddInplace, _v, t._v);
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_OP_SELF] * gas_coefficient());
+			BigintPtr v = PREDA_CALL(CreateBigint);
+			PREDA_CALL(BigintAssignInt64, v, 1);
+			PREDA_CALL(BigintAddInplace, _v, v);
 			test_overflow();
 		}
 
 		void operator--()
 		{
-			this_type t(__prlt_uint8(1));
-			PREDA_CALL(BigintSubInplace, _v, t._v);
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_OP_SELF] * gas_coefficient());
+			BigintPtr v = PREDA_CALL(CreateBigint);
+			PREDA_CALL(BigintAssignInt64, v, 1);
+			PREDA_CALL(BigintSubInplace, _v, v);
 			test_overflow();
 		}
 
@@ -167,68 +190,78 @@ namespace prlrt {
 
 		this_type operator-() const
 		{
-			this_type ret;
-			PREDA_CALL(BigintNegate, ret._v, _v);
-
-			return ret;
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_OP_SELF] * gas_coefficient());
+			BigintPtr v = PREDA_CALL(CreateBigint);
+			PREDA_CALL(BigintNegate, v, _v);
+			return this_type(v, nullptr);
 		}
 
 		this_type operator+(const this_type &rhs) const
 		{
-			this_type ret;
-			PREDA_CALL(BigintAdd, ret._v, _v, rhs._v);
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_OP_SIMPLE] * bigger_gas_coefficient(rhs));
+			BigintPtr v = PREDA_CALL(CreateBigint);
+			PREDA_CALL(BigintAdd, v, _v, rhs._v);
+			this_type ret(v, nullptr);
 			ret.test_overflow();
 			//TODO: check global memory overflow
 			return ret;
 		}
 		this_type operator-(const this_type &rhs) const
 		{
-			this_type ret;
-			PREDA_CALL(BigintSub, ret._v, _v, rhs._v);
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_OP_SIMPLE] * bigger_gas_coefficient(rhs));
+			BigintPtr v = PREDA_CALL(CreateBigint);
+			PREDA_CALL(BigintSub, v, _v, rhs._v);
+			this_type ret(v, nullptr);
 			ret.test_overflow();
 			//TODO: check global memory overflow
 			return ret;
 		}
 		this_type operator*(const this_type &rhs) const
 		{
-			this_type ret;
-			PREDA_CALL(BigintMul, ret._v, _v, rhs._v);
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_OP_COMPLEX] * bigger_gas_coefficient(rhs));
+			BigintPtr v = PREDA_CALL(CreateBigint);
+			PREDA_CALL(BigintMul, v, _v, rhs._v);
+			this_type ret(v, nullptr);
 			ret.test_overflow();
 			//TODO: check global memory overflow
 			return ret;
 		}
 		this_type operator/(const this_type& rhs) const
 		{
-			this_type ret;
-			if (rhs == __prlt_bigint(0))
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_OP_COMPLEX] * bigger_gas_coefficient(rhs));
+			if (0 == PREDA_CALL(BigintCompare, rhs._v, __prlt_bigint(0)._v))
 			{
 				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 			}
-			PREDA_CALL(BigintDiv, ret._v, _v, rhs._v, 0);
+			BigintPtr v = PREDA_CALL(CreateBigint);
+			PREDA_CALL(BigintDiv, v, _v, rhs._v, 0);
+			this_type ret(v, nullptr);
 			ret.test_overflow();
 			//TODO: check global memory overflow
 			return ret;
 		}
 		this_type __prli_div_uint32(const __prlt_uint32 &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_OP_COMPLEX] * gas_coefficient());
 			if (rhs._v == 0)
 			{
 				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 			}
-
-			this_type ret;
-			PREDA_CALL(BigintDiv_Uint32, ret._v, _v, rhs._v, 0);
+			BigintPtr v = PREDA_CALL(CreateBigint);
+			PREDA_CALL(BigintDiv_Uint32, v, _v, rhs._v, 0);
 			//TODO: check global memory overflow
-			return ret;
+			return this_type(v, nullptr);
 		}
 		this_type operator%(const this_type& rhs) const
 		{
-			this_type ret;
-			if (rhs == __prlt_bigint(0))
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_OP_COMPLEX] * bigger_gas_coefficient(rhs));
+			if (0 == PREDA_CALL(BigintCompare, rhs._v, __prlt_bigint(0)._v))
 			{
 				preda_exception::throw_exception("mod by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 			}
-			PREDA_CALL(BigintMod, ret._v, _v, rhs._v);
+			BigintPtr v = PREDA_CALL(CreateBigint);
+			PREDA_CALL(BigintMod, v, _v, rhs._v);
+			this_type ret(v, nullptr);
 			ret.test_overflow();
 			//TODO: check global memory overflow
 			return ret;
@@ -236,12 +269,14 @@ namespace prlrt {
 
 		void operator+=(const this_type &rhs) const
 		{
+			burn_gas(((uint64_t)gas_costs[PRDOP_BIGINT_OP_SIMPLE] + (uint64_t)gas_costs[PRDOP_BIGINT_ASSIGN_STATIC]) * bigger_gas_coefficient(rhs));
 			PREDA_CALL(BigintAddInplace, _v, rhs._v);
 			test_overflow();
 			//TODO: check global memory overflow
 		}
 		void operator-=(const this_type &rhs) const
 		{
+			burn_gas(((uint64_t)gas_costs[PRDOP_BIGINT_OP_SIMPLE] + (uint64_t)gas_costs[PRDOP_BIGINT_ASSIGN_STATIC]) * bigger_gas_coefficient(rhs));
 			PREDA_CALL(BigintSubInplace, _v, rhs._v);
 			test_overflow();
 			//TODO: check global memory overflow
@@ -252,26 +287,32 @@ namespace prlrt {
 
 		__prlt_bool operator ==(const this_type &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_OP_SIMPLE] * bigger_gas_coefficient(rhs));
 			return PREDA_CALL(BigintCompare, _v, rhs._v) == 0;
 		}
 		__prlt_bool operator !=(const this_type &rhs) const
-		{
+		{	
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_OP_SIMPLE] * bigger_gas_coefficient(rhs));
 			return PREDA_CALL(BigintCompare, _v, rhs._v) != 0;
 		}
 		__prlt_bool operator <(const this_type &rhs) const
-		{
+		{	
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_OP_SIMPLE] * bigger_gas_coefficient(rhs));
 			return PREDA_CALL(BigintCompare, _v, rhs._v) < 0;
 		}
 		__prlt_bool operator >(const this_type &rhs) const
-		{
+		{	
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_OP_SIMPLE] * bigger_gas_coefficient(rhs));
 			return PREDA_CALL(BigintCompare, _v, rhs._v) > 0;
 		}
 		__prlt_bool operator <=(const this_type &rhs) const
-		{
+		{	
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_OP_SIMPLE] * bigger_gas_coefficient(rhs));
 			return PREDA_CALL(BigintCompare, _v, rhs._v) <= 0;
 		}
 		__prlt_bool operator >=(const this_type &rhs) const
-		{
+		{	
+			burn_gas((uint64_t)gas_costs[PRDOP_BIGINT_OP_SIMPLE] * bigger_gas_coefficient(rhs));
 			return PREDA_CALL(BigintCompare, _v, rhs._v) >= 0;
 		}
 
@@ -386,17 +427,20 @@ namespace prlrt {
 
 		serialize_size_type get_serialize_size() const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_SIZE]);
 			return PREDA_CALL(BigintGetEmbeddedSize, _v);
 		}
 
 		void serialize_out(uint8_t *buffer, bool for_debug) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_OUT_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * PREDA_CALL(BigintGetEmbeddedSize, _v));
 			PREDA_CALL(BigintEmbed, _v, buffer);
 		}
 
 		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
 			uint32_t consumed = PREDA_CALL(BigintInitFromEmbedded, _v, buffer, bufferSize);
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_MAP_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * consumed);
 			if (consumed == 0)
 				return false;
 			buffer += consumed;

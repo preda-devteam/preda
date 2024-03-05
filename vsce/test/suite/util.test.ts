@@ -10,7 +10,7 @@ import {
   getChsimuFileFloder,
   transformCompileArg,
   getConfigName,
-  findTSByPrdName
+  findTSByName
 } from '../../src/utils/finder';
 import { padStart, formatTime } from '../../src/utils/time'
 import path = require('path');
@@ -18,7 +18,7 @@ import { examplePrdFileName, testWorkspace } from "../utils";
 
 suite("Uitls.finder Test Suite", () => {
   
-  test('Test getCurrentActiveFileAndFolder|findTSByPrdName function', async () => {
+  test('Test getCurrentActiveFileAndFolder|findTSByName function', async () => {
     const exampleFilePath = path.resolve(testWorkspace, examplePrdFileName)
     const Uri = vscode.Uri.file(exampleFilePath);
     await vscode.commands.executeCommand<vscode.TextDocumentShowOptions>("vscode.open",Uri);
@@ -29,13 +29,13 @@ suite("Uitls.finder Test Suite", () => {
     const {
       currentFileName: tsFileName,
       currentFilePath: tsFilePath
-    } = findTSByPrdName(Uri);
+    } = findTSByName(Uri);
 
     // getCurrentActiveFileAndFolder
     assert.equal(currentFileName, examplePrdFileName);
     assert.equal(currentFilePath, exampleFilePath);
 
-    // findTSByPrdName
+    // findTSByName
     assert.equal(tsFileName, examplePrdFileName + 'ts');
     assert.equal(tsFilePath, exampleFilePath + 'ts');
 

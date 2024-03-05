@@ -284,7 +284,8 @@ void CRuntimeInterface::PushContractStack(const rvm::ContractModuleID &moduleId,
 	}
 }
 
-void CRuntimeInterface::ClearBigInt() {
+void CRuntimeInterface::ClearBigInt()
+{
 	m_bigint.clear();
 }
 
@@ -308,6 +309,21 @@ bool CRuntimeInterface::EmitRelayToGlobal(uint32_t opCode, const uint8_t* args_s
 	return m_pExecutionContext->EmitRelayToGlobal(rvm::CONTRACT_SET_SCOPE(m_contractStack.back().cvId, rvm::Scope::Global), rvm::OpCode(opCode), &args, 1);
 }
 
+bool CRuntimeInterface::EmitRelayDeferred(uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)
+{
+	rvm::Scope curScope = rvm::CONTRACT_SCOPE(m_pExecutionContext->GetContractId());
+
+	// relay @ next is not allowed if current target is shard
+	if (curScope == rvm::Scope::Shard)
+		return false;
+
+	rvm::ConstData args;
+	args.DataPtr = args_serialized;
+	args.DataSize = args_size;
+	// TODO: implement gas_redistribution_weight on preda code level
+	return m_pExecutionContext->EmitRelayDeferred(rvm::CONTRACT_SET_SCOPE(m_contractStack.back().cvId, curScope), rvm::OpCode(opCode), &args, 1);
+}
+
 bool CRuntimeInterface::EmitRelayToShards(uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)
 {
 	rvm::ConstData args;
@@ -319,22 +335,9 @@ bool CRuntimeInterface::EmitRelayToShards(uint32_t opCode, const uint8_t* args_s
 
 uint32_t CRuntimeInterface::CrossCall(uint64_t cvId, int64_t templateContractImportSlot, uint32_t opCode, const void **ptrs, uint32_t numPtrs)
 {
-	static_assert(sizeof(cvId) == sizeof(rvm::ContractVersionId));
-
-	if (templateContractImportSlot < -1 || templateContractImportSlot >= int64_t(m_contractStack.back().numImportedContracts))
+	if (!ContractHasTemplate(cvId, templateContractImportSlot))
 		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(prlrt::ExceptionType::CrossCallContractNotFound) << 8);
 
-	rvm::ContractVersionId templateCvId = templateContractImportSlot == -1 ? m_contractStack.back().cvId : m_contractStack.back().importedCvIds[templateContractImportSlot];
-
-	// since the call is via arbitrary contract id, it's possible that the contract is not a copy of the base contract
-	// check if their DID are the same
-	if (cvId != uint64_t(templateCvId))
-	{
-		const rvm::DeployedContract *deployedContract = m_pChainState->GetContractDeployed(rvm::ContractVersionId(cvId));
-		const rvm::DeployedContract *baseDeployedContract = m_pChainState->GetContractDeployed(templateCvId);
-		if (deployedContract == nullptr || baseDeployedContract == nullptr || memcmp(&deployedContract->Module, &baseDeployedContract->Module, sizeof(rvm::ContractModuleID)) != 0)
-			return uint32_t(ExecutionResult::InvalidFunctionId);
-	}
 	return m_pExecutionEngine->InvokeContractCall(m_pExecutionContext, rvm::ContractVersionId(cvId), opCode, ptrs, numPtrs);
 }
 
@@ -351,9 +354,31 @@ uint32_t CRuntimeInterface::InterfaceCall(uint64_t cvId, int64_t interfaceContra
 	return m_pExecutionEngine->InvokeContractCall(m_pExecutionContext, rvm::ContractVersionId(cvId), opCode, ptrs, numPtrs);
 }
 
-bool CRuntimeInterface::InterfaceIsImplemented(uint64_t cvId, int64_t interfaceContractImportSlot, uint32_t interfaceSlot)
+bool CRuntimeInterface::ContractImplementsInterface(uint64_t cvId, int64_t interfaceContractImportSlot, uint32_t interfaceSlot)
 {
 	return GetImplementedInterfaceFromContract(cvId, interfaceContractImportSlot, interfaceSlot) != nullptr;
+}
+
+bool CRuntimeInterface::ContractHasTemplate(uint64_t cvId, int64_t templateContractImportSlot)
+{
+	static_assert(sizeof(cvId) == sizeof(rvm::ContractVersionId));
+
+	if (templateContractImportSlot < -1 || templateContractImportSlot >= int64_t(m_contractStack.back().numImportedContracts))
+		return false;
+
+	rvm::ContractVersionId templateCvId = templateContractImportSlot == -1 ? m_contractStack.back().cvId : m_contractStack.back().importedCvIds[templateContractImportSlot];
+
+	// since the call is via arbitrary contract id, it's possible that the contract is not a copy of the template contract
+	// check if their module ids are the same
+	if (cvId != uint64_t(templateCvId))
+	{
+		const rvm::DeployedContract* deployedContract = m_pChainState->GetContractDeployed(rvm::ContractVersionId(cvId));
+		const rvm::DeployedContract* templateDeployedContract = m_pChainState->GetContractDeployed(templateCvId);
+		if (deployedContract == nullptr || templateDeployedContract == nullptr || memcmp(&deployedContract->Module, &templateDeployedContract->Module, sizeof(rvm::ContractModuleID)) != 0)
+			return false;
+	}
+
+	return true;
 }
 
 const ContractImplementedInterface* CRuntimeInterface::GetImplementedInterfaceFromContract(uint64_t cvId, int64_t interfaceContractImportSlot, uint32_t interfaceSlot)
@@ -432,12 +457,14 @@ uint64_t CRuntimeInterface::DeployCall(int64_t templateContractImportSlot, const
 		|| (pContractEntry->compileData.functions[opCode].flags & uint32_t(transpiler::FunctionFlags::CallableFromSystem)) == 0)
 		return (uint64_t)rvm::ContractVersionIdInvalid;
 
+	ContractRuntimeInstance* pCallerInstance = m_pExecutionEngine->GetIntermediateContractInstanceFromCvid(GetContractTopCvid());
+
 	// newly deployed contract should have the same stub as the template contract since it's just the imported contract ids
 	PushContractStack(*pModuleId, newCvId, pContractEntry->compileData.functions[opCode].flags, (const rvm::ContractVersionId*)templateContract->Stub, templateContract->StubSize / sizeof(rvm::ContractVersionId));
 	// no need to call SetExecutionContext() here, deploy call is only possible inside a transaction call, therefore execution context is already set
 
 	// newly deployed contract should have the same stub as the template contract since it's just the imported contract ids
-	ContractRuntimeInstance* pContractInstance = m_pExecutionEngine->CreateContractInstance(*pModuleId, newCvId, (const rvm::ContractVersionId*)templateContract->Stub, templateContract->StubSize / sizeof(rvm::ContractVersionId));
+	ContractRuntimeInstance* pContractInstance = m_pExecutionEngine->CreateContractInstance(*pModuleId, newCvId, (const rvm::ContractVersionId*)templateContract->Stub, templateContract->StubSize / sizeof(rvm::ContractVersionId), pCallerInstance->GetRemainingGas());
 	if (pContractInstance == nullptr)
 		return (uint64_t)rvm::ContractVersionIdInvalid;
 
@@ -445,6 +472,8 @@ uint64_t CRuntimeInterface::DeployCall(int64_t templateContractImportSlot, const
 		return (uint64_t)rvm::ContractVersionIdInvalid;
 
 	uint32_t ret = pContractInstance->ContractCall(opCode, ptrs, numPtrs);
+
+	pCallerInstance->SetRemainingGas(pContractInstance->GetRemainingGas());
 
 	PopContractStack();
 
@@ -459,9 +488,70 @@ void CRuntimeInterface::ReportOrphanToken(uint64_t id, prlrt::BigintPtr amount)
 	if (!m_bReportOrphanToken)
 		return;
 
-	uint64_t v;
-	amount->ToUint64(&v);
-	std::cout << "orphan token: id " << id << ", amount " << v << std::endl;
+	auto itor = m_orphanTokens.find(id);
+	if (itor == m_orphanTokens.end())
+		m_orphanTokens.emplace(id, amount->m_bigNum);
+	else
+		itor->second += amount->m_bigNum;
+}
+
+rvm::NativeTokens* CRuntimeInterface::GetOrphanTokens()
+{
+	if (m_orphanTokens.size() == 0)
+		return nullptr;
+	OrphanTokens* ret = new OrphanTokens;
+	ret->tokens.reserve(m_orphanTokens.size());
+	for (auto itor : m_orphanTokens)
+		ret->tokens.emplace_back(itor.first, itor.second);
+	return ret;
+}
+
+void CRuntimeInterface::DepositToken(uint64_t id, prlrt::BigintPtr amount)
+{
+	auto itor = m_depositTokens.find(id);
+	if (itor != m_depositTokens.end())
+		itor->second += amount->m_bigNum;
+	else
+		m_depositTokens.emplace(id, amount->m_bigNum);
+}
+
+void CRuntimeInterface::TokenMinted(uint64_t id, prlrt::BigintPtr amount)
+{
+	auto itor = m_tokensSupplyChange.find(id);
+	if (itor != m_tokensSupplyChange.end())
+		itor->second += amount->m_bigNum;
+	else
+		m_tokensSupplyChange.emplace(id, amount->m_bigNum);
+}
+
+void CRuntimeInterface::TokenBurnt(uint64_t id, prlrt::BigintPtr amount)
+{
+	auto itor = m_tokensSupplyChange.find(id);
+	if (itor != m_tokensSupplyChange.end())
+		itor->second -= amount->m_bigNum;
+	else
+	{
+		m_tokensSupplyChange.emplace(id, amount->m_bigNum).first->second.FlipSign();
+	}
+}
+
+uint32_t CRuntimeInterface::TokenIdToSymbolLength(uint64_t id)
+{
+	static_assert(std::is_same_v<std::underlying_type_t<rvm::TokenId>, decltype(id)>);
+	return uint32_t(rvm::TokenIdToSymbol(rvm::TokenId(id)).GetLength());
+}
+
+uint64_t CRuntimeInterface::TokenSymbolToId(const char* symbol)
+{
+	return std::underlying_type_t<rvm::TokenId>(rvm::TokenIdFromSymbol(rt::String_Ref(symbol)));
+}
+
+bool CRuntimeInterface::AllowedToMint(uint64_t id)
+{
+	static_assert(std::is_same_v<std::underlying_type_t<rvm::TokenId>, decltype(id)>);
+	using u_type = std::underlying_type_t<rvm::TokenMinterFlag>;
+	rvm::TokenMinterFlag flag = m_pExecutionContext->GetTokenMinterState(rvm::TokenId(id), rvm::CONTRACT_UNSET_BUILD(m_contractStack.back().cvId));
+	return (u_type(flag) & u_type(rvm::TokenMinterFlag::Allowed)) != 0;
 }
 
 void CRuntimeInterface::ReportReturnValue(const char *type_export_name, const uint8_t *serialized_data, uint32_t serialized_data_size)
@@ -493,8 +583,13 @@ void CRuntimeInterface::DebugPrintOutputBuffer(uint32_t line)
 void CRuntimeInterface::DebugAssertionFailure(uint32_t line)
 {
 	std::string tmp = "Assertion failure on line " + std::to_string(line);
+	if(m_logOutputBuffer.length() > 0)
+	{
+		tmp += ": " + m_logOutputBuffer;
+	}
 	rvm::ConstString s{ tmp.c_str(), uint32_t(tmp.size()) };
 	m_pDB->m_pRuntimeAPI->DebugPrint(rvm::DebugMessageType::Warning, &s, m_pExecutionContext, m_pDB->GetContract(&m_contractStack.back().moduleId));
+	m_logOutputBuffer.clear();
 }
 
 void CRuntimeInterface::DebugAssertionFailureMessage(uint32_t line, const char* message, uint32_t length)
@@ -549,29 +644,15 @@ void CRuntimeInterface::SetAsContractAddress(void* pAddress, uint64_t contract_i
 	((oxd::SecureAddress*)pAddress)->SetAsContract(contract_id);
 }
 
-bool CRuntimeInterface::BurnGasLoop()
+bool CRuntimeInterface::BurnGas(uint64_t gas_cost)
 {
-	constexpr uint32_t loopGas = 1;
-	if (m_remainingGas < loopGas)
+	if (m_remainingGas < gas_cost)
 	{
 		m_remainingGas = 0;
 		return false;
 	}
 
-	m_remainingGas -= loopGas;
-	return true;
-}
-
-bool CRuntimeInterface::BurnGasFunctionCall()
-{
-	constexpr uint32_t functionCallGas = 1000;
-	if (m_remainingGas < functionCallGas)
-	{
-		m_remainingGas = 0;
-		return false;
-	}
-
-	m_remainingGas -= functionCallGas;
+	m_remainingGas -= gas_cost;
 	return true;
 }
 
@@ -782,7 +863,11 @@ uint64_t CRuntimeInterface::Block_GetTimestamp()
 
 uint64_t CRuntimeInterface::Block_GetRandomNumber()
 {
-	return m_pExecutionContext->GetRandomNumber();
+	uint64_t ret;
+
+	m_pExecutionContext->Randomize((uint8_t*)(&ret), sizeof(ret));
+
+	return ret;
 }
 
 void CRuntimeInterface::Block_GetMinerAddress(uint8_t* out)
@@ -876,6 +961,49 @@ void CRuntimeInterface::Transaction_GetInitiatorAddress(uint8_t* out)
 	*(rvm::Address*)out = *m_pExecutionContext->GetInitiator();
 }
 
+uint32_t CRuntimeInterface::Transaction_GetSuppliedTokensCount()
+{
+	if (m_pExecutionContext->GetInvokeType() != rvm::InvokeContextType::Normal)
+		return 0;
+	const rvm::NativeTokens *native_tokens = m_pExecutionContext->GetNativeTokenSupplied();
+	if (native_tokens == nullptr)
+		return 0;
+	return native_tokens->GetCount();
+}
+
+void CRuntimeInterface::Transaction_GetSuppliedToken(uint32_t index, uint64_t *id, prlrt::BigintPtr self)
+{
+	if (m_pExecutionContext->GetInvokeType() != rvm::InvokeContextType::Normal)
+	{
+		*id = uint64_t(rvm::TokenIdInvalid);
+		self->AssignUint64(0ull);
+		return;
+	}
+	const rvm::NativeTokens* native_tokens = m_pExecutionContext->GetNativeTokenSupplied();
+	if (native_tokens == nullptr)
+	{
+		*id = uint64_t(rvm::TokenIdInvalid);
+		self->AssignUint64(0ull);
+		return;
+	}
+
+	rvm::ConstNativeToken tk = native_tokens->Get(index);
+
+	if (tk.Amount.Sign)
+	{
+		*id = uint64_t(rvm::TokenIdInvalid);
+		self->AssignUint64(0ull);
+		return;
+	}
+
+	*id = uint64_t(tk.Token);
+
+	rvm::ConstBigNum b = tk.Amount;
+	self->m_bigNum = ext::BigNumRef(b.Blocks, b.BlockCount);
+
+	return;
+}
+
 void CRuntimeInterface::Event_Push(uint32_t, const char*, uint32_t)
 {
 }
@@ -896,4 +1024,26 @@ void CRuntimeInterface::Event_Exception(const char* msg, prlrt::ExceptionType ex
 	// `curr_exc` is set to a stack value before calling any method inside vm
 	ASSERT(!exec_stack.empty());
 	exec_stack.top() = exc_type;
+}
+
+
+uint32_t CRuntimeInterface::OrphanTokens::GetCount() const
+{
+	return uint32_t(tokens.size());
+}
+
+rvm::ConstNativeToken CRuntimeInterface::OrphanTokens::Get(uint32_t idx) const
+{
+	if (idx < GetCount())
+	{
+		auto& r = tokens[idx];
+		return { rvm::TokenId(r.first), { r.second._Data, r.second.GetLength() } };
+	}
+
+	return { rvm::TokenIdInvalid, { nullptr, 0 } };
+}
+
+void CRuntimeInterface::OrphanTokens::Release()
+{
+	delete this;
 }

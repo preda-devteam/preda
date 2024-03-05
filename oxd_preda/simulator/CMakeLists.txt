@@ -66,16 +66,6 @@ if(WIN32)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /W3 /sdl /MP /Gy /O2 /Oi /GL /GS /FC /permissive /bigobj")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /ZI /JMC /W3 /MP /sdl /RTC1 /Od /GS /FC /permissive /bigobj")
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /OPT:ICF /OPT:REF /DEBUG /LTCG:incremental")
-
-    # target_compile_options(chain_simulator PRIVATE
-    # $<$<CONFIG:Debug>:/ZI /JMC /W3 /MP /sdl /RTC1 /Od /GS /FC /permissive>
-    # $<$<CONFIG:Release>:/Zi /W3 /sdl /MP /Gy /O2 /Oi /GL /GS /FC /permissive>
-    # )
-    # target_link_options(chain_simulator PRIVATE
-    # $<$<CONFIG:Release>:/OPT:ICF /OPT:REF /DEBUG /LTCG:incremental>
-    # )
-
-    # set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF /LTCG:incremental")
   endif()
 elseif(UNIX AND NOT APPLE)
   linux_link_ipp_rule(chain_simulator)

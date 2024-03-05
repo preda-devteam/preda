@@ -24,9 +24,9 @@ public:
 	TYPETRAITS_DECLARE_NON_POD;
 	RVM_IMMUTABLE_TYPE(CoinsWallet);
 
-	UINT		GetAssetCount() const { return _SC::GetCount(); }
-	auto		GetAssetId(UINT i) const { return _SC::_GetByPos(i).key(); }
-	auto&		GetAssetAmount(UINT i) const { return _SC::_GetByPos(i).val(); }
+	UINT		GetTokenCount() const { return _SC::GetCount(); }
+	auto		GetTokenId(UINT i) const { return _SC::_GetByPos(i).key(); }
+	auto&		GetTokenAmount(UINT i) const { return _SC::_GetByPos(i).val(); }
 
 	auto		GetAmount(TokenId aid) const -> const BigNum&;
 	bool		IsEmpty() const { return _SC::IsEmpty(); }
@@ -55,9 +55,13 @@ public:
 	CoinsWalletMutable(const CoinsWallet &x) : _SC(x) {}
 	auto Assign(const CoinsWallet &x) -> CoinsWalletMutable&;
 	bool IsEmpty() const { return _SC::IsEmpty(); }
+	void Empty(){ _SC::Empty(); }
 	void Deposit(const Coins &x); // this += x
+	void Deposit(const ConstNativeToken &x); // this += x
+	bool Withdraw(const Coins &x); // this -= x, false if over-withdraw and made no change
 	void Deposit(CoinsMutable &x); // this += x, and x will be zeroed
-	bool JsonParse(const rt::String_Ref& str){ return false; /*_SC::JsonParse(str);*/ }  // TBD
+	bool JsonParse(const rt::String_Ref& str){ return _SC::JsonParse(str); }
+	auto GetAmount(TokenId t) const { return _SC::Get(t); }
 };
 
 #pragma pack(push, 1)

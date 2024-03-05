@@ -29,7 +29,11 @@
 	#endif
 #elif defined(PLATFORM_MAC)
 	#ifdef PLATFORM_64BIT
-        #include "./platforms/mac_x64/botan_all.cpp"
+		#if defined(__arm__)
+			#include "./platforms/mac_arm64/botan_all.cpp"
+		#else
+			#include "./platforms/mac_x64/botan_all.cpp"
+		#endif
 	#else
         #error 32-bit is not supported on MacOS
     #endif
@@ -43,12 +47,11 @@
 	#ifdef PLATFORM_64BIT
 		#include "./platforms/linux_x64/botan_all.cpp"
 	#else
-		#include "./platforms/linux_x86/botan_all.cpp"
+		#error 32-bit is not supported on Linux
 	#endif
 #else
-	#error unknown platform
+	#error unsupported platform
 #endif
-
 
 namespace sec
 {

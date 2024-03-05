@@ -6,19 +6,11 @@
 #include "shard_data.h"
 #include "simulator.h"
 #include "simu_global.h"
+#include "core_contracts.h"
 
 
 namespace oxd
 {
-namespace _details
-{
-const rvm::Contract* GetDeployedContract(rvm::RvmEngine* engine, rvm::ContractVersionId cid)
-{
-	auto* cdid = Simulator::Get().GetGlobalStates()->GetContractDeployed(cid);
-	return cdid?engine->GetContract(&cdid->Module):nullptr;
-
-}
-} // namespace _details
 
 ShardStateKeyObj::ShardStateKeyObj(const ShardStateKeyObj& x)
 {
@@ -69,43 +61,63 @@ ShardStateKeyObj::~ShardStateKeyObj()
 
 PendingTxns::~PendingTxns()
 {
-	LPSIMUTXN txn;
-	while(_Queue.Pop(txn))
+	std::lock_guard<std::mutex> lock(_Mutex);
+	for (SimuTxn *txn : _Queue)
 		txn->Release();
 }
 
 bool PendingTxns::Push(SimuTxn* tx)
 {
-	bool ret = (_Queue.GetSize() == 0);
-	_Queue.Push(tx);
+	std::lock_guard<std::mutex> lock(_Mutex);
+	bool ret = (_Queue.size() == 0);
+	_Queue.push_back(tx);
 
 	return ret;
 }
+
 
 bool PendingTxns::Push(SimuTxn** txns, uint32_t count)
 {
 	ASSERT(count);
 
-	bool ret = (_Queue.GetSize() == 0);
-	for(uint32_t i=0; i<count; i++, txns++)
+	std::lock_guard<std::mutex> lock(_Mutex);
+
+	bool ret = (_Queue.size() == 0);
+	for (uint32_t i=0; i<count; i++, txns++)
 	{
 		ASSERT((*txns)->IsRelay());
-		_Queue.Push(*txns);
+		_Queue.push_back(*txns);
 	}
+
+	return ret;
+}
+
+bool PendingTxns::Push_Front(SimuTxn* tx)
+{
+	std::lock_guard<std::mutex> lock(_Mutex);
+	bool ret = (_Queue.size() == 0);
+	_Queue.push_front(tx);
 
 	return ret;
 }
 
 SimuTxn* PendingTxns::Pop()
 {
-	LPSIMUTXN txn;
-	return _Queue.Pop(txn)?txn:nullptr;
+	std::lock_guard<std::mutex> lock(_Mutex);
+
+	if (_Queue.empty())
+		return nullptr;
+
+	SimuTxn* txn = _Queue.front();
+	_Queue.pop_front();
+	return txn;
 }
-#ifdef _VIZ
-void SimuTxn::Jsonify(rvm::RvmEngine* engine, rt::Json& append, rvm::InvokeResult* result) const
+
+void SimuTxn::Jsonify(rvm::RvmEngine* engine, rt::Json& append) const
 {
+	append.Object();
 	append.AppendKeyWithString("InvokeContextType", rt::EnumStringify(Type));
-	if (rvm::Scope scope = GetScope(); scope != rvm::Scope::Global && scope != rvm::Scope::Shard)
+	if(rvm::Scope scope = GetScope(); scope != rvm::Scope::Global && scope != rvm::Scope::Shard)
 	{
 		static const rt::SS szTarget("Target");
 		rvm::ScopeKeySized kst = rvm::SCOPE_KEYSIZETYPE(scope);
@@ -113,7 +125,7 @@ void SimuTxn::Jsonify(rvm::RvmEngine* engine, rt::Json& append, rvm::InvokeResul
 		{
 		case rvm::ScopeKeySized::Address:
 			append.AppendKeyWithString(szTarget, oxd::SecureAddress::String(Target.addr));
-			if (TargetIndex >= 0)
+			if(TargetIndex >= 0)
 				append.AppendKeyWithString("AddressIndex", rt::SS() + ('@') + TargetIndex);
 			break;
 		case rvm::ScopeKeySized::UInt32:
@@ -150,7 +162,7 @@ void SimuTxn::Jsonify(rvm::RvmEngine* engine, rt::Json& append, rvm::InvokeResul
 			J(OriginateHeight) = OriginateHeight
 		));
 
-		if(OriginateShardIndex == 65535)
+		if(OriginateShardIndex == rvm::GlobalShard)
 		{
 			append << ((J(OriginateShardIndex) = "g"));
 		}
@@ -160,7 +172,7 @@ void SimuTxn::Jsonify(rvm::RvmEngine* engine, rt::Json& append, rvm::InvokeResul
 		append << ((J(OriginateShardOrder) = OriginateShardOrder));
 	}
 
-	if (Type == rvm::InvokeContextType::System)
+	if(Type == rvm::InvokeContextType::System)
 	{
 		append << ((
 			J(BuildNum) = 0,
@@ -171,8 +183,8 @@ void SimuTxn::Jsonify(rvm::RvmEngine* engine, rt::Json& append, rvm::InvokeResul
 	}
 	else
 	{
-		const rvm::Contract* contract = _details::GetDeployedContract(engine, rvm::CONTRACT_UNSET_SCOPE(Contract));
-		if (!contract)
+		const rvm::Contract* contract = RvmDeployedContract(engine, rvm::CONTRACT_UNSET_SCOPE(Contract));
+		if(!contract)
 		{
 			append.Empty();
 			return;
@@ -184,21 +196,29 @@ void SimuTxn::Jsonify(rvm::RvmEngine* engine, rt::Json& append, rvm::InvokeResul
 			J(Function) = contract->GetFunctionName((uint32_t)Op).Str()
 			));
 	}
-	
-	if(result)
+
+	if (HasNativeTokensSupplied())
 	{
-		append << ((J(InvokeResult) = rt::EnumStringify(result->Code)));
+		auto& coinsArr = GetNativeTokenSupplied();
+		auto walletBody = append.ScopeAppendingKey("TokenSupply");
+		append.Array();
+		for (uint32_t i = 0; i < coinsArr.GetCount(); i++)
+		{
+			auto s = append.ScopeAppendingElement();
+			coinsArr[i].Jsonify(append);
+		}
 	}
+	
 	if(Type != rvm::InvokeContextType::System && ArgsSerializedSize > 0)
 	{
 		rvm::StringStreamImpl str_out(append.GetInternalString());
 		auto s2 = append.ScopeAppendingKey("Arguments");
-		rvm::ConstData data({ ArgsSerializedData, ArgsSerializedSize });
+		rvm::ConstData data({ SerializedData + TokensSerializedSize, ArgsSerializedSize });
 		engine->ArgumentsJsonify(Contract, Op, &data, &str_out);
 	}
 	append << ((J(Height) = Height));
 
-	if(ShardIndex == 65535)
+	if(ShardIndex == rvm::GlobalShard)
 	{
 		append << ((J(ShardIndex) = "g"));
 	}
@@ -207,14 +227,15 @@ void SimuTxn::Jsonify(rvm::RvmEngine* engine, rt::Json& append, rvm::InvokeResul
 	}
 	append << ((J(ShardOrder) = ShardOrder));
 }
-#endif
 
-SimuTxn* SimuTxn::Create(uint32_t args_size)
+SimuTxn* SimuTxn::Create(uint32_t args_size, uint32_t assets_size)
 {
-	uint32_t size = args_size + offsetof(SimuTxn, ArgsSerializedData);
+	uint32_t size = args_size + assets_size + offsetof(SimuTxn, SerializedData);
 	auto* ret = (SimuTxn*)_Malloc8AL(uint8_t, size);
 	rt::Zero(ret, size);
 	ret->ArgsSerializedSize = args_size;
+	ret->TokensSerializedSize = assets_size;
+	ret->Gas = DefaultGas;
 
 	return ret;
 }
@@ -417,23 +438,28 @@ void InputParametrized::Evaluate(rt::String& out, int loop_index) const
 	}
 }
 
-rvm::ConstData InputParametrized::ComposeState(rvm::ContractInvokeId cid, int loop_index)
+bool InputParametrized::ComposeState(rvm::ConstData &out_buf, rvm::ContractInvokeId cid, int loop_index, const rt::String_Ref& existing_state)
 {
 	auto& str = _TempString();
 	Evaluate(str, loop_index);
 
+	rt::String derived;
+	rvm::ConstString s = { str.Begin(), (uint32_t)str.GetLength() };
+
+	if(!existing_state.IsEmpty())
+	{
+		rt::JsonObject(existing_state).Derive(str, derived);
+		s = { derived.Begin(), (uint32_t)derived.GetLength() };
+	}
+
 	auto& data = _TempBuffer();
 	data.Empty();
 
-	rvm::ConstString s = { str.Begin(), (uint32_t)str.GetLength() };
-	if(_Simulator.GetEngine(rvm::CONTRACT_ENGINE(cid))->StateJsonParse(cid, &s, &data, &_Simulator.JsonLog))
-	{
-		return { data.GetData(), data.GetSize() };
-	}
-	else
-	{
-		return { nullptr, 0 };
-	}
+	if (!_Simulator.GetEngine(rvm::CONTRACT_ENGINE(cid))->StateJsonParse(cid, &s, &data, &_Simulator.JsonLog))
+		return false;
+	
+	out_buf = { data.GetData(), data.GetSize() };
+	return true;
 }
 
 SimuTxn* InputParametrized::ComposeTxn(rvm::ContractInvokeId cid, rvm::OpCode opcode, int loop_index)
@@ -441,13 +467,69 @@ SimuTxn* InputParametrized::ComposeTxn(rvm::ContractInvokeId cid, rvm::OpCode op
 	auto& str = _TempString();
 	Evaluate(str, loop_index);
 
+	_TokensSupplied.ShrinkSize(0);
 	auto& data = _TempBuffer();
 	data.Empty();
 
-	rvm::ConstString s = { str.Begin(), (uint32_t)str.GetLength() };
+	uint32_t str_len = (uint32_t)str.GetLength();
+
+	// parse assets supplied
+	{	// <= (1000dio, 2000 eth)
+		int pos = (int)str.FindString("<=");
+		if(pos > 0)
+		{
+			str_len = pos;
+			while(str[str_len] <= ' ')str_len--;
+
+			pos = (int)str.FindCharacter('(', pos);
+			if(pos < 0)return nullptr;
+
+			int end = (int)str.FindCharacter(')', pos);
+			if(end < 0)return nullptr;
+
+			static const rt::CharacterSet sep(",;+");
+			static const rt::CharacterSet_Digits dig;
+
+			rt::String_Ref segs[65];
+			uint32_t co = rt::String_Ref(&str[pos+1], &str[end]).TrimSpace().Split<true>(segs, sizeofArray(segs), sep);
+			if(co == sizeofArray(segs))return nullptr;
+
+			rvm::ArrayMutable<rvm::Coins> assets;
+			assets.SetCount(co);
+
+			rvm::CoinsMutable c;
+			for(uint32_t i=0; i<co; i++)
+			{
+				segs[i] = segs[i].TrimSpace();
+
+				auto p = segs[i].FindCharacterReverse(dig);
+				if(p < 0)return nullptr;
+
+				p++;
+				if(!c.GetModifiableAmount().FromString(segs[i].SubStrHead(p)))
+					return nullptr;
+
+				rt::String_Ref token_name = segs[i].SubStr(p).TrimSpace();
+				token_name.MakeUpper();
+				c.SetId(rvm::TokenIdFromSymbol(token_name));
+
+				auto* coin = rvm::RvmImmutableTypeCompose(c);
+				assets.Set(i, coin, rvm::RVMPTR_TAKE);
+			}
+
+			typedef rvm::Array<rvm::Coins> TOKENS;
+			_TokensSupplied.ChangeSize(TOKENS::GetEmbeddedSize(assets));
+			if(!_TokensSupplied.GetSize())return nullptr;
+
+			VERIFY(((TOKENS*)_TokensSupplied.Begin())->Embed(assets) == _TokensSupplied.GetSize());
+		}
+	}
+
+	// parse invocation args supplied
+	rvm::ConstString s = { str.Begin(), str_len };
 	if(_Simulator.GetEngine(rvm::CONTRACT_ENGINE(cid))->ArgumentsJsonParse(cid, opcode, &s, &data, &_Simulator.JsonLog))
 	{
-		auto* txn = SimuTxn::Create(data.GetSize());
+		auto* txn = SimuTxn::Create(data.GetSize(), (uint32_t)_TokensSupplied.GetSize());
 		txn->Type = rvm::InvokeContextType::Normal;
 		txn->Contract = cid;
 		txn->Op = opcode;
@@ -459,11 +541,20 @@ SimuTxn* InputParametrized::ComposeTxn(rvm::ContractInvokeId cid, rvm::OpCode op
 		txn->Height = 0;
 		txn->ShardIndex = 0;
 		txn->ShardOrder = 0;
-		ASSERT(txn->ArgsSerializedSize == data.GetSize());
-		memcpy(txn->ArgsSerializedData, data.GetData(), data.GetSize());
+
+		if(txn->TokensSerializedSize)
+		{
+			ASSERT(txn->TokensSerializedSize == _TokensSupplied.GetSize());
+			memcpy(txn->SerializedData, _TokensSupplied.Begin(), _TokensSupplied.GetSize());
+		}
+
+		if(txn->ArgsSerializedSize)
+		{
+			ASSERT(txn->ArgsSerializedSize == data.GetSize());
+			memcpy(txn->SerializedData + txn->TokensSerializedSize, data.GetData(), data.GetSize());
+		}
 
 		sec::Hash<sec::HASH_SHA256>().Calculate(((char*)txn) + sizeof(rvm::HashValue), txn->GetSize() - sizeof(rvm::HashValue), &txn->Hash);
-
 		return txn;
 	}
 	else
@@ -471,6 +562,32 @@ SimuTxn* InputParametrized::ComposeTxn(rvm::ContractInvokeId cid, rvm::OpCode op
 		_LOG("[PRD] Line " << _Simulator.GetLineNum() << ": Invalid function argument/s")
 		return nullptr;
 	}
+}
+
+bool RvmStateJsonify(rvm::ContractRepository* engine, rvm::ContractInvokeId ciid, const rvm::ConstData* contract_state, rvm::StringStream* json_out)
+{
+	if(contract_state == nullptr || contract_state->DataSize == 0)
+	{
+		json_out->Append("{}", 2);
+		return true;
+	}
+
+	return engine->StateJsonify(ciid, contract_state, json_out);
+}
+
+const rvm::Contract* RvmDeployedContract(rvm::RvmEngine* engine, rvm::ContractVersionId cvid)
+{
+	if(rvm::CONTRACT_ENGINE(cvid) == rvm::EngineId::Core)
+	{
+		return CoreEngine::Get().GetContract(cvid);
+	}
+	else
+	{
+		auto* cdid = Simulator::Get().GetGlobalStates()->GetContractDeployed(cvid);
+		if(cdid)return engine->GetContract(&cdid->Module);
+	}
+
+	return nullptr;
 }
 
 } // namespace oxd

@@ -11,6 +11,12 @@ Coins::Coins(decltype(0) x) : Amount(0)
 	CoinId = TokenIdInvalid;
 }
 
+UINT Coins::Embed(rvm::TokenId t, const BigNumRef& a)
+{
+	CoinId = t;
+	return Amount.Embed(a) + sizeof(TokenId);
+}
+
 void Coins::Withdraw(CoinsMutable& get, CoinsMutable& residue) const	// residue = this - get
 {	
 	ASSERT(residue.IsZero());
@@ -26,7 +32,7 @@ void Coins::Jsonify(rt::Json &append) const
 {
 	if(CoinId == TokenIdInvalid)
 	{
-		append.Number(0);
+		append.Null();
 	}
 	else
 	{

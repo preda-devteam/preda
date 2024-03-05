@@ -78,7 +78,7 @@ bool ReadEntryFromJson(const rt::JsonObject &json, ContractDatabaseEntry &outEnt
 	if (!bExist) return false;
 
 	{
-		rt::String jsonStr(json.GetValue("inter_hash", bExist));
+		rt::String_Ref jsonStr(json.GetValue("inter_hash", bExist));
 		if (!bExist) return false;
 		::rvm::RvmTypeJsonParse(outEntry.compileData.intermediateHash, jsonStr);
 	}
@@ -94,17 +94,17 @@ bool ReadEntryFromJson(const rt::JsonObject &json, ContractDatabaseEntry &outEnt
 		{
 			svArray.GetNextObjectRaw(svJson);
 
-			rt::String sig;
+			rt::String_Ref sig;
 			if (!svJson.LoadValue("sig", sig))
 				return false;
-			outEntry.compileData.scopeStateVarMeta[i].signature = sig;
+			outEntry.compileData.scopeStateVarMeta[i].signature = rt::String(sig).GetString();
 
 			rt::String_Ref comment;
 			if (!svJson.LoadValue("comment", comment))
 				return false;
 			rt::JsonArray stateVarArray(comment);
 			rt::String_Ref stateVarStr;
-			for (int i = 0; i < (int)stateVarArray.GetSize(); i++)
+			for (int j = 0; j < (int)stateVarArray.GetSize(); j++)
 			{
 				stateVarArray.GetNextObjectRaw(stateVarStr);
 				outEntry.compileData.scopeStateVarMeta[i].comment.push_back(rt::String(stateVarStr).GetString());
@@ -160,7 +160,7 @@ bool ReadEntryFromJson(const rt::JsonObject &json, ContractDatabaseEntry &outEnt
 			rt::JsonArray enumeratorArray(enumerators);
 
 			rt::String_Ref strRef;
-			for (int i = 0; i < (int)enumeratorArray.GetSize(); i++)
+			for (int j = 0; j < (int)enumeratorArray.GetSize(); j++)
 			{
 				enumeratorArray.GetNextObject(strRef);
 				outEntry.compileData.enums.back().enumerators.push_back(rt::String(strRef).GetString());
@@ -195,7 +195,7 @@ bool ReadEntryFromJson(const rt::JsonObject &json, ContractDatabaseEntry &outEnt
 			if (memberArray.GetSize() % 2 != 0)
 				return false;
 			rt::String_Ref strRef;
-			for (int i = 0; i < (int)memberArray.GetSize() / 2; i++)
+			for (int j = 0; j < (int)memberArray.GetSize() / 2; j++)
 			{
 				memberArray.GetNextObject(strRef);
 				std::string memberType = rt::String(strRef).GetString();
@@ -207,15 +207,13 @@ bool ReadEntryFromJson(const rt::JsonObject &json, ContractDatabaseEntry &outEnt
 	}
 
 	{
-		rt::String_Ref tmp;
-		tmp = rt::String(json.GetValue("global_deploy_function", bExist)).GetString();
+		rt::String_Ref tmp = json.GetValue("global_deploy_function", bExist);
 		if (!bExist) return false;
 		tmp.ToNumber(outEntry.compileData.globalDeployFunctionIdx);
 	}
 
 	{
-		rt::String_Ref tmp;
-		tmp = rt::String(json.GetValue("shard_scale_out_function", bExist)).GetString();
+		rt::String_Ref tmp = json.GetValue("shard_scale_out_function", bExist);
 		if (!bExist) return false;
 		tmp.ToNumber(outEntry.compileData.shardScaleOutFunctionIdx);
 	}
@@ -1603,6 +1601,10 @@ void CContractDatabase::CancelCurrentBuildingTask()
 
 bool CContractDatabase::Deploy(const rvm::GlobalStates* chain_state, rvm::CompiledModules* linked, const rvm::ContractVersionId* target_cvids, rvm::DataBuffer** out_stub, rvm::LogMessageOutput* log_msg_output)
 {
+	// generating stub requires chain_state
+	if (out_stub && !chain_state)
+		return false;
+
 	PredaCompiledContracts* pCompiledContracts = (PredaCompiledContracts*)linked;
 	assert(pCompiledContracts->IsLinked());
 
@@ -1614,7 +1616,7 @@ bool CContractDatabase::Deploy(const rvm::GlobalStates* chain_state, rvm::Compil
 		{
 			contractIds[i] = target_cvids[i];
 		}
-		else
+		else if (chain_state)
 		{
 			const ContractCompileData* pCompiledData = pCompiledContracts->GetCompiledData(i);
 			contractIds[i] = _details::GetOnChainContractIdFromContractFullName(chain_state, pCompiledData->dapp + "." + pCompiledData->name);
@@ -1645,7 +1647,7 @@ bool CContractDatabase::Deploy(const rvm::GlobalStates* chain_state, rvm::Compil
 #ifdef _WIN32
 			sprintf_s(&s[0], s.size(), "%lld_%016llx_%s", m_nextDeployId + contractIdx, uint64_t(contractId), entries[contractIdx].compileData.name.c_str());
 #else
-			sprintf(&s[0], "%ld_%016lx_%s", contractId, m_nextDeployId + contractIdx, entries[contractIdx].compileData.name.c_str());
+			sprintf(&s[0], "%lu_%016lx_%s", uint64_t(contractId), m_nextDeployId + contractIdx, entries[contractIdx].compileData.name.c_str());
 #endif
 			std::string contractIdString = &s[0];
 			entries[contractIdx].linkData.intermediatePathFileName = "intermediate/" + contractIdString + ".cpp";
@@ -1697,46 +1699,49 @@ bool CContractDatabase::Deploy(const rvm::GlobalStates* chain_state, rvm::Compil
 			}
 		}
 
-		std::vector<rvm::ContractVersionId> importedContractIds(entries[contractIdx].compileData.importedContracts.size());
-		for (uint32_t importedContractIdx = 0; importedContractIdx < entries[contractIdx].compileData.importedContracts.size(); importedContractIdx++)
+		if (out_stub)
 		{
-			const std::string& importedContractName = entries[contractIdx].compileData.importedContracts[importedContractIdx];
-
-			rvm::ContractVersionId importedContractId = rvm::ContractVersionIdInvalid;
-
-			// first look in the contracts that are being deployed
-			for (uint32_t i = 0; i < contracts_count; i++)
+			std::vector<rvm::ContractVersionId> importedContractIds(entries[contractIdx].compileData.importedContracts.size());
+			for (uint32_t importedContractIdx = 0; importedContractIdx < entries[contractIdx].compileData.importedContracts.size(); importedContractIdx++)
 			{
-				if (entries[i].compileData.dapp + "." + entries[i].compileData.name == importedContractName)
+				const std::string& importedContractName = entries[contractIdx].compileData.importedContracts[importedContractIdx];
+
+				rvm::ContractVersionId importedContractId = rvm::ContractVersionIdInvalid;
+
+				// first look in the contracts that are being deployed
+				for (uint32_t i = 0; i < contracts_count; i++)
 				{
-					importedContractId = contractIds[i];
-					break;
+					if (entries[i].compileData.dapp + "." + entries[i].compileData.name == importedContractName)
+					{
+						importedContractId = contractIds[i];
+						break;
+					}
 				}
+
+				// then look in the chain state
+				if (importedContractId == rvm::ContractVersionIdInvalid && chain_state)
+					importedContractId = _details::GetOnChainContractIdFromContractFullName(chain_state, importedContractName);
+
+				if (importedContractId == rvm::ContractVersionIdInvalid)
+				{
+					if (log_msg_output)
+					{
+						std::string tmp = "imported contract " + importedContractName + " not found";
+						rt::String_Ref tmp1(tmp.c_str());
+						log_msg_output->Log(rvm::LogMessageType::Error, 0, contractIdx, 0, 0, (rvm::ConstString*)&tmp1);
+					}
+					bSuccess = false;
+					continue;
+				}
+
+				importedContractIds[importedContractIdx] = importedContractId;
 			}
 
-			// then look in the chain state
-			if (importedContractId == rvm::ContractVersionIdInvalid)
-				importedContractId = _details::GetOnChainContractIdFromContractFullName(chain_state, importedContractName);
-
-			if (importedContractId == rvm::ContractVersionIdInvalid)
+			if (bSuccess && importedContractIds.size())
 			{
-				if (log_msg_output)
-				{
-					std::string tmp = "imported contract " + importedContractName + " not found";
-					rt::String_Ref tmp1(tmp.c_str());
-					log_msg_output->Log(rvm::LogMessageType::Error, 0, contractIdx, 0, 0, (rvm::ConstString*)&tmp1);
-				}
-				bSuccess = false;
-				continue;
+				uint8_t* buffer = out_stub[contractIdx]->SetSize(uint32_t(importedContractIds.size() * sizeof(importedContractIds[0])));
+				memcpy(buffer, &importedContractIds[0], out_stub[contractIdx]->GetSize());
 			}
-
-			importedContractIds[importedContractIdx] = importedContractId;
-		}
-
-		if (bSuccess && out_stub && importedContractIds.size())
-		{
-			uint8_t *buffer = out_stub[contractIdx]->SetSize(uint32_t(importedContractIds.size() * sizeof(importedContractIds[0])));
-			memcpy(buffer, &importedContractIds[0], out_stub[contractIdx]->GetSize());
 		}
 	}
 
@@ -1816,7 +1821,7 @@ std::string CContractDatabase::ConvertEntryToJson(const ContractDatabaseEntry *p
 	json += "\t\"sv\": [\n";
 	for (int i = 0; i < int(transpiler::ScopeType::Num); i++)
 	{
-		json += "\t\t[\n";
+		json += "\t\t{\n";
 		json += "\t\t\t\"sig\": \"" + pEntry->compileData.scopeStateVarMeta[i].signature + "\",\n";
 		json += "\t\t\t\"comment\": [\n";
 		for (int j = 0; j < pEntry->compileData.scopeStateVarMeta[i].comment.size(); j++) {
@@ -1827,7 +1832,7 @@ std::string CContractDatabase::ConvertEntryToJson(const ContractDatabaseEntry *p
 		json += "\n\t\t\t],\n";
 		json += "\t\t\t\"has_asset\": \"" + std::string(pEntry->compileData.scopeStateVarMeta[i].hasAsset ? "true" : "false") + "\",\n";
 		json += "\t\t\t\"has_blob\": \"" + std::string(pEntry->compileData.scopeStateVarMeta[i].hasBlob ? "true" : "false") + "\"\n";
-		json += "\t\t]" + std::string(i < int(transpiler::ScopeType::Num) - 1 ? ",":"") + "\n";
+		json += "\t\t}" + std::string(i < int(transpiler::ScopeType::Num) - 1 ? ",":"") + "\n";
 	}
 	json += "\t],\n";
 
@@ -1928,7 +1933,7 @@ std::string CContractDatabase::ConvertEntryToJson(const ContractDatabaseEntry *p
 		json += "\t\t}";
 		json += i < pEntry->compileData.interfaces.size() - 1 ? ",\n" : "\n";
 	}
-	json += "\t]\n";
+	json += "\t],\n";
 
 	//implemented interfaces
 	json += "\t\"implemented_interfaces\": [\n";

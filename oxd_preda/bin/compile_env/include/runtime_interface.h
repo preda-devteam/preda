@@ -25,7 +25,9 @@ namespace prlrt {
 		RuntimeException = 3,
 		UserDefinedError = 4,
 		SerializeOutUnknownContextClass = 5,
-		WASMTrapError = 6
+		WASMTrapError = 6,
+		ResidualNotAllowed = 7,
+		DepositTokenError = 8
 	};
 
 	enum class ExceptionType : uint16_t {
@@ -63,6 +65,72 @@ namespace prlrt {
 		TokenMint_NegativeAmount = 31,
 		InvalidTokenId = 32,
 		DeployFailed = 33,
+	};
+
+	enum prlrt_oprations : uint8_t
+	{
+	// bool
+	PRDOP_BOOL_ASSIGN = 0,				// =
+	PRDOP_BOOL_NOT,						// !
+	PRDOP_BOOL_COMP,					// == !=
+	// enum
+	PRDOP_ENUM_ASSIGN,					// =
+	PRDOP_ENUM_COMP,					// == !=
+	// int and uint
+	PRDOP_INT_ASSIGN,					// =
+	PRDOP_INT_OP_SELF,					// ++ -- ! -
+	PRDOP_INT_OP_SIMPLE,				// + - & | ^ << >> < > == != <= >=
+	PRDOP_INT_OP_COMPLEX,				// * / %
+	// bigint
+	PRDOP_BIGINT_ASSIGN_STATIC,			// =
+	PRDOP_BIGINT_ASSIGN_DYNAMIC,		// dynamic assign coefficient
+	PRDOP_BIGINT_OP_SELF,				// ++ -- ! -
+	PRDOP_BIGINT_OP_SIMPLE,				// + - & | ^ << >> < > == != <= >=
+	PRDOP_BIGINT_OP_COMPLEX,			// * / %
+	// float
+	PRDOP_FLOAT_ASSIGN,					// =
+	PRDOP_FLOAT_OP_SELF,				// -
+	PRDOP_FLOAT_OP_SIMPLE,				// + - << >> < > == != <= >=
+	PRDOP_FLOAT_OP_COMPLEX,				// * /
+	// address, blob, hash
+	PRDOP_ABH_ASSIGN,					// =
+	PRDOP_ABH_OP_SIMPLE,				// < > == != <= >=
+	PRDOP_ABH_TYPE_TRANSFORM,					// abh to string, string to abh
+	PRDOP_ADDRESS_CHECK,				// is user / delegated / dapp ...
+	// string
+	PRDOP_STR_ASSIGN, 					// = 
+	PRDOP_STR_OP_SIMPLE,				// < > == != <= >= set, append, length
+	// array
+	PRDOP_ARRAY_ASSIGN,					// =
+	PRDOP_ARRAY_OP_SIMPLE,				// [], length, set_length, push, pop
+	// map
+	PRDOP_MAP_ASSIGN,					// =
+	PRDOP_MAP_OP_SIMPLE,				// length, has, erase, []
+	// token
+	PRDOP_TOKEN_ASSIGN,					// =
+	PRDOP_TOKEN_ID,						// get_id
+	PRDOP_TOKEN_AMOUNT,					// get_amount
+	PRDOP_TOKEN_TRANSFER,				// transfer
+	PRDOP_TOKEN_TRANSFERALL,			// transfer_all
+	PRDOP_TOKEN_DEPOSIT,				// deposit
+	// data serialization
+	PRDOP_SERIALIZE_SIZE,				// get_serialize_size
+	PRDOP_SERIALIZE_OUT_STATIC,			// serialize_out
+	PRDOP_SERIALIZE_MAP_STATIC,			// map_from_serialize_data
+	PRDOP_SERIALIZE_DYNAMIC,			// dynamic serialization coefficient
+	// function
+	PRDOP_JUMP,
+	PRDOP_CROSS,
+	PRDOP_RELAY,
+	PRDOP_GLOBAL_RELAY,
+	PRDOP_DEPLOY,
+	// transaction context
+	PRDOP_TXN_CTX,
+	// block context
+	PRDOP_BLK_CTX,
+	// debug
+	PRDOP_DEBUG_OP,
+	PRDOP_NUM
 	};
 
 	struct CBigInt;
@@ -202,12 +270,20 @@ namespace prlrt {
 	V(bool, EmitRelayToScope, const uint8_t* scope_key, uint32_t scope_key_size, uint32_t scope_type, uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)\
 	V(bool, EmitRelayToGlobal, uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)\
 	V(bool, EmitRelayToShards, uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)\
+	V(bool, EmitRelayDeferred, uint32_t opCode, const uint8_t* args_serialized, uint32_t args_size)\
 	V(bool, HashToString, const void* pData, uint32_t dataLen, char* out) \
 	V(uint32_t, CrossCall, uint64_t cvId, int64_t templateContractImportSlot, uint32_t opCode, const void** ptrs, uint32_t numPtrs)\
 	V(uint32_t, InterfaceCall, uint64_t cvId, int64_t interfaceContractImportSlot, uint32_t slotIdx, uint32_t funcIdx, const void** ptrs, uint32_t numPtrs)\
-	V(bool, InterfaceIsImplemented, uint64_t cvId, int64_t interfaceContractImportSlot, uint32_t slotIdx)\
+	V(bool, ContractImplementsInterface, uint64_t cvId, int64_t interfaceContractImportSlot, uint32_t slotIdx)\
+	V(bool, ContractHasTemplate, uint64_t cvId, int64_t templateContractImportSlot)\
 	V(uint64_t, DeployCall, int64_t templateContractImportSlot, const void** ptrs, uint32_t numPtrs)\
 	V(void, ReportOrphanToken, uint64_t id, ::prlrt::BigintPtr amount)\
+	V(void, DepositToken, uint64_t id, ::prlrt::BigintPtr amount)\
+	V(void, TokenMinted, uint64_t id, ::prlrt::BigintPtr amount)\
+	V(void, TokenBurnt, uint64_t id, ::prlrt::BigintPtr amount)\
+	V(uint32_t, TokenIdToSymbolLength, uint64_t id)\
+	V(uint64_t, TokenSymbolToId, const char *symbol)\
+	V(bool, AllowedToMint, uint64_t id)\
 	V(void, ReportReturnValue, const char* type_export_name, const uint8_t* serialized_data, uint32_t serialized_data_size)\
 	V(void, DebugPrintBufferAppendSerializedData, const char* type_export_name, const uint8_t* serialized_data, uint32_t serialized_data_size)\
 	V(void, DebugPrintOutputBuffer, uint32_t line)\
@@ -224,8 +300,7 @@ namespace prlrt {
 	V(void, SetAsContractAddress, void* pAddress, uint64_t contract_id)\
 	V(void, SetAsCustomAddress, void* pAddress, const uint8_t* data)\
 \
-	V(bool, BurnGasLoop, )\
-	V(bool, BurnGasFunctionCall, )\
+	V(bool, BurnGas, uint64_t gas_cost)\
 \
 	FOR_EACH_PREDA_FLOAT_METHOD(V, 256)\
 	FOR_EACH_PREDA_FLOAT_METHOD(V, 512)\
@@ -260,6 +335,8 @@ namespace prlrt {
 	V(uint32_t, Transaction_GetOriginatedShardIndex, )\
 	V(uint32_t, Transaction_GetOriginatedShardOrder, )\
 	V(void, Transaction_GetInitiatorAddress, uint8_t* out)\
+	V(uint32_t, Transaction_GetSuppliedTokensCount, )\
+	V(void, Transaction_GetSuppliedToken, uint32_t index, uint64_t *id, ::prlrt::BigintPtr self)\
 \
 	/*  event context */\
 	V(::prlrt::uievent_state, Event_GetUserState)\

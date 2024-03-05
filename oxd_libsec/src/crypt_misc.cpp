@@ -21,7 +21,7 @@ bool HeavySaltedEncrypt(const rt::String_Ref& pwd, rt::String& cipertext, const 
 
 	// data dilution
 	{	SecuritySuite::Randomize(plaintext, dilution_size);
-		UINT step = ((dilution_size - 32)/plaintext_in.GetLength());
+		UINT step = (UINT)((dilution_size - 32)/plaintext_in.GetLength());
 		for(UINT i=0; i<plaintext_in.GetLength(); i++)
 		{
 			plaintext[dilution_size-1 - step*i] = plaintext_in[plaintext_in.GetLength()-1-i];

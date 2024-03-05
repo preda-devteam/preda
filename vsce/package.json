@@ -2,7 +2,7 @@
   "name": "preda",
   "displayName": "PREDA Language Preview Toolchain",
   "description": "Local development environment for the PREDA smart contract programming language",
-  "version": "0.1.85",
+  "version": "0.2.6",
   "scripts": {
     "vscode:prepublish": "yarn run compile",
     "watch": "npm-run-all -p watch:*",
@@ -19,7 +19,7 @@
   "engines": {
     "vscode": "^1.56.0"
   },
-  "icon": "resource/images/logo.png",
+  "icon": "resource/images/preda.png",
   "categories": [
     "Testing",
     "Debuggers",
@@ -30,12 +30,12 @@
     "onCommand:Preda.run",
     "onCommand:Preda.edit",
     "onCommand:Preda.compile",
-    "onCommand:Preda.deploy",
     "onCommand:Preda.compileMultiple",
     "onCommand:Preda.view",
     "onLanguage:prdts",
     "onLanguage:preda",
-    "onLanguage:log"
+    "onLanguage:log",
+    "onCommand:Preda.deploy"
   ],
   "main": "./out/src/extension.js",
   "contributes": {
@@ -74,7 +74,8 @@
     "commands": [
       {
         "command": "Preda.run",
-        "title": "PREDA: Run"
+        "title": "PREDA: Run",
+        "icon": "$(play)"
       },
       {
         "command": "Preda.edit",
@@ -82,7 +83,8 @@
       },
       {
         "command": "Preda.compile",
-        "title": "PREDA: Compile"
+        "title": "PREDA: Compile",
+        "icon": "$(play)"
       },
       {
         "command": "Preda.compileMultiple",
@@ -115,11 +117,6 @@
           "when": "resourceExtname == .prd"
         },
         {
-          "command": "Preda.deploy",
-          "group": "1_Preda",
-          "when": "resourceExtname == .prd"
-        },
-        {
           "command": "Preda.compileMultiple",
           "group": "1_Preda",
           "when": "resourceExtname == .prd"
@@ -128,6 +125,11 @@
           "command": "Preda.view",
           "group": "1_Preda",
           "when": "resourceExtname == .html"
+        },
+        {
+          "command": "Preda.deploy",
+          "group": "1_Preda",
+          "when": "resourceExtname == .prd"
         }
       ],
       "editor/context": [
@@ -147,11 +149,6 @@
           "when": "editorTextFocus && resourceExtname == .prd"
         },
         {
-          "command": "Preda.deploy",
-          "group": "1_Preda",
-          "when": "editorTextFocus && resourceExtname == .prd"
-        },
-        {
           "command": "Preda.compileMultiple",
           "group": "1_Preda",
           "when": "editorTextFocus && resourceExtname == .prd"
@@ -160,6 +157,23 @@
           "command": "Preda.view",
           "group": "1_Preda",
           "when": "editorTextFocus && resourceExtname == .html"
+        },
+        {
+          "command": "Preda.deploy",
+          "group": "1_Preda",
+          "when": "editorTextFocus && resourceExtname == .prd"
+        }
+      ],
+      "editor/title/run": [
+        {
+          "when": "resourceExtname == .prd",
+          "command": "Preda.compile",
+          "group": "1_Preda"
+        },
+        {
+          "when": "resourceExtname == .prdts",
+          "command": "Preda.run",
+          "group": "1_Preda"
         }
       ]
     },
@@ -290,6 +304,7 @@
   },
   "dependencies": {
     "@types/detect-port": "^1.3.3",
+    "@types/json-bigint": "^1.0.2",
     "@types/node-fetch": "^2.6.5",
     "@types/qs": "^6.9.8",
     "@types/uuid": "^9.0.4",
@@ -302,6 +317,7 @@
     "detect-port": "^1.5.1",
     "ejs": "^3.1.8",
     "fs-extra": "^10.1.0",
+    "json-bigint": "^1.0.0",
     "mustache": "^4.2.0",
     "qs": "^6.11.2",
     "query-string": "^8.1.0",

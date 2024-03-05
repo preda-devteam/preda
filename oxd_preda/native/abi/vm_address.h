@@ -7,6 +7,7 @@
 
 namespace rvm
 {
+#pragma pack(push, 1)
 
 enum class SecSuite: uint8_t
 {
@@ -36,23 +37,44 @@ enum class SecSuite: uint8_t
 static_assert(uint8_t(SecSuite::CryptographyMax) <= uint8_t(SecSuite::NoSigning), "CryptographyMax section overlaps with NoSigning section");
 static_assert(uint8_t(SecSuite::NoSigningMax) <= uint8_t(SecSuite::Delegated), "NoSigningMax section overlaps with Delegated section");
 
+typedef uint32_t UInt32;
+typedef uint64_t UInt64;
+struct UInt96  { union{ struct { UInt64		a;	UInt32  e;	}; uint8_t _[12]; }; };
+struct UInt128 { union{ struct { UInt64		a;	UInt64  e;	}; uint8_t _[16]; }; };
+struct UInt160 { union{ struct { UInt128	a;	UInt32  e;	}; uint8_t _[20]; }; };
+struct UInt256 { union{ struct { UInt128	a;	UInt128	e;	}; uint8_t _[32]; }; };
+struct UInt512 { union{ struct { UInt256	a;	UInt256	e;	}; uint8_t _[64]; }; };
+static_assert(sizeof(UInt96)  == 12);
+static_assert(sizeof(UInt128) == 16);
+static_assert(sizeof(UInt160) == 20);
+static_assert(sizeof(UInt256) == 32);
+static_assert(sizeof(UInt512) == 64);
+
 struct Address
 {	
-	uint8_t		_[RVM_HASH_SIZE];
 	union {
-	int			_SSID:4;
+	UInt256		a;
+	uint8_t		_[RVM_HASH_SIZE];
+	};
+	union {
+	uint32_t	_SSID:4;
 	uint32_t	_CheckSum;
+	uint32_t	e;
 	};
 };
 typedef const Address ConstAddress;
 static_assert(sizeof(Address) == 36);
+
+struct UInt336 { union{ struct { Address	a;	UInt64	e;	}; uint8_t _[44]; }; };
+static_assert(sizeof(UInt336) == 44);
+
 
 // 6-bit
 enum class ScopeKeySized : uint8_t
 {
 	// non-Enumerable
 	Default = 0,	// actual scope is defined on scope_slot
-	Address = 0,	// address (slot #0, #1, #2 were occupied for ScopeType::Contract, slot for customized address scope should starts from #3)
+	Address = 0,	// address/36B (slot #0, #1, #2 were occupied for ScopeType::Contract, slot for customized address scope should starts from #3)
 	UInt32,			// uint32_t	: 4B
 	UInt64,			// uint64_t	: 8B
 	UInt96,			// uint96_t	: 12B
@@ -60,6 +82,7 @@ enum class ScopeKeySized : uint8_t
 	UInt160,		// SHA160	: 20B
 	UInt256,		// SHA256	: 32B
 	UInt512,		// SHA512	: 64B
+	UInt336,		// <Address,UInt64>	: 42B
 	// Enumerable
 	AddressEnumerable = 0x20,	// address
 	UInt32Enumerable,			// uint32_t
@@ -69,6 +92,7 @@ enum class ScopeKeySized : uint8_t
 	UInt160Enumerable,			// SHA160		
 	UInt256Enumerable,			// SHA256		
 	UInt512Enumerable,			// SHA512
+	UInt336Enumerable,			// <Address,UInt64>	
 
 	Bitmask = 0x3fu,
 	BaseTypeBitmask = 0x1fu,
@@ -103,14 +127,15 @@ inline uint32_t				SCOPEKEY_SHARD_BITMASK(uint32_t shard_order){ return ~(((uint
 inline uint32_t				SCOPEKEY_SHARD_BRANCH_BIT(uint32_t shard_order){ return shard_order?(1U<<(shard_order-1)):0; } // 0 for base, otherwise for up
 inline constexpr int		SCOPEKEY_SIZE(ScopeKeySized t)
 							{	switch((ScopeKeySized)(uint16_t(ScopeKeySized::BaseTypeBitmask)& uint16_t(t)))
-								{	case ScopeKeySized::UInt32: return 4;
-									case ScopeKeySized::UInt64: return 8;
-									case ScopeKeySized::UInt96: return 12;
-									case ScopeKeySized::UInt128: return 16;
-									case ScopeKeySized::UInt160: return 20;
-									case ScopeKeySized::UInt256: return 32;
-									case ScopeKeySized::Address: return 36;
-									case ScopeKeySized::UInt512: return 64;
+								{	case ScopeKeySized::UInt32:  return sizeof(UInt32);
+									case ScopeKeySized::UInt64:  return sizeof(UInt64);
+									case ScopeKeySized::UInt96:  return sizeof(UInt96);
+									case ScopeKeySized::UInt128: return sizeof(UInt128);
+									case ScopeKeySized::UInt160: return sizeof(UInt160);
+									case ScopeKeySized::UInt256: return sizeof(UInt256);
+									case ScopeKeySized::Address: return sizeof(Address);
+									case ScopeKeySized::UInt336: return sizeof(UInt336);
+									case ScopeKeySized::UInt512: return sizeof(UInt512);
 									default: return -1;
 								}
 							}
@@ -141,4 +166,6 @@ inline constexpr SecSuite	ADDRESS_SECSUITE_ID(const Address& a){ return (SecSuit
 inline			 bool		ADDRESS_IS_VALID(const Address& a){ return !(0xfffffff0 & (a._CheckSum ^ os::crc32c(a._, RVM_HASH_SIZE, (uint32_t)ADDRESS_SECSUITE_ID(a)))); }
 inline			 void		ADDRESS_SET_SECSUITE(Address& a, SecSuite ssid){ a._CheckSum = ((uint8_t)ssid&0xf) | (0xfffffff0 & os::crc32c(a._, RVM_HASH_SIZE, (uint32_t)ssid)); }
 
+
+#pragma pack(pop)
 } // namespace rvm

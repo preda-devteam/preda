@@ -35,20 +35,23 @@ public:
 	void		Withdraw(CoinsMutable &get, CoinsMutable &residue) const; // residue = this - get
 	bool		IsCoreCoin() const { return Amount.IsPositive() && CoinId == TokenIdCoreCoin; }
 	template <typename T_Coin>
+	UINT		Embed(const T_Coin &c)
+				{
+					CoinId = c.CoinId;
+					UINT ret = Amount.Embed(c.Amount) + sizeof(TokenId);
+					rt::_CastToNonconst(&c)->CoinId = TokenIdInvalid; // clear to zero after embedding state out
+					return ret;
+				}
+	UINT		Embed(rvm::TokenId t, const BigNumRef& a);
+
+	template <typename T_Coin>
 	static UINT GetEmbeddedSize(const T_Coin &c) { return sizeof(TokenId) + BigNum::GetEmbeddedSize(c.Amount); }
 	static UINT GetEmbeddedSizeByAmount(const BigNumRef &c) { return sizeof(TokenId) + BigNum::GetEmbeddedSize(c); }
 	template <typename T_Coin>
 	static bool IsEmbeddable(const T_Coin &c){ return BigNum::IsEmbeddable(c.Amount); }
 	static bool IsEmbeddableByAmount(const BigNumRef &c){ return BigNum::IsEmbeddable(c); }
-	template <typename T_Coin>
-	UINT Embed(const T_Coin &c)
-	{
-		CoinId = c.CoinId;
-		UINT ret = Amount.Embed(c.Amount) + sizeof(TokenId);
-		rt::_CastToNonconst(&c)->CoinId = TokenIdInvalid; // clear to zero after embedding state out
-		return ret;
-	}
-	static void GetTypeSignature(rt::String &n) { n += rt::SS("token"); }
+	static void		GetTypeSignature(rt::String &n) { n += rt::SS("token"); }
+	static auto&	Zero(){ static const Coins _zero(0); return _zero; }
 };
 #pragma pack(pop)
 

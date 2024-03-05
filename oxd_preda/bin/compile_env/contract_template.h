@@ -13,6 +13,7 @@
 #include "include/relay.h"
 #include "include/interface.h"
 #include "include/contexts.h"
+#include "include/gascost.h"
 
 #if defined(__linux__) || defined(__linux) || defined(__APPLE__)
 	#define API_EXPORT __attribute__((visibility("default")))

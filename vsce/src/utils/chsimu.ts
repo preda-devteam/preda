@@ -6,6 +6,8 @@ import { formatTime } from "./time";
 import ViewLoader from "../viewloader";
 import FileHandler from "./filehandler";
 import { getChsimuFileFloder } from "./finder";
+import { getdiagnosticCollection, msg2problems } from "./common";
+import { exec } from "child_process";
 
 const isWin = process.platform === "win32";
 let outputChannel: vscode.OutputChannel;
@@ -43,7 +45,7 @@ export async function outputToChannel(params: OutputParams) {
   const outputDirPath = path.resolve(currentFolder);
   const outFilePath = path.resolve(outputDirPath, outFilename + ".html");
   const logPath = path.resolve(outputDirPath, outFilename + ".log");
-
+  
   if (outputChannel) {
     outputChannel.clear();
   } else {
@@ -65,20 +67,25 @@ export async function outputToChannel(params: OutputParams) {
 
   outputChannel.show();
   outputChannel.appendLine(invokeMsg);
+  const disgnostics: {[file: string]: vscode.Diagnostic[]} = {};
+  const diagnosticCollection = getdiagnosticCollection();
+  diagnosticCollection.clear();
   spawn({
     cmd: isWin ? chsimuName : "./" + chsimuName,
     option: { cwd: chsimuFloder, shell: true },
     args,
     onData: (data) => {
       const message = data.toString();
+      // msg += message;
       outputChannel.append(message);
+      msg2problems(message, disgnostics);
     },
     onErr: (err) => {
       outputChannel.appendLine(`${err.toString()}`);
     },
     onExt: (code) => {
       outputChannel.show();
-
+      // msg2output(msg, channel);
       if (code === 0) {
         outputChannel.appendLine(`Result will output to "${outFilePath}"`);
         outputChannel.appendLine("");
@@ -101,7 +108,6 @@ export async function outputToChannel(params: OutputParams) {
           });
         return;
       }
-      outputChannel.appendLine(`[Failed] exit code: ${code}`);
     },
   });
 }

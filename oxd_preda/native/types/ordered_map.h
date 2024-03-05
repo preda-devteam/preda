@@ -329,6 +329,21 @@ public:
 	void			Empty(){ _Unbase(); _NewItems.ShrinkSize(0); }
 	UINT			GetCount() const { return (UINT)_NewItems.GetSize() + _BaseCount; }
 	bool			Has(const KEY& k) const { return _SC::FindKey(k) >= 0; }
+	bool			JsonParse(const rt::String_Ref& str)
+					{	Empty();
+						rt::JsonObject json(str);
+						rt::JsonKeyValuePair kv;
+						while(json.GetNextKeyValuePair(kv))
+						{	KEY k;
+							if(!TypeTraits<KEY>::JsonParse(k, kv.GetKey()))return false;
+							if(Has(k))return false; // duplicated key
+							typedef TypeTraits<VAL> VAL_TRAITS;
+							typename VAL_TRAITS::Mutable val;
+							if(!VAL_TRAITS::JsonParse(val, kv.GetValue()))return false;
+							VERIFY(_Set(&k, rvm::RVMPTR_COPY, rvm::RvmImmutableTypeCompose(val), rvm::RVMPTR_TAKE));
+						}
+						return true;
+					}
 
 #if defined(PLATFORM_DEBUG_BUILD)
 	bool			VerifyTotalItemSize() const

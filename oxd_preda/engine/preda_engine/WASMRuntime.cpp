@@ -317,6 +317,13 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 		})) {
 		return {};
 	}
+	if (!linker.func_wrap("env", "predaEmitRelayDeferred",
+		[&engine](wasmtime::Caller caller, uint32_t op_code, WasmPtrT args_serialized_offset, uint32_t args_size) -> uint32_t {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			return engine.runtimeInterface().EmitRelayDeferred(op_code, WasmPtrToPtr<const uint8_t*>(mem, args_serialized_offset), args_size);
+		})) {
+		return {};
+	}
 	if (!linker.func_wrap("env", "predaEmitRelayToShards",
 		[&engine](wasmtime::Caller caller, uint32_t op_code, WasmPtrT args_serialized_offset, uint32_t args_size) -> uint32_t {
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
@@ -341,11 +348,19 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 		})) {
 		return {};
 	}
-	if (!linker.func_wrap("env", "predaInterfaceIsImplemented",
+	if (!linker.func_wrap("env", "predaContractImplementsInterface",
 		[&engine](wasmtime::Caller caller, uint64_t contractId, int64_t interfaceContractImportSlot, uint32_t interfaceSlot) -> uint32_t {
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
-			return engine.runtimeInterface().InterfaceIsImplemented(contractId,
+			return engine.runtimeInterface().ContractImplementsInterface(contractId,
 				interfaceContractImportSlot, interfaceSlot);
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaContractHasTemplate",
+		[&engine](wasmtime::Caller caller, uint64_t contractId, int64_t templateContractImportSlot) -> uint32_t {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			return engine.runtimeInterface().ContractHasTemplate(contractId,
+				templateContractImportSlot);
 		})) {
 		return {};
 	}
@@ -360,6 +375,45 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 	if (!linker.func_wrap("env", "predaReportOrphanToken",
 		[&engine](wasmtime::Caller caller, uint64_t id, uint64_t amount) {
 			engine.runtimeInterface().ReportOrphanToken(id, (prlrt::BigintPtr)(amount));
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaDepositToken",
+		[&engine](wasmtime::Caller caller, uint64_t id, uint64_t amount) {
+			engine.runtimeInterface().DepositToken(id, (prlrt::BigintPtr)(amount));
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaTokenMinted",
+		[&engine](wasmtime::Caller caller, uint64_t id, uint64_t amount) {
+			engine.runtimeInterface().TokenMinted(id, (prlrt::BigintPtr)(amount));
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaTokenBurnt",
+		[&engine](wasmtime::Caller caller, uint64_t id, uint64_t amount) {
+			engine.runtimeInterface().TokenBurnt(id, (prlrt::BigintPtr)(amount));
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaTokenIdToSymbolLength",
+		[&engine](wasmtime::Caller caller, uint64_t id) -> uint32_t {
+			return engine.runtimeInterface().TokenIdToSymbolLength(id);
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaTokenSymbolToId",
+		[&engine](wasmtime::Caller caller, WasmPtrT symbol_offset) -> uint64_t {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			const char* symbol = WasmPtrToPtr<const char*>(mem, symbol_offset);
+			return engine.runtimeInterface().TokenSymbolToId(symbol);
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaAllowedToMint",
+		[&engine](wasmtime::Caller caller, uint64_t id) -> uint32_t {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			return engine.runtimeInterface().AllowedToMint(id);
 		})) {
 		return {};
 	}
@@ -461,18 +515,6 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 		[&engine](wasmtime::Caller caller, WasmPtrT address_offset, WasmPtrT data_offset) -> void {
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
 			return engine.runtimeInterface().SetAsCustomAddress(WasmPtrToPtr<void*>(mem, address_offset), WasmPtrToPtr<const uint8_t*>(mem, data_offset));
-		})) {
-		return {};
-	}
-	if (!linker.func_wrap("env", "predaBurnGasLoop",
-		[&engine](wasmtime::Caller caller) -> uint32_t {
-			return engine.runtimeInterface().BurnGasLoop();
-		})) {
-		return {};
-	}
-	if (!linker.func_wrap("env", "predaBurnGasFunctionCall",
-		[&engine](wasmtime::Caller caller) -> uint32_t {
-			return engine.runtimeInterface().BurnGasFunctionCall();
 		})) {
 		return {};
 	}
@@ -839,6 +881,20 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 		[&engine](wasmtime::Caller caller, WasmPtrT out_offset) -> void {
 			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
 			return engine.runtimeInterface().Transaction_GetInitiatorAddress(WasmPtrToPtr<uint8_t*>(mem, out_offset));
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaTransaction_GetSuppliedTokensCount",
+		[&engine](wasmtime::Caller caller) -> uint32_t {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			return engine.runtimeInterface().Transaction_GetSuppliedTokensCount();
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaTransaction_GetSuppliedToken",
+		[&engine](wasmtime::Caller caller, uint32_t index, WasmPtrT id, uint64_t amount) -> void {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			return engine.runtimeInterface().Transaction_GetSuppliedToken(index, WasmPtrToPtr<uint64_t*>(mem, id), (prlrt::BigintPtr)amount);
 		})) {
 		return {};
 	}

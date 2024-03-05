@@ -142,7 +142,7 @@ relayStatement
   : RelayKeyword '@' relayType ((identifier '(' functionCallArguments ')' ';') | relayLambdaDefinition);
   
 relayType
-  : (expression | ShardsKeyword | GlobalKeyword);
+  : (expression | ShardsKeyword | GlobalKeyword | NextKeyword);
 
 relayLambdaDefinition
   : '(' (relayLambdaParameter (',' relayLambdaParameter)*)? ')' ConstantKeyword? '{' statement* '}';
@@ -267,6 +267,7 @@ InterfaceKeyword : 'interface';
 ImplementsKeyword : 'implements';
 DeployKeyword : 'deploy';
 ConstructorKeyword : 'constructor';
+NextKeyword : 'next';
 
 FloatType
   : 'float256' | 'float512' | 'float1024' ;

@@ -2,6 +2,8 @@
 #include "common.h"
 #include "inttypes.h"
 #include "biginttype.h"
+#include "gascost.h"
+#include "stringtype.h"
 
 namespace prlrt {
 
@@ -36,9 +38,9 @@ namespace prlrt {
 
 		bool Transfer(____token_impl &recipient, const amount_type &transfer_amount)
 		{
-			if (id == 0)
+			if (id._v == 0)
 				return false;
-			if (recipient.id != id && recipient.id != 0)
+			if (recipient.id._v != id._v && recipient.id._v != 0)
 				return false;
 			if (transfer_amount < amount_type(0))
 				return false;
@@ -65,6 +67,26 @@ namespace prlrt {
 		{
 			const amount_type &transfer_amount = GetAmount();
 			return Transfer(recipient, transfer_amount);
+		}
+
+		void Deposit()
+		{
+			PREDA_CALL(DepositToken, id._v, amount._v);
+			amount = amount_type(0);
+		}
+
+		static __prlt_string IdToSymbol(id_type id)
+		{
+			uint32_t len = PREDA_CALL(TokenIdToSymbolLength, id._v);
+			char buf[sizeof(id) + 1];
+			memcpy(buf, &id, len);
+			buf[len] = 0;
+			return __prlt_string(buf);
+		}
+
+		static id_type SymbolToId(const __prlt_string &symbol)
+		{
+			return PREDA_CALL(TokenSymbolToId, symbol.get_c_str());
 		}
 
 		serialize_size_type get_serialize_size() const
@@ -131,43 +153,67 @@ namespace prlrt {
 		}
 		void operator=(const __prlt_token &rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_TOKEN_ASSIGN]);
 			ptr = rhs.ptr;
 		}
 
 		// token interface
 		implementation_type::id_type __prli_get_id() const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_TOKEN_ID]);
 			return ptr->GetTokenId();
 		}
 
 		implementation_type::amount_type __prli_get_amount() const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_TOKEN_AMOUNT]);
 			return ptr->GetAmount();
 		}
 
 		__prlt_bool __prli_transfer(__prlt_token recipient, const implementation_type::amount_type &transfer_amount)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_TOKEN_TRANSFER]);
 			return ptr->Transfer(*recipient.ptr.get(), transfer_amount);
 		}
 
 		__prlt_bool __prli_transfer_all(__prlt_token recipient)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_TOKEN_TRANSFERALL]);
 			return ptr->TransferAll(*recipient.ptr.get());
+		}
+
+		void __prli_deposit() const
+		{
+			burn_gas((uint64_t)gas_costs[PRDOP_TOKEN_DEPOSIT]);
+			return ptr->Deposit();
+		}
+
+		static __prlt_string __prli_id_to_symbol(implementation_type::id_type id)
+		{
+			return implementation_type::IdToSymbol(id);
+		}
+
+		static implementation_type::id_type __prli_symbol_to_id(const __prlt_string &symbol)
+		{
+			return implementation_type::SymbolToId(symbol);
 		}
 
 		// serialization-related interface
 		serialize_size_type get_serialize_size() const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_SIZE]);
 			return ptr->get_serialize_size();
 		}
 
 		void serialize_out(uint8_t *buffer, bool for_debug) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_OUT_STATIC]);
 			ptr->serialize_out(buffer, for_debug);
 		}
 
 		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_MAP_STATIC]);
 			return ptr->map_from_serialized_data(buffer, bufferSize, bDeep);
 		}
 	};
@@ -180,13 +226,28 @@ namespace prlrt {
 	__prlt_token mint(____token_impl::id_type id, ____token_impl::amount_type amount)
 	{
 		__prlt_token ret;
-		ret.ptr->id = id;
-		ret.ptr->amount = amount;
+		if (amount.IsNegative())
+		{
+			return ret;
+		}
+		bool allowed = PREDA_CALL(AllowedToMint, id._v);
+		if (allowed)
+		{
+			ret.ptr->id = id;
+			ret.ptr->amount = amount;
+			PREDA_CALL(TokenMinted, id._v, amount._v);
+		}
 		return ret;
 	}
-	void burn(__prlt_token token)
+	bool burn(__prlt_token token)
 	{
+		bool allowed = PREDA_CALL(AllowedToMint, token.__prli_get_id()._v);
+		if (!allowed)
+			return false;
+
+		PREDA_CALL(TokenBurnt, token.__prli_get_id()._v, token.__prli_get_amount()._v);
 		token.ptr->id = 0;
 		token.ptr->amount = 0;
+		return true;
 	}
 }

@@ -10,7 +10,7 @@ namespace _details
 {
 	static bool Delegated_VerifySignature(LPCVOID pk, LPCVOID signature, LPCVOID pMessage, UINT MessageLen){ return false; }
 	static bool Delegated_Sign(LPCVOID sk, LPCVOID pMessage, UINT MessageLen, LPVOID signature_out){ return false; }
-	static void Delegated_GenerateKeypair(LPVOID pk, LPVOID sk){ ASSERT(0); }
+	static void Delegated_GenerateKeypair(LPVOID pk, LPVOID sk, LPCVOID){ ASSERT(0); }
 	static bool Delegated_DerivePublicKey(LPCVOID sk, LPVOID out){ return false; }
 	static void Delegated_DeriveAddress(LPCVOID pk, LPVOID out){ ASSERT(0); }
 	static bool Delegated_DeriveEncryptionPublicKey(LPCVOID pk, LPVOID out_epk){ return false; }

@@ -123,6 +123,8 @@ public:
 	void AddMultipleConstructorError();
 	void AddDeployInNonGlobalError();
 	void AddUseCurrentContractTypeError();
+	void AddRelayNextFromShardError();
+	void AddMemberOnlyAccessibleViaTypeName(const std::string& identifierName, const std::string& typeName);
 
 	void AddSyntaxError(uint32_t line, uint32_t pos, const std::string &msg);
 	void AddInternalError(uint32_t line, uint32_t pos, const std::string &msg);

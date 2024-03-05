@@ -1,6 +1,7 @@
 #include "simu_global.h"
 #include "simulator.h"
 #include "../native/types/data_jsonifer.h"
+#include "core_contracts.h"
 
 
 namespace oxd
@@ -61,6 +62,8 @@ SimuGlobalShard::SimuGlobalShard(Simulator* simu, uint64_t time_base, uint32_t s
 {
 	_pGlobalShard = this;
 	_bDeploying = false;
+
+	CoreEngine::InitContractsDatabase(*this);
 }
 
 rvm::BuildNum SimuGlobalShard::_GetContractEffectiveBuild(rvm::ContractId contract) const
@@ -88,6 +91,18 @@ const rvm::DeployedContract* SimuGlobalShard::_GetContractDeployed(rvm::Contract
 		return &it->second->Deployment;
 	else
 		return nullptr;
+}
+
+rvm::TokenMinterFlag SimuGlobalShard::_GetTokenMinterState(rvm::TokenId tid, rvm::ContractId contract) const
+{
+	CoreContractState<CORE_TOKEN_SUPPLIERS> state = GetState(-CORE_TOKEN_SUPPLIERS);
+	if(!state.IsEmpty())
+	{
+		auto* f = state->Get(rvm::UInt128{ (uint64_t)tid, (uint64_t)contract});
+		if(f)return *f;
+	}
+
+	return rvm::TokenMinterFlag::Disabled;
 }
 
 void SimuGlobalShard::DeployBegin()
@@ -264,7 +279,7 @@ bool SimuGlobalShard::AllocateContractIds(const BuildContracts& built)
 		{
 			if(_DeployingDatabase._ContractEngine[full_name] != e && _ContractEngine[full_name] != e)
 			{
-				_LOG("[PRD] Contract " << full_name << " already deployed with another engine")
+				_LOG("[PRD]: Contract " << full_name << " already deployed with another engine")
 				return false;
 			}
 
@@ -282,6 +297,8 @@ rvm::DAppId	SimuGlobalShard::_GetDAppByName(const rvm::ConstString* dapp_name) c
 {
 	if(dapp_name->Str() == Simulator::Get().DAPP_NAME)
 		return Simulator::Get().DAPP_ID;
+	else if(dapp_name->Str() == rt::SS("core"))
+		return rvm::DAppIdCore;
 
 	return rvm::DAppIdInvalid;
 }
@@ -295,7 +312,7 @@ void SimuGlobalShard::_FinalizeFunctionInfo(const rvm::ContractVersionId& cvid, 
 	info->Deployment.Version = rvm::CONTRACT_BUILD(cvid);
 	info->Deployment.Module = deploy_id;
 	info->Deployment.StubSize = stub.DataSize;
-	if (stub.DataSize > 0)
+	if(stub.DataSize > 0)
 		memcpy(info->Deployment.Stub, stub.DataPtr, stub.DataSize);
 
 	for(int i=0; i<256; i++)
@@ -397,20 +414,10 @@ void BuildContracts::AddContractCode(const rt::String_Ref& code, const rt::Strin
 	ASSERT(_Stage == STAGE_SOURCE);
 
 	rvm::ConstData data = { (uint8_t*)code.Begin(), (uint32_t)code.GetLength() };
-	rt::String_Ref contract_name = _pEngine->GetContractName(&data).Str();
 
 	_Sources.push_back(code);
 	_Filenames.push_back(fn);
 	_ConstructorArgs.push_back(deploy_arg);
-
-	if(!contract_name.IsEmpty())
-	{
-		_LOG("Source code for contract `"<<contract_name<<"` is loaded from "<<fn);
-	}
-	else
-	{
-		_LOG("Cannot extract contract name from source code file "<<fn);
-	}
 }
 
 void BuildContracts::Log(rvm::LogMessageType type, uint32_t code, uint32_t unitIndex, uint32_t line, uint32_t lineOffset, const rvm::ConstString *message)
@@ -437,7 +444,7 @@ void BuildContracts::Log(rvm::LogMessageType type, uint32_t code, uint32_t unitI
 		fn = ALLOCA_C_STRING(str);
 	}
 
-	__LOG_TYPE(	fn<<'('<<line<<':'<<lineOffset<<"): "<<
+	__LOG_TYPE(	fn<<':'<<line<<':'<<lineOffset<<": "<<
 				label[_Stage]<<' '<<type_str<<" #"<<code<<rt::SS(": ")<<
 				msg,
 				rt::LOGTYPE_IN_CONSOLE|rt::LOGTYPE_IN_LOGFILE|log_type
@@ -464,7 +471,7 @@ bool BuildContracts::Compile(bool checkDeployArg)
 		codes[i] = { (uint8_t*)_Sources[i].Begin(), (uint32_t)_Sources[i].GetLength() };
 
 	_Stage = STAGE_COMPILE;
-	_LOG("Compiling " << count << " contract(s), target=" << rt::EnumStringify(_EngineId));
+	_LOG("[PRD]: Compiling " << count << " contract(s), target=" << rt::EnumStringify(_EngineId));
 
 	rvm::CompilationFlag cflag = rvm::CompilationFlag::None;
 	if(os::CommandLine::Get().HasOption("perftest"))
@@ -474,7 +481,7 @@ bool BuildContracts::Compile(bool checkDeployArg)
 	if(_pEngine->Compile(&dapp, count, codes, cflag, &_pCompiled, this) && _pCompiled && _pCompiled->GetCount() == count)
 	{
 		_ResetContractWorkData(count);
-		rt::String filename, sig;
+		rt::String filename;
 
 		for(uint32_t i = 0; i < count; i++)
 		{
@@ -496,9 +503,9 @@ bool BuildContracts::Compile(bool checkDeployArg)
 			rvm::SystemFunctionOpCodes opcodes;
 			contract->GetSystemFunctionOpCodes(&opcodes);
 
-			if (opcodes.GlobalDeploy == rvm::OpCodeInvalid)
+			if(opcodes.GlobalDeploy == rvm::OpCodeInvalid)
 			{
-				if (!deploy_arg.IsEmpty())
+				if(!deploy_arg.IsEmpty())
 				{
 					_LOG_WARNING("[PRD]: Contract deploy arguments for `" << filename << "` is not expected");
 					goto COMPILE_FAILED;
@@ -510,13 +517,14 @@ bool BuildContracts::Compile(bool checkDeployArg)
 				for(uint32_t f=0; f<func_co; f++)
 					if(opcodes.GlobalDeploy == contract->GetFunctionOpCode(f))
 					{
+						rt::String sig;
 						rvm::StringStreamImpl sig_ss(sig);
 
 						if(contract->GetFunctionSignature(f, &sig_ss))
 						{
 							rvm::RvmDataJsonParser arg_parse(sig, nullptr);
 							std::vector<uint8_t> data;
-							if (deploy_arg.IsEmpty())			// when deploy_arg is not given, regarding it as an empty json
+							if(deploy_arg.IsEmpty())			// when deploy_arg is not given, regarding it as an empty json
 								deploy_arg = "{}";
 							if(rvm::FunctionArgumentUtil::JsonParseArguments(sig.GetString(), nullptr, deploy_arg, data))
 							{

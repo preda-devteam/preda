@@ -1,6 +1,7 @@
 param(
     [Parameter()]
-    [string]$Path
+    [string]$Path,
+    [string]$MDFile
 )
 $Candidates = @(
     "HKCU:SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{771FD6B0-FA20-440A-A002-3B3BAC16DC50}_is1",
@@ -19,6 +20,7 @@ Foreach ($Candidate in $Candidates) {
 }
 $Helper = $VSCodeLocation + "resources\app\out\cli.js"
 $VSCode = $VSCodeLocation + "Code.exe"
-$Command = 'set ELECTRON_RUN_AS_NODE=1 && "{0}" "{1}" --ms-enable-electron-run-as-node "{2}"' -f $VSCode, $Helper, $Path
+# $Command = 'set ELECTRON_RUN_AS_NODE=1 && "{0}" "{1}" --ms-enable-electron-run-as-node "{2}"' -f $VSCode, $Helper, $Path
+$Command = '"{0}" "{1}" "{2}"' -f $VSCode, $Path, $MDFile
 & "C:\Windows\system32\cmd.exe" /v /c $Command
 exit $LASTEXITCODE

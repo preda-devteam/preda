@@ -208,20 +208,33 @@ template<typename T> inline constexpr bool		CONTRACT_ON_GLOBAL(T x){ return CONT
 template<typename T> inline constexpr bool		CONTRACT_ON_SHARDED_SCOPE(T x){ return (int)CONTRACT_SCOPE(x) >= (int)Scope::Address && (int)CONTRACT_SCOPE(x) < (int)Scope::ScatteredMapOnGlobal; }
 template<typename T> inline constexpr bool		CONTRACT_SCOPE_IS_ENUMERABLE(T x){ return SCOPE_IS_ENUMERABLE(CONTRACT_SCOPE(x)); }
 
-enum class			TokenId		:uint64_t{};
-inline constexpr	TokenId		TokenIdMake(char x0, char x1, char x2, char x3 = 0){ return (TokenId)(x0|(x1<<8)|(x2<<16)|(x3<<24)); }
-static const		TokenId		TokenIdInvalid	= (TokenId)0;
-static const		TokenId		TokenIdCoreCoin = TokenIdMake('D', 'I', 'O');
-static const		TokenId		TokenIdNonFungibleBit = (TokenId)0x8000'0000'0000'0000ull;
-inline				TokenId		TokenIdFromSymbol(const rt::String_Ref& symbol)
-								{	if(symbol.GetLength() >= TokenNameSizeMin && symbol.GetLength() <= TokenNameSizeMax)
-									{	TokenId ret = TokenIdInvalid;
-										symbol.CopyTo((char*)&ret);
-										return ret;
+enum class				TokenId		:uint64_t{};
+inline constexpr		TokenId		TokenIdMake(char x0, char x1, char x2, char x3 = 0){ return (TokenId)(x0|(x1<<8)|(x2<<16)|(x3<<24)); }
+static const constexpr	TokenId		TokenIdInvalid	= (TokenId)0;
+static const constexpr	TokenId		TokenIdCoreCoin = TokenIdMake('B', 'R', 'X');
+static const constexpr	TokenId		TokenIdNonFungibleBit = (TokenId)0x8000'0000'0000'0000ull;
+inline					TokenId		TokenIdFromSymbol(const rt::String_Ref& symbol)
+									{
+										static const rt::CharacterSet_UpperCase TokenNameCharset("-#"); // match with \oxd_libsec\src\sec_suites.cpp
+										if(symbol.GetLength() >= TokenNameSizeMin && symbol.GetLength() <= TokenNameSizeMax && symbol.OccurrenceExcluded(TokenNameCharset) == 0)
+										{
+											static_assert(std::underlying_type_t<TokenId>(TokenIdInvalid) == 0);
+											TokenId ret = TokenIdInvalid;
+											symbol.CopyTo((char*)&ret);
+											return ret;
+										}
+										else
+											return TokenIdInvalid;
 									}
-									else return TokenIdInvalid;
-								}
-inline			rt::String_Ref	TokenIdToSymbol(TokenId id){ return rt::DS(id).GetLengthRecalculated(); }
+inline			 rt::String_Ref		TokenIdToSymbol(const TokenId &id)
+									{
+										rt::String_Ref ret = rt::DS(id).GetLengthRecalculated();
+										static const rt::CharacterSet_UpperCase TokenNameCharset("-#"); // match with \oxd_libsec\src\sec_suites.cpp
+										if (ret.GetLength() >= TokenNameSizeMin && ret.GetLength() <= TokenNameSizeMax && ret.OccurrenceExcluded(TokenNameCharset) == 0
+											&& (ret.GetLength() == sizeof(id) || (std::underlying_type_t<TokenId>(id) >> uint8_t(ret.GetLength() * 8)) == 0))
+											return ret;
+										return nullptr;
+									}
 
 namespace _details
 {
@@ -254,15 +267,9 @@ enum class CompilationFlag: uint64_t
 	DisableGlobalScope	= 1<<1,
 };
 
-typedef uint32_t UInt32;
-typedef uint64_t UInt64;
-struct UInt96  { uint8_t _[96/8]; };
-struct UInt128 { uint8_t _[128/8]; };
-struct UInt160 { uint8_t _[160/8]; };
-struct UInt256 { uint8_t _[256/8]; };
-struct UInt512 { uint8_t _[512/8]; };
 
-typedef UInt256 HashValue;
+struct HashValue : public UInt256 {};
+//typedef UInt256 HashValue;
 typedef HashValue BlobAddress;
 typedef HashValue ContractModuleID;
 static_assert(sizeof(HashValue) == RVM_HASH_SIZE);
@@ -325,7 +332,6 @@ enum class DeployError : uint8_t
 	TranspilerNotAvailable			 = 128,
 	WriteDiskError					 = 129,
 	GccLaunchError					 = 130,
-	RegisterAssetError				 = 131,
 };
 
 enum class FunctionFlag : uint32_t
@@ -349,7 +355,7 @@ enum class InvokeContextType : uint8_t
 	RelayInbound,	// TGM_RELAY					No gas payment required, has orig_exec_idx, no signers  (Txn issued by relay@ statement, cross-shard execution)
 	RelayIntra,		// TGM_RELAY					No gas payment required, has orig_exec_idx, no signers, no txid  (Txn issued by relay@ statement, intra-shard execution)
 	Scheduled,		// TGM_PERIODIC_SYSTEM			No gas payment required, no orig_exec_idx, no signer
-					// TGM_RELAY,TGM_DEFERRED,TGM_GLOBAL_TO_SHARD  No gas payment required, has orig_exec_idx, no signer
+					// TGM_RELAY,TGM_DEFERRED,TGM_GLOBAL_TO_SHARDS  No gas payment required, has orig_exec_idx, no signer
 					// TGM_PERIODIC_USER			Gas will be charged, no orig_exec_idx, no signer
 	System			// n/a (deploy,scale_out)		Gas ?????
 };
@@ -368,6 +374,7 @@ enum class InvokeErrorCode : uint8_t
 	ContractFunctionUnavailable,
 	ContractFunctionDisallowed,
 	InvalidFunctionArgments,
+	UnexpectedTokensResidual,
 	// Blue Screen Error
 	BlueScreenErrorBegin = 200,
 	InternalError = BlueScreenErrorBegin,
@@ -392,6 +399,14 @@ enum class LogMessageType : uint8_t
 	Information,
 };
 
+enum class TokenMinterFlag : uint8_t
+{	
+	Disabled	= 0,
+	Allowed		= 1<<0,
+	Irrevocable = 1<<1,
+	Bitmask		= 0xf,
+};
+
 struct ConstString
 {
 	const char*		StrPtr;
@@ -413,12 +428,28 @@ struct ConstStateData
 	BuildNum		Version;
 };
 
+struct ConstBigNum
+{
+	const uint64_t*	Blocks;
+	uint32_t		BlockCount;
+	bool			Sign;
+};
+
+struct ConstNativeToken
+{
+	TokenId			Token;
+	ConstBigNum		Amount;
+};
+
+struct NativeTokens;
+
 struct InvokeResult
 {
 	uint16_t		SubCodeLow;
 	uint8_t			SubCodeHigh;
 	InvokeErrorCode	Code;
 	uint32_t		GasBurnt;
+	NativeTokens*	TokenResidual;	// might be nullptr, release by caller
 };
 
 struct ExecuteResult: public InvokeResult
@@ -432,14 +463,14 @@ struct ExecuteResult: public InvokeResult
 namespace rvm
 {
 
-inline ContractInvokeId		operator + (ContractScopeId csid, BuildNum b){ return CONTRACT_SET_BUILD(csid, b); }
-inline ContractInvokeId		operator + (ContractVersionId cvid, Scope s){ return CONTRACT_SET_SCOPE(cvid, s); }
-inline ContractVersionId	operator + (ContractId cid, BuildNum b){ return CONTRACT_SET_BUILD(cid, b); }
-inline ContractScopeId		operator + (ContractId cid, Scope s){ return CONTRACT_SET_SCOPE(cid, s); }
-inline ContractVersionId	operator ~ (ContractInvokeId ciid){ return CONTRACT_UNSET_SCOPE(ciid); }
-inline ContractId			operator ~ (ContractScopeId csid){ return CONTRACT_UNSET_SCOPE(csid); }
-inline ContractScopeId		operator - (ContractInvokeId ciid){ return CONTRACT_UNSET_BUILD(ciid); }
-inline ContractId			operator - (ContractVersionId cvid){ return CONTRACT_UNSET_BUILD(cvid); }
+inline constexpr ContractInvokeId	operator + (ContractScopeId csid, BuildNum b){ return CONTRACT_SET_BUILD(csid, b); }
+inline constexpr ContractInvokeId	operator + (ContractVersionId cvid, Scope s){ return CONTRACT_SET_SCOPE(cvid, s); }
+inline constexpr ContractVersionId	operator + (ContractId cid, BuildNum b){ return CONTRACT_SET_BUILD(cid, b); }
+inline constexpr ContractScopeId	operator + (ContractId cid, Scope s){ return CONTRACT_SET_SCOPE(cid, s); }
+inline constexpr ContractVersionId	operator ~ (ContractInvokeId ciid){ return CONTRACT_UNSET_SCOPE(ciid); }
+inline constexpr ContractId			operator ~ (ContractScopeId csid){ return CONTRACT_UNSET_SCOPE(csid); }
+inline constexpr ContractScopeId	operator - (ContractInvokeId ciid){ return CONTRACT_UNSET_BUILD(ciid); }
+inline constexpr ContractId			operator - (ContractVersionId cvid){ return CONTRACT_UNSET_BUILD(cvid); }
 
 } // namespace rvm
 

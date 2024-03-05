@@ -7,7 +7,7 @@ chain.deploy @1 Token.prd
 log.highlight Token test
 log Perparing test transactions
 
-state.set address.Token @all { balance:"10000000000000" }
+state.set Token.address @all { balance:"10000000000000" }
 
 txn1[] = Token.transfer*$~count$ @random { to:"$@random$", amount:"$random(1000, 2000)*100$" }
 

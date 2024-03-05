@@ -15,7 +15,7 @@ enum class ExecutionResult : uint8_t {
 	InvalidFunctionId						= 2,
 	FunctionSignatureMismatch				= 3,
 	ExecutionError							= 4,
-	//ContractStateExceedsSizeLimit			= 5,
+	InsufficientGas							= 5,
 	SerializeOutMultipleVersionState		= 6,
 	SystemErrorBegin						= 128,
 	CannotLoadLibrary						= 128,
@@ -29,6 +29,8 @@ class CExecutionEngine : public rvm::ExecutionUnit {
 private:
 	CContractDatabase *m_pDB = nullptr;
 	CRuntimeInterface m_runtimeInterface;
+	// gas table
+	constexpr static uint64_t m_intrinsic_gas = 20000; 
 
 	// The wasm runtime is wrapper of wasmtime engine, holds wasmtime::Store, wasmtime::Memory and main module symbols.
 	// It is created once only when the ExecutionEngine is constructed.
@@ -62,10 +64,10 @@ private:
 
 	uint32_t InvokeContractCall(rvm::ExecutionContext *executionContext, rvm::ContractVersionId cvId, uint32_t opCode, const void **ptrs, uint32_t numPtrs);
 
-	ContractRuntimeInstance *CreateContractInstance(const rvm::ContractModuleID &moduleId, rvm::ContractVersionId cvId, const rvm::ContractVersionId *importedCvId, uint32_t numImportedContracts);
+	ContractRuntimeInstance *CreateContractInstance(const rvm::ContractModuleID &moduleId, rvm::ContractVersionId cvId, const rvm::ContractVersionId *importedCvId, uint32_t numImportedContracts, uint64_t gas_limit);
 	bool MapNeededContractContext(rvm::ExecutionContext *executionContext, ContractRuntimeInstance *pInstance, uint32_t calledFunctionFlag);
 
-	uint32_t Invoke_Internal(rvm::ExecutionContext *executionContext, rvm::ContractVersionId cvId, const rvm::DeployedContract *deployedContract, rvm::OpCode opCode, const rvm::ConstData* args_serialized, uint32_t gas_limit);
+	uint32_t Invoke_Internal(rvm::ExecutionContext *executionContext, rvm::ContractVersionId cvId, const rvm::DeployedContract *deployedContract, rvm::OpCode opCode, const rvm::ConstData* args_serialized, uint32_t gas_limit, rvm::NativeTokens** out_token_residual);
 public:
 	CContractDatabase* contractDatabase() {
 		return m_pDB;
@@ -94,4 +96,5 @@ public:
 		delete this;
 	}
 	virtual void GetExceptionMessage(uint16_t except, rvm::StringStream* str) const override;
+	ContractRuntimeInstance* GetIntermediateContractInstanceFromCvid(rvm::ContractVersionId cvid);
 };

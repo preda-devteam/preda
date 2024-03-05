@@ -57,7 +57,7 @@ export const getChsimuFileFloder = () => {
   return { chsimuName, chsimuFloder };
 };
 
-export function findTSByPrdName(uri: vscode.Uri) {
+export function findTSByName(uri: vscode.Uri) {
   const fileContext = getCurrentActiveFileAndFolder(uri);
   const { currentFolder } = fileContext;
   let { currentFileName, currentFilePath } = fileContext;
@@ -75,10 +75,15 @@ export function findTSByPrdName(uri: vscode.Uri) {
   };
 }
 
-export function transformCompileArg (pathStr: string, currentFolder: string): string {
-  if (!pathStr) {return '';}
-  let result = '';
-  const pathArr = pathStr.split(',');
+export function transformCompileArg(
+  pathStr: string,
+  currentFolder: string
+): string {
+  if (!pathStr) {
+    return "";
+  }
+  let result = "";
+  const pathArr = pathStr.split(",");
   pathArr.forEach((p, index) => {
     const isFilePath = p.match(/(\.prd|\.sol-json)$/);
     if (isFilePath) {
@@ -87,12 +92,12 @@ export function transformCompileArg (pathStr: string, currentFolder: string): st
       result += p;
     }
     if (index < pathArr.length - 1) {
-      result += ' ';
+      result += " ";
     }
   });
   return result;
 }
 
-export function getConfigName () {
-  return 'scriptArgs.json';
+export function getConfigName() {
+  return "scriptArgs.json";
 }

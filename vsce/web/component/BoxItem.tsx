@@ -308,7 +308,7 @@ export const TxnBox = ({data, key, title}: BoxItemType) => {
                           theme="chalk"
                         />}>
                           <>
-                            {d.Function}@{d.Contract}
+                            {d.Function}.{d.Contract}
                           </>
                       </Tooltip>
                     </div>
@@ -318,6 +318,29 @@ export const TxnBox = ({data, key, title}: BoxItemType) => {
                     <div className='box-val'>{toShard(d.ShardIndex, d.ShardOrder)}</div>
                     <div className='box-key'>Return Value:</div>
                     <div className='box-val'>{d.InvokeResult}</div>
+                    {d.Assets ? (<><div className='box-key'>Assets:</div>
+                          <div className='box-val'>
+                            <div className='view-table'>
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>Symbol</th>
+                                    <th>Supplies</th>
+                                    <th>Residuals</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {d.Assets.map((s: Token) => (
+                                    <tr key={s.Symbol + 'txn'}>
+                                      <td width="220">{s.Symbol}</td>
+                                      <td>{s.Supplies}</td>
+                                      <td>{s.Residuals}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div></>): null}
                   </div>
               </div>
             ))}
@@ -421,10 +444,33 @@ export const BlockBox = ({data, key, title, shardOrder = '0'}: BoxItemType) => {
                                 theme="chalk"
                               />}>
                                 <>
-                                  {txn.Function}@{txn.Contract}
+                                  {txn.Function}.{txn.Contract}
                                 </>
                             </Tooltip>
                           </div>
+                          {txn.TokenResidual ? (<><div className='box-key'>Assets:</div>
+                          <div className='box-val'>
+                            <div className='view-table'>
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>Symbol</th>
+                                    <th>Supplies</th>
+                                    {txn?.TokenSupply && <th>Residuals</th>}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {txn.TokenResidual?.map((s: string, i: number) => (
+                                    <tr key={s.split(':')[1]}>
+                                      <td width="220">{s.split(':')[1]}</td>
+                                      <td>{s.split(':')[0]}</td>
+                                      {txn?.TokenSupply && <td>{(txn?.TokenSupply?.[i] || '0').split(':')[0]}</td>}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div></>): null}
                         </div>
                       ))}
                     </div>

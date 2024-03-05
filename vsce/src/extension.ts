@@ -2,15 +2,16 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
 
-import completationProvider from "./CompletionProvider/predats";
-import predaCompletationProvider from "./CompletionProvider/preda";
-import runPreda from "./Commands/run";
+import completationProvider from "./CompletionProvider/contractts";
+import CompletationProvider from "./CompletionProvider/contract";
+import run from "./Commands/run";
 import editArgs from "./Commands/edit";
 import compile from "./Commands/compile";
 import deploy from "./Commands/deploy";
 import compileMultiple from "./Commands/compileMultiple";
 import view from "./Commands/view";
-import { PredaDefinitionProvider } from "./languageServer/definitionProvider";
+import DefinitionProvider from "./languageServer/definitionProvider";
+import ReferenceProvider from "./languageServer/referenceProvider";
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -21,7 +22,7 @@ export function activate(context: vscode.ExtensionContext) {
   // run
   const runChsimuCommand = vscode.commands.registerCommand(
     "Preda.run",
-    (uri: vscode.Uri) => runPreda(uri, context)
+    (uri: vscode.Uri) => run(uri, context)
   );
 
   // edit
@@ -60,7 +61,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(compileMultipleChsimuCommand);
   context.subscriptions.push(viewHtmlCommand);
   context.subscriptions.push(completationProvider);
-  context.subscriptions.push(predaCompletationProvider);
+  context.subscriptions.push(CompletationProvider);
   context.subscriptions.push(deployCommand);
 
   let timeout: any = null;
@@ -169,16 +170,22 @@ export function activate(context: vscode.ExtensionContext) {
     timeout = setTimeout(updateDecorations, 0);
   }
   // defind language
-  if (vscode.workspace.workspaceFolders) {
+  // if (vscode.workspace.workspaceFolders) {
     // Push the disposable to the context's subscriptions so that the
     // client can be deactivated on extension deactivation
     context.subscriptions.push(
-      vscode.languages.registerDefinitionProvider(
+      vscode.languages.registerReferenceProvider(
         { language: "preda", scheme: "file" },
-        new PredaDefinitionProvider()
+        new ReferenceProvider()
       )
     );
-  }
+    context.subscriptions.push(
+      vscode.languages.registerDefinitionProvider(
+        { language: "preda", scheme: "file" },
+        new DefinitionProvider()
+      )
+    );
+  // }
 }
 
 export function deactivate() {}

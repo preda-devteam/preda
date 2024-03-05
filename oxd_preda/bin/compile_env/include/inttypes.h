@@ -3,10 +3,12 @@
 #include <vector>
 #include "common.h"
 #include "exceptions.h"
+#include "gascost.h"
 
-#define WRAP_SIMPLE_BINARY_OPERATOR(returnType, oper)\
+#define WRAP_SIMPLE_BINARY_OPERATOR(returnType, oper, gas)\
 	returnType operator oper(const this_type &rhs) const\
 	{\
+		burn_gas(gas);\
 		return returnType(_v oper rhs._v);\
 	}
 
@@ -33,7 +35,7 @@ namespace prlrt {
 		using internal_type = bool;
 		using is_value_type = std::true_type;
 		using is_fixed_size = std::true_type;
-		using fixed_size_in_bytes = std::integral_constant<serialize_size_type, 1>;
+		using fixed_size_in_bytes = std::integral_constant<serialize_size_type, (serialize_size_type)(sizeof(internal_type))>;
 		using type_identifier_type = simple_type_type_identifier<type_identifier_enum::___bool>;
 		static constexpr uint32_t get_type_identifier_size()
 		{
@@ -46,7 +48,10 @@ namespace prlrt {
 		}
 
 		internal_type _v;
-		__prlt_bool() { _v = false; }
+		__prlt_bool() 
+		{ 
+			_v = false; 
+		}
 		__prlt_bool(bool x) { _v = x; }
 
 		operator bool() const
@@ -56,36 +61,41 @@ namespace prlrt {
 
 		void operator=(const this_type &rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_BOOL_ASSIGN]);
 			_v = rhs._v;
 		}
 
 		__prlt_bool operator!() const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_BOOL_NOT]);
 			return __prlt_bool(!_v);
 		}
 
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, &&);
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, || );
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, == );
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, != );
+		// WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, &&);
+		// WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, || );
+		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, ==, gas_costs[PRDOP_BOOL_COMP]);
+		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, !=, gas_costs[PRDOP_BOOL_COMP]);
 
-		constexpr serialize_size_type get_serialize_size() const
+		serialize_size_type get_serialize_size() const
 		{
-			return sizeof(this_type);
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_SIZE]);
+			return fixed_size_in_bytes::value;
 		}
 
 		void serialize_out(uint8_t *buffer, bool for_debug) const
 		{
-			*(this_type*)buffer = _v ? 1 : 0;
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_OUT_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * fixed_size_in_bytes::value);
+			(*(this_type*)buffer)._v = _v;
 		}
 
 		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
-			if (bufferSize < serialize_size_type(sizeof(internal_type)))
+			if (bufferSize < fixed_size_in_bytes::value)
 				return false;
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_MAP_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * fixed_size_in_bytes::value);
 			_v = *(internal_type*)buffer;
-			buffer += serialize_size_type(sizeof(internal_type));
-			bufferSize -= serialize_size_type(sizeof(internal_type));
+			buffer += fixed_size_in_bytes::value;
+			bufferSize -= fixed_size_in_bytes::value;
 			return true;
 		}
 	};
@@ -151,16 +161,21 @@ namespace prlrt {
 		}
 
 		internal_type _v;
-		____uint() { _v = 0; }
+		____uint() 
+		{ 
+			_v = 0; 
+		}
 		____uint(internal_type x) { _v = x; }
 
 		void operator=(const this_type &rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_ASSIGN]);
 			_v = rhs._v;
 		}
 
 		void operator++()
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SELF]);
 			if (_v == max_value::value)
 			{
 				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
@@ -170,6 +185,7 @@ namespace prlrt {
 
 		void operator--()
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SELF]);
 			if (_v == min_value::value)
 			{
 				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
@@ -181,11 +197,13 @@ namespace prlrt {
 
 		this_type operator~() const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SELF]);
 			return this_type(~_v);
 		}
 
 		this_type operator+(const this_type &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE]);
 			if (max_value::value - _v < rhs._v)
 			{
 				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
@@ -195,6 +213,7 @@ namespace prlrt {
 
 		this_type operator-(const this_type &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE]);
 			if (_v < rhs._v)
 			{
 				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
@@ -204,6 +223,7 @@ namespace prlrt {
 
 		this_type operator*(const this_type &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_COMPLEX]);
 			if (_v != 0 && max_value::value / _v < rhs._v)
 			{
 				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
@@ -213,6 +233,7 @@ namespace prlrt {
 
 		this_type operator/(const this_type &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_COMPLEX]);
 			if (rhs._v == 0)
 			{
 				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
@@ -222,6 +243,7 @@ namespace prlrt {
 
 		this_type operator%(const this_type &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_COMPLEX]);
 			if (rhs._v == 0)
 			{
 				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
@@ -235,25 +257,27 @@ namespace prlrt {
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(/ );
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(%);
 
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, == );
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, != );
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, <= );
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, >= );
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, < );
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, > );
+		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, ==, gas_costs[PRDOP_INT_OP_SIMPLE]);
+		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, !=, gas_costs[PRDOP_INT_OP_SIMPLE]);
+		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, <=, gas_costs[PRDOP_INT_OP_SIMPLE]);
+		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, >=, gas_costs[PRDOP_INT_OP_SIMPLE]);
+		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, <, gas_costs[PRDOP_INT_OP_SIMPLE]);
+		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, >, gas_costs[PRDOP_INT_OP_SIMPLE]);
 
-		WRAP_SIMPLE_BINARY_OPERATOR(this_type, &);
-		WRAP_SIMPLE_BINARY_OPERATOR(this_type, ^);
-		WRAP_SIMPLE_BINARY_OPERATOR(this_type, | );
+		WRAP_SIMPLE_BINARY_OPERATOR(this_type, &, gas_costs[PRDOP_INT_OP_SIMPLE]);
+		WRAP_SIMPLE_BINARY_OPERATOR(this_type, ^, gas_costs[PRDOP_INT_OP_SIMPLE]);
+		WRAP_SIMPLE_BINARY_OPERATOR(this_type, |, gas_costs[PRDOP_INT_OP_SIMPLE]);
 
 		this_type operator <<(const this_type &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE]);
 			if (rhs._v >= internal_type(sizeof(internal_type) * 8))
 				return this_type(internal_type(0));
 			return this_type(_v << rhs._v);
 		}
 		this_type operator >>(const this_type& rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE]);
 			if (rhs._v >= internal_type(sizeof(internal_type) * 8))
 				return this_type(internal_type(0));
 			return this_type(_v >> rhs._v);
@@ -261,6 +285,7 @@ namespace prlrt {
 		template<typename T_OtherIntType>
 		this_type operator<<(const T_OtherIntType& rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE]);
 			int64_t bitShift;
 			if(rhs.ToInt64(bitShift))
 			{
@@ -271,6 +296,7 @@ namespace prlrt {
 		template<typename T_OtherIntType>
 		this_type operator>>(const T_OtherIntType& rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE]);
 			int64_t bitShift;
 			if(rhs.ToInt64(bitShift))
 			{
@@ -308,23 +334,26 @@ namespace prlrt {
 			return ____int<T_OtherInternal>(T_OtherInternal(_v));
 		}
 
-		constexpr serialize_size_type get_serialize_size() const
+		serialize_size_type get_serialize_size() const
 		{
-			return sizeof(this_type);
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_SIZE]);
+			return fixed_size_in_bytes::value;
 		}
 
 		void serialize_out(uint8_t *buffer, bool for_debug) const
 		{
-			*(this_type*)buffer = *this;
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_OUT_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * fixed_size_in_bytes::value);
+			(*(this_type*)buffer)._v = _v;
 		}
 
 		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
-			if (bufferSize < serialize_size_type(sizeof(internal_type)))
+			if (bufferSize < fixed_size_in_bytes::value)
 				return false;
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_MAP_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * fixed_size_in_bytes::value);
 			_v = *(internal_type*)buffer;
-			buffer += serialize_size_type(sizeof(internal_type));
-			bufferSize -= serialize_size_type(sizeof(internal_type));
+			buffer += fixed_size_in_bytes::value;
+			bufferSize -= fixed_size_in_bytes::value;
 			return true;
 		}
 	};
@@ -350,16 +379,21 @@ namespace prlrt {
 		}
 
 		internal_type _v;
-		____int() { _v = 0; }
+		____int() 
+		{
+			 _v = 0; 
+		}
 		____int(internal_type x) { _v = x; }
 
 		void operator=(const this_type &rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_ASSIGN]);
 			_v = rhs._v;
 		}
 
 		void operator++()
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SELF]);
 			if (_v == max_value::value)
 			{
 				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
@@ -369,6 +403,7 @@ namespace prlrt {
 
 		void operator--()
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SELF]);
 			if (_v == min_value::value)
 			{
 				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
@@ -380,6 +415,7 @@ namespace prlrt {
 
 		this_type operator-() const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SELF]);
 			if (_v == min_value::value)
 			{
 				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
@@ -389,6 +425,7 @@ namespace prlrt {
 
 		this_type operator+(const this_type &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE]);
 			if ((_v > 0 && max_value::value - _v < rhs._v)
 				|| (_v < 0 && min_value::value - _v > rhs._v))
 			{
@@ -399,6 +436,7 @@ namespace prlrt {
 
 		this_type operator-(const this_type &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE]);
 			if ((rhs._v > 0 && _v < min_value::value + rhs._v)
 				|| (rhs._v < 0 && _v > max_value::value + rhs._v))
 			{
@@ -409,6 +447,7 @@ namespace prlrt {
 
 		this_type operator*(const this_type &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_COMPLEX]);
 			if (_v > 0)
 			{
 				if (rhs._v > 0)
@@ -448,6 +487,7 @@ namespace prlrt {
 
 		this_type operator/(const this_type &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_COMPLEX]);
 			if (rhs._v == 0)
 			{
 				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
@@ -461,6 +501,7 @@ namespace prlrt {
 
 		this_type operator%(const this_type &rhs) const
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_COMPLEX]);
 			if (rhs._v == 0)
 			{
 				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
@@ -478,12 +519,12 @@ namespace prlrt {
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(/ );
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(%);
 
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, == );
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, != );
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, <= );
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, >= );
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, < );
-		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, > );
+		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, ==, gas_costs[PRDOP_INT_OP_SIMPLE]);
+		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, !=, gas_costs[PRDOP_INT_OP_SIMPLE]);
+		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, <= , gas_costs[PRDOP_INT_OP_SIMPLE]);
+		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, >= , gas_costs[PRDOP_INT_OP_SIMPLE]);
+		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, <, gas_costs[PRDOP_INT_OP_SIMPLE]);
+		WRAP_SIMPLE_BINARY_OPERATOR(__prlt_bool, >, gas_costs[PRDOP_INT_OP_SIMPLE]);
 
 		template<typename T_OtherInternal>
 		explicit operator ____int<T_OtherInternal>() const
@@ -515,23 +556,26 @@ namespace prlrt {
 			return ____uint<T_OtherInternal>(T_OtherInternal(_v));
 		}
 
-		constexpr serialize_size_type get_serialize_size() const
+		serialize_size_type get_serialize_size() const
 		{
-			return sizeof(this_type);
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_SIZE]);
+			return fixed_size_in_bytes::value;
 		}
 
 		void serialize_out(uint8_t *buffer, bool for_debug) const
 		{
-			*(this_type*)buffer = *this;
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_OUT_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * fixed_size_in_bytes::value);
+			(*(this_type*)buffer)._v = _v;
 		}
 
 		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
-			if (bufferSize < serialize_size_type(sizeof(internal_type)))
+			if (bufferSize < fixed_size_in_bytes::value)
 				return false;
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_MAP_STATIC]);
 			_v = *(internal_type*)buffer;
-			buffer += serialize_size_type(sizeof(internal_type));
-			bufferSize -= serialize_size_type(sizeof(internal_type));
+			buffer += fixed_size_in_bytes::value;
+			bufferSize -= fixed_size_in_bytes::value;
 			return true;
 		}
 	};
@@ -667,6 +711,7 @@ namespace prlrt {
 		using type_identifier_type = simple_type_type_identifier<____get_type_identifier_enum_of_long_int_type<Size>()>;
 		constexpr static internal_type max_value = ____get_max_value_of_longint<Size>();
 		constexpr static internal_type min_value = ____get_min_value_of_longint<Size>();
+		constexpr static short gas_coefficient = Size / 64;
 		static constexpr uint32_t get_type_identifier_size()
 		{
 			return type_identifier_type::value.length();
@@ -678,10 +723,9 @@ namespace prlrt {
 		}
 
 		internal_type _fStruct;
-		____longint()
-		{
-		}
+		____longint() {}
 		____longint(const char* longint_literal){
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_ASSIGN] * gas_coefficient);
 			int starting_pos = *longint_literal == '-' ? 1 : 0;
 			if(strlen(longint_literal) >= starting_pos + 2 && longint_literal[starting_pos] == '0' && longint_literal[starting_pos + 1] == 'x')
 			{
@@ -696,27 +740,30 @@ namespace prlrt {
 		}
 		template<typename T_OtherInternal>
 		____longint(const ____int<T_OtherInternal>& x){
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_ASSIGN] * gas_coefficient);
 			impl_type::LongInt_fromInt(_fStruct, (int64_t)x._v);
 		}
 		template<typename T_OtherInternal>
 		____longint(const ____uint<T_OtherInternal>& x){
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_ASSIGN] * gas_coefficient);
 			impl_type::LongInt_fromUInt(_fStruct, (uint64_t)x._v);
 		}
 
 		template<short T_OtherSize>
 		____longint(const ____longint<T_OtherSize>& x){
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_ASSIGN] * gas_coefficient);
 			if constexpr(Size < T_OtherSize)
 			{
 				____longint<T_OtherSize> max;
 				memcpy(max._fStruct._Data, max_value._Data, std::min(sizeof(max_value._Data), sizeof(max._fStruct._Data)));
-				if(max < x)
+				if(max.lt(x))
 				{
 					preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 				}
 				____longint<T_OtherSize> min;
 				memset(min._fStruct._Data, 0xff, sizeof(min._fStruct._Data));
 				memcpy(min._fStruct._Data, min_value._Data, std::min(sizeof(min_value._Data), sizeof(min._fStruct._Data)));
-				if(min > x)
+				if(min.gt(x))
 				{
 					preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 				}
@@ -730,11 +777,12 @@ namespace prlrt {
 
 		template<short T_OtherSize>
 		____longint(const ____ulongint<T_OtherSize>& x){
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_ASSIGN] * gas_coefficient);
 			if constexpr(Size <= T_OtherSize)
 			{
 				____ulongint<T_OtherSize> max;
 				memcpy(max._fStruct._Data, max_value._Data, std::min(sizeof(max_value._Data), sizeof(max._fStruct._Data)));
-				if(max < x)
+				if(max.lt(x))
 				{
 					preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 				}
@@ -751,31 +799,38 @@ namespace prlrt {
 		}
 		void operator=(const this_type &rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_ASSIGN] * gas_coefficient);
 			_fStruct = rhs._fStruct;
 		}
 		void operator=(const internal_type &rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_ASSIGN] * gas_coefficient);
 			_fStruct = rhs;
 		}
 		void operator++(){
-			if (*this == this_type(max_value))
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SELF] * gas_coefficient);
+			if (isMaxValue())
 			{
 				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
-			this_type tmp((int8_t)1);
-			*this += tmp;
+			internal_type result;
+			impl_type::LongInt_add(_fStruct, this_type((int8_t)1)._fStruct, result);
+			_fStruct = result;
 		}
 		void operator--(){
-			if (*this == this_type(min_value))
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SELF] * gas_coefficient);
+			if (isMinValue())
 			{
 				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
-			this_type tmp((int8_t)1);
-			*this -= tmp;
+			internal_type result;
+			impl_type::LongInt_sub(_fStruct, this_type((int8_t)1)._fStruct, result);
+			_fStruct = result;
 		}
 		FORWARD_POST_INC_DEC_TO_PRE_INC_DEC
 		this_type operator-() const{
-			if (*this == this_type(min_value))
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SELF] * gas_coefficient);
+			if (isMinValue())
 			{
 				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
@@ -784,11 +839,12 @@ namespace prlrt {
 			return this_type(result);
 		}
 		this_type operator+(const this_type &rhs) const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
 			internal_type tmp_sub_result_1;
 			impl_type::LongInt_sub(max_value, _fStruct, tmp_sub_result_1);
 			internal_type tmp_sub_result_2;
 			impl_type::LongInt_sub(min_value, _fStruct, tmp_sub_result_2);
-			if ((!impl_type::LongInt_IsSign(_fStruct) && this_type(tmp_sub_result_1) < rhs) || (impl_type::LongInt_IsSign(_fStruct) && this_type(tmp_sub_result_2) > rhs))
+			if ((!impl_type::LongInt_IsSign(_fStruct) && this_type(tmp_sub_result_1).lt(rhs)) || (impl_type::LongInt_IsSign(_fStruct) && this_type(tmp_sub_result_2).gt(rhs)))
 			{
 				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
@@ -797,11 +853,12 @@ namespace prlrt {
 			return this_type(result);
 		}
 		this_type operator-(const this_type &rhs) const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
 			internal_type tmp_add_result_1;
 			impl_type::LongInt_add(min_value, rhs._fStruct, tmp_add_result_1);
 			internal_type tmp_add_result_2;
 			impl_type::LongInt_add(max_value, rhs._fStruct, tmp_add_result_2);
-			if ((!impl_type::LongInt_IsSign(rhs._fStruct) && *this < this_type(tmp_add_result_1)) || (impl_type::LongInt_IsSign(rhs._fStruct) && *this > this_type(tmp_add_result_2)))
+			if ((!impl_type::LongInt_IsSign(rhs._fStruct) && lt(this_type(tmp_add_result_1))) || (impl_type::LongInt_IsSign(rhs._fStruct) && gt(this_type(tmp_add_result_2))))
 			{
 				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 			}
@@ -810,6 +867,7 @@ namespace prlrt {
 			return this_type(result);
 		}
 		this_type operator*(const this_type &rhs) const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_COMPLEX] * gas_coefficient);
 			internal_type tmp_div_result_1;
 			impl_type::LongInt_div(max_value, rhs._fStruct, tmp_div_result_1);
 			internal_type tmp_div_result_2;
@@ -818,14 +876,14 @@ namespace prlrt {
 			{
 				if (!impl_type::LongInt_IsSign(rhs._fStruct))
 				{
-					if (this_type(tmp_div_result_1) < *this)
+					if (this_type(tmp_div_result_1).lt(*this))
 					{
 						preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 					}
 				}
 				else if (impl_type::LongInt_IsSign(rhs._fStruct))
 				{
-					if (this_type(tmp_div_result_2) < *this)
+					if (this_type(tmp_div_result_2).lt(*this))
 					{
 						preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 					}
@@ -835,14 +893,14 @@ namespace prlrt {
 			{
 				if (!impl_type::LongInt_IsSign(rhs._fStruct))
 				{
-					if (this_type(tmp_div_result_2) > *this)
+					if (this_type(tmp_div_result_2).gt(*this))
 					{
 						preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Underflow);
 					}
 				}
 				else if (impl_type::LongInt_IsSign(rhs._fStruct))
 				{
-					if (this_type(tmp_div_result_1) > *this)
+					if (this_type(tmp_div_result_1).gt(*this))
 					{
 						preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 					}
@@ -852,18 +910,25 @@ namespace prlrt {
 			impl_type::LongInt_mul(_fStruct, rhs._fStruct, result);
 			return this_type(result);
 		}
-		bool isZero() const{
-			return impl_type::LongInt_isZero(_fStruct);
-		}
-		bool isNegative() const{
-			return impl_type::LongInt_IsSign(_fStruct);
-		}
+
+		bool isZero() const{return impl_type::LongInt_isZero(_fStruct);}
+		bool isNegative() const{return impl_type::LongInt_IsSign(_fStruct);}
+		bool eq(const this_type& rhs) const {return 0 == impl_type::LongInt_compare(_fStruct, rhs._fStruct);}
+		bool notEq(const this_type& rhs) const {return !eq(rhs);}
+		bool lt(const this_type& rhs) const {return -1 == impl_type::LongInt_compare(_fStruct, rhs._fStruct);}
+		bool gt(const this_type& rhs) const {return 1 == impl_type::LongInt_compare(_fStruct, rhs._fStruct);}
+		bool slt(const this_type& rhs) const {return !gt(rhs);}
+		bool sgt(const this_type& rhs) const {return !lt(rhs);}
+		bool isMaxValue() const {return eq(this_type(max_value));}
+		bool isMinValue() const {return eq(this_type(min_value));}
+
 		this_type operator/(const this_type &rhs) const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_COMPLEX] * gas_coefficient);
 			if (rhs.isZero())
 			{
 				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 			}
-			if (impl_type::LongInt_IsSign(rhs._fStruct) && *this == this_type(min_value))
+			if (impl_type::LongInt_IsSign(rhs._fStruct) && isMinValue())
 			{
 				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
@@ -872,11 +937,12 @@ namespace prlrt {
 			return this_type(result);
 		}
 		this_type operator%(const this_type &rhs) const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_COMPLEX] * gas_coefficient);
 			if (rhs.isZero())
 			{
 				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 			}
-			if (impl_type::LongInt_IsSign(rhs._fStruct) && *this == this_type(min_value))
+			if (impl_type::LongInt_IsSign(rhs._fStruct) && isMinValue())
 			{
 				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
@@ -885,61 +951,33 @@ namespace prlrt {
 			return this_type(result);
 		}
 		__prlt_bool operator==(const this_type& rhs) const{
-			int result = impl_type::LongInt_compare(_fStruct, rhs._fStruct);
-			if(result == 0){
-				return __prlt_bool(true);
-			}
-			return __prlt_bool(false);
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
+			return __prlt_bool(eq(rhs));
 		}
 		__prlt_bool operator!=(const this_type& rhs) const{
-			int result = impl_type::LongInt_compare(_fStruct, rhs._fStruct);
-			if(result != 0){
-				return __prlt_bool(true);
-			}
-			return __prlt_bool(false);
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
+			return __prlt_bool(notEq(rhs));
 		}
 		__prlt_bool operator>=(const this_type& rhs) const{
-			int result = impl_type::LongInt_compare(_fStruct, rhs._fStruct);
-			if(result == 0 || result == 1){
-				return __prlt_bool(true);
-			}
-			return __prlt_bool(false);
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
+			return __prlt_bool(sgt(rhs));
 		}
 		__prlt_bool operator<=(const this_type& rhs) const{
-			int result = impl_type::LongInt_compare(_fStruct, rhs._fStruct);
-			if(result == 0 || result == -1){
-				return __prlt_bool(true);
-			}
-			return __prlt_bool(false);
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
+			return __prlt_bool(slt(rhs));
 		}
 		__prlt_bool operator<(const this_type& rhs) const{
-			int result = impl_type::LongInt_compare(_fStruct, rhs._fStruct);
-			if(result == -1){
-				return __prlt_bool(true);
-			}
-			return __prlt_bool(false);
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
+			return __prlt_bool(lt(rhs));
 		}
 		__prlt_bool operator>(const this_type& rhs) const{
-			int result = impl_type::LongInt_compare(_fStruct, rhs._fStruct);
-			if(result == 1){
-				return __prlt_bool(true);
-			}
-			return __prlt_bool(false);
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
+			return __prlt_bool(gt(rhs));
 		}
-		bool ToInt64(int64_t& result) const{
-			if(impl_type::LongInt_toInt64(_fStruct, result) > 0)
-			{
-				return false;
-			}
-			return true;
-		}
-		bool ToUInt64(uint64_t& result) const{
-			if(impl_type::LongInt_toUInt64(_fStruct, result) > 0)
-			{
-				return false;
-			}
-			return true;
-		}
+
+		bool ToInt64(int64_t& result) const{return impl_type::LongInt_toInt64(_fStruct, result) <= 0;}
+		bool ToUInt64(uint64_t& result) const{return impl_type::LongInt_toUInt64(_fStruct, result) <= 0;}
+
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(+);
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(-);
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(*);
@@ -980,28 +1018,32 @@ namespace prlrt {
 			impl_type::LongInt_ToString(_fStruct, &buf[0]);
 			return std::string(&buf[0], len);
 		}
-		constexpr serialize_size_type get_serialize_size() const
+		serialize_size_type get_serialize_size() const
 		{
-			return sizeof(this_type);
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_SIZE]);
+			return fixed_size_in_bytes::value;
 		}
 		void serialize_out(uint8_t *buffer, bool for_debug) const
 		{
-			*(this_type*)buffer = *this;
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_OUT_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * fixed_size_in_bytes::value);
+			(*(this_type*)buffer)._fStruct = _fStruct;
 		}
 		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
-			if (bufferSize < serialize_size_type(sizeof(internal_type)))
+			if (bufferSize < fixed_size_in_bytes::value)
 				return false;
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_MAP_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * fixed_size_in_bytes::value);
 			_fStruct = *(internal_type*)buffer;
-			buffer += serialize_size_type(sizeof(internal_type));
-			bufferSize -= serialize_size_type(sizeof(internal_type));
+			buffer += fixed_size_in_bytes::value;
+			bufferSize -= fixed_size_in_bytes::value;
 			return true;
 		}
 	};
 
-#define ULONGINT_BITWISE_OPERATOR(oper)\
+#define ULONGINT_BITWISE_OPERATOR(oper, gas)\
 this_type operator oper(const this_type &rhs) const\
 {\
+	burn_gas(gas);\
 	this_type result;\
 	for(int i = 0; i < sizeof(result._fStruct._Data)/sizeof(uint8_t); i++)\
 	{\
@@ -1021,6 +1063,7 @@ template<short Size>
 		using fixed_size_in_bytes = std::integral_constant<serialize_size_type, serialize_size_type(sizeof(internal_type))>;
 		using type_identifier_type = simple_type_type_identifier<____get_type_identifier_enum_of_long_uint_type<Size>()>;
 		constexpr static internal_type max_value = ____get_max_value_of_ulongint<Size>();
+		constexpr static short gas_coefficient = Size / 64;
 		static constexpr uint32_t get_type_identifier_size()
 		{
 			return type_identifier_type::value.length();
@@ -1068,7 +1111,7 @@ template<short Size>
 			{
 				____longint<T_OtherSize> max;
 				memcpy(max._fStruct._Data, max_value._Data, std::min(sizeof(max_value._Data), sizeof(max._fStruct._Data)));
-				if(max < x)
+				if(max.lt(x))
 				{
 					preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 				}
@@ -1082,7 +1125,7 @@ template<short Size>
 			{
 				____ulongint<T_OtherSize> max;
 				memcpy(max._fStruct._Data, max_value._Data, std::min(sizeof(max_value._Data), sizeof(max._fStruct._Data)));
-				if(max < x)
+				if(max.lt(x))
 				{
 					preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 				}
@@ -1099,29 +1142,42 @@ template<short Size>
 		}
 		void operator=(const this_type &rhs)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_ASSIGN] * gas_coefficient);
 			_fStruct = rhs._fStruct;
 		}
 		void operator++(){
-			if (*this == this_type(max_value))
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SELF] * gas_coefficient);
+			if (isMaxValue())
 			{
 				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
-			this_type tmp((uint8_t)1);
-			*this += tmp;
+			internal_type result;
+			impl_type::ULongInt_add(_fStruct, this_type((int8_t)1)._fStruct, result);
+			_fStruct = result;
 		}
 		void operator--(){
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SELF] * gas_coefficient);
 			if (isZero())
 			{
 				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
-			this_type tmp((uint8_t)1);
-			*this -= tmp;
+			internal_type result;
+			impl_type::ULongInt_sub(_fStruct, this_type((int8_t)1)._fStruct, result);
+			_fStruct = result;
 		}
 		FORWARD_POST_INC_DEC_TO_PRE_INC_DEC
+		this_type operator~() const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SELF] * gas_coefficient);
+			this_type result;
+			for(int i = 0; i < sizeof(result._fStruct._Data) / sizeof(uint8_t); i++)
+				result._fStruct._Data[i] = ~_fStruct._Data[i];
+			return result;
+		}
 		this_type operator+(const this_type &rhs) const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
 			internal_type tmp_sub_result;
 			impl_type::ULongInt_sub(max_value, _fStruct, tmp_sub_result);
-			if (this_type(tmp_sub_result) < rhs)
+			if (this_type(tmp_sub_result).lt(rhs))
 			{
 				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
@@ -1130,7 +1186,8 @@ template<short Size>
 			return this_type(result);
 		}
 		this_type operator-(const this_type &rhs) const{
-			if(*this < rhs)
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
+			if(lt(rhs))
 			{
 				preda_exception::throw_exception("underflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
@@ -1140,9 +1197,10 @@ template<short Size>
 			return out;
 		}
 		this_type operator*(const this_type &rhs) const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_COMPLEX] * gas_coefficient);
 			internal_type tmp_div_result_1;
 			impl_type::ULongInt_div(max_value, _fStruct, tmp_div_result_1);
-			if (this_type(tmp_div_result_1) < rhs)
+			if (this_type(tmp_div_result_1).lt(rhs))
 			{
 				preda_exception::throw_exception("overflow in " + std::string(__FUNCTION__), prlrt::ExceptionType::Overflow);
 			}
@@ -1151,10 +1209,17 @@ template<short Size>
 			this_type out(result);
 			return out;
 		}
-		bool isZero() const{
-			return impl_type::ULongInt_isZero(_fStruct);
-		}
+		bool isZero() const{return impl_type::ULongInt_isZero(_fStruct);}
+		bool eq(const this_type& rhs) const { return 0 == impl_type::ULongInt_compare(_fStruct, rhs._fStruct); }
+		bool notEq(const this_type& rhs) const { return !eq(rhs); }
+		bool lt(const this_type& rhs) const {return -1 == impl_type::ULongInt_compare(_fStruct, rhs._fStruct);}
+		bool gt(const this_type& rhs) const {return 1 == impl_type::ULongInt_compare(_fStruct, rhs._fStruct);}
+		bool slt(const this_type& rhs) const {return !gt(rhs);}
+		bool sgt(const this_type& rhs) const {return !lt(rhs);}
+		bool isMaxValue() const {return 0 == (impl_type::ULongInt_compare(_fStruct, this_type(max_value)._fStruct));}
+
 		this_type operator/(const this_type &rhs) const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_COMPLEX] * gas_coefficient);
 			if(rhs.isZero()){
 				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 			}
@@ -1163,6 +1228,7 @@ template<short Size>
 			return this_type(result);
 		}
 		this_type operator%(const this_type &rhs) const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_COMPLEX] * gas_coefficient);
 			if(rhs.isZero()){
 				preda_exception::throw_exception("divide by zero in " + std::string(__FUNCTION__), prlrt::ExceptionType::DividedByZero);
 			}
@@ -1171,49 +1237,38 @@ template<short Size>
 			return this_type(result);
 		}
 		__prlt_bool operator==(const this_type& rhs) const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
 			int result = impl_type::ULongInt_compare(_fStruct, rhs._fStruct);
-			if(result == 0){
-				return __prlt_bool(true);
-			}
-			return __prlt_bool(false);
+			return __prlt_bool(eq(rhs));
 		}
 		__prlt_bool operator!=(const this_type& rhs) const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
 			int result = impl_type::ULongInt_compare(_fStruct, rhs._fStruct);
-			if(result != 0){
-				return __prlt_bool(true);
-			}
-			return __prlt_bool(false);
+			return __prlt_bool(notEq(rhs));
 		}
 		__prlt_bool operator>=(const this_type& rhs) const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
 			int result = impl_type::ULongInt_compare(_fStruct, rhs._fStruct);
-			if(result == 0 || result == 1){
-				return __prlt_bool(true);
-			}
-			return __prlt_bool(false);
+			return __prlt_bool(sgt(rhs));
 		}
 		__prlt_bool operator<=(const this_type& rhs) const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
 			int result = impl_type::ULongInt_compare(_fStruct, rhs._fStruct);
-			if(result == 0 || result == -1){
-				return __prlt_bool(true);
-			}
-			return __prlt_bool(false);
+			return __prlt_bool(slt(rhs));
 		}
 		__prlt_bool operator<(const this_type& rhs) const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
 			int result = impl_type::ULongInt_compare(_fStruct, rhs._fStruct);
-			if(result == -1){
-				return __prlt_bool(true);
-			}
-			return __prlt_bool(false);
+			return __prlt_bool(lt(rhs));
 		}
 		__prlt_bool operator>(const this_type& rhs) const{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
 			int result = impl_type::ULongInt_compare(_fStruct, rhs._fStruct);
-			if(result == 1){
-				return __prlt_bool(true);
-			}
-			return __prlt_bool(false);
+			return __prlt_bool(gt(rhs));
 		}
 		this_type operator<<(const this_type& x)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
 			int64_t bitWidth;
 			if(!x.ToInt64(bitWidth) || bitWidth >= Size)
 			{
@@ -1225,6 +1280,7 @@ template<short Size>
 		}
 		this_type operator>>(const this_type& x)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
 			int64_t bitWidth;
 			if(!x.ToInt64(bitWidth) || bitWidth >= Size)
 			{
@@ -1237,6 +1293,7 @@ template<short Size>
 		template<typename T_OtherIntType>
 		this_type operator<<(const T_OtherIntType& x)
 		{
+			burn_gas((uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
 			int64_t bitWidth = x._v;
 			if(bitWidth >= Size)
 			{
@@ -1265,9 +1322,9 @@ template<short Size>
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(*);
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(/);
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(%);
-		ULONGINT_BITWISE_OPERATOR(&);
-		ULONGINT_BITWISE_OPERATOR(^);
-		ULONGINT_BITWISE_OPERATOR(|);
+		ULONGINT_BITWISE_OPERATOR(&, (uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
+		ULONGINT_BITWISE_OPERATOR(^, (uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
+		ULONGINT_BITWISE_OPERATOR(|, (uint64_t)gas_costs[PRDOP_INT_OP_SIMPLE] * gas_coefficient);
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(&);
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(^);
 		EXTEND_OPERATOR_TO_COMPOUND_ASSIGNMENT(|);
@@ -1301,21 +1358,24 @@ template<short Size>
 			std::string LongInt_str(&buf[0], len);
 			return LongInt_str;
 		}
-		constexpr serialize_size_type get_serialize_size() const
+		serialize_size_type get_serialize_size() const
 		{
-			return sizeof(this_type);
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_SIZE]);
+			return fixed_size_in_bytes::value;
 		}
 		void serialize_out(uint8_t *buffer, bool for_debug) const
 		{
-			*(this_type*)buffer = *this;
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_OUT_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * fixed_size_in_bytes::value);
+			(*(this_type*)buffer)._fStruct = _fStruct;
 		}
 		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
-			if (bufferSize < serialize_size_type(sizeof(internal_type)))
+			if (bufferSize < fixed_size_in_bytes::value)
 				return false;
+			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_MAP_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * fixed_size_in_bytes::value);
 			_fStruct = *(internal_type*)buffer;
-			buffer += serialize_size_type(sizeof(internal_type));
-			bufferSize -= serialize_size_type(sizeof(internal_type));
+			buffer += fixed_size_in_bytes::value;
+			bufferSize -= fixed_size_in_bytes::value;
 			return true;
 		}
 	};

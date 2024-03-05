@@ -34,6 +34,12 @@ interface StateVariable {
   scope: string;
 }
 
+interface Token {
+  Symbol: string
+  Supplies: string
+  Residuals: string
+}
+
 declare const BuildContext: {
   args: string;
   contract: string;

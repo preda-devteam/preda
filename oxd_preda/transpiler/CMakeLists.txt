@@ -66,10 +66,17 @@ elseif(UNIX AND NOT APPLE)
     PREFIX ""
     SUFFIX ".so"
   )
-  add_custom_command(TARGET transpiler POST_BUILD
-    COMMENT "Copy antlr4_shared library to libdirectory......"
-    COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a ${CMAKE_HOME_DIRECTORY}/dist/libantlr4-runtime.so* ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
-  )
+  if(CMAKE_CONFIGURATION_TYPES)
+    add_custom_command(TARGET transpiler POST_BUILD
+      COMMENT "Copy antlr4_shared library to libdirectory......"
+      COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a ${CMAKE_HOME_DIRECTORY}/dist/$<CONFIG>/libantlr4-runtime.so* ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
+    )
+  else()
+    add_custom_command(TARGET transpiler POST_BUILD
+      COMMENT "Copy antlr4_shared library to libdirectory......"
+      COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a ${CMAKE_HOME_DIRECTORY}/dist/libantlr4-runtime.so* ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
+    )
+  endif()
 elseif(APPLE)
   file(GLOB MAC_SOURCE_FILE ../../SFC/libs/mac/*.a)
   add_dependencies(transpiler antlr4_shared)
@@ -84,10 +91,17 @@ elseif(APPLE)
     SUFFIX ".dylib"
   )
   mac_link_rule(transpiler)
-  add_custom_command(TARGET transpiler POST_BUILD
-    COMMENT "Copy antlr4_shared library to libdirectory......"
-    COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a ${CMAKE_HOME_DIRECTORY}/dist/libantlr4-runtime.* ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
-  )
+  if(CMAKE_CONFIGURATION_TYPES)
+    add_custom_command(TARGET transpiler POST_BUILD
+      COMMENT "Copy antlr4_shared library to libdirectory......"
+      COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a ${CMAKE_HOME_DIRECTORY}/dist/$<CONFIG>/libantlr4-runtime.* ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
+    )
+  else()
+    add_custom_command(TARGET transpiler POST_BUILD
+      COMMENT "Copy antlr4_shared library to libdirectory......"
+      COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a ${CMAKE_HOME_DIRECTORY}/dist/libantlr4-runtime.* ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
+    )
+  endif()
 endif()
 
 target_include_directories(transpiler PRIVATE

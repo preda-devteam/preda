@@ -237,34 +237,34 @@ class _PublicKeyOp
 {
 protected:
 	rt::ObjectPlaceHolder<typename _details::ECC<CRYTOMETHOD>::PublicKey>	_PK;
-public:
-	bool SetPublicKey(const typename Keypair<CRYTOMETHOD>::PublicKey& pk)
-	{	try{
-			Botan::EC_Group group(_details::ECC<CRYTOMETHOD>::ECGroupName());
-			auto& curve = group.get_curve();
-
-			Botan::BigInt x, y;
-			Botan::BigIntAssign(x, pk);
-			
-			//y = Botan::decompress_point(true, x, curve.get_curve());
-			Botan::BigInt xpow3 = x * x * x;
-			const Botan::BigInt& p = curve.get_p();
-			
-			Botan::BigInt g = curve.get_a() * x;
-			g += xpow3;
-			g += curve.get_b();
-			g = g % p;
-			
-			y = Botan::ressol(g, p);
-			
-			if(y < 0)throw Botan::Illegal_Point("error during EC point decompression");
-			if(y.get_bit(0) != x.get_bit(0))y = p - y;
-
-			_PK.Reinit(group, Botan::PointGFp(curve, x, y));
-			return true;
-		}catch(...){}
-		return false;
-	}
+//public:
+//	bool SetPublicKey(const typename Keypair<CRYTOMETHOD>::PublicKey& pk)
+//	{	try{
+//			Botan::EC_Group group(_details::ECC<CRYTOMETHOD>::ECGroupName());
+//			auto& curve = group.get_curve();
+//
+//			Botan::BigInt x, y;
+//			Botan::BigIntAssign(x, pk);
+//			
+//			//y = Botan::decompress_point(true, x, curve.get_curve());
+//			Botan::BigInt xpow3 = x * x * x;
+//			const Botan::BigInt& p = curve.get_p();
+//			
+//			Botan::BigInt g = curve.get_a() * x;
+//			g += xpow3;
+//			g += curve.get_b();
+//			g = g % p;
+//			
+//			y = Botan::ressol(g, p);
+//			
+//			if(y < 0)throw Botan::Illegal_Point("error during EC point decompression");
+//			if(y.get_bit(0) != x.get_bit(0))y = p - y;
+//
+//			_PK.Reinit(group, Botan::PointGFp(curve, x, y));
+//			return true;
+//		}catch(...){}
+//		return false;
+//	}
 };
 
 } // namespace _details

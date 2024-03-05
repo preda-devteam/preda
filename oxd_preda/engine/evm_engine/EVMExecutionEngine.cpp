@@ -1016,6 +1016,7 @@ namespace preda_evm {
         ret.SubCodeHigh = 0;
         ret.SubCodeLow = 0;
         ret.GasBurnt = rvm::RVM_GAS_BURNT_DEFAULT;
+		ret.Residual = nullptr;
 
         ContractModuleID deployId = _details::RvmCDIDToEVMCDID(contract_deployment_id);
         const ContractDatabaseEntry* entry = m_pDB->FindContractEntry(deployId);
@@ -1114,6 +1115,7 @@ namespace preda_evm {
         ret.SubCodeLow = 0;
         ret.GasBurnt = rvm::RVM_GAS_BURNT_DEFAULT;
         ret.Code = rvm::InvokeErrorCode::Success;
+		ret.Residual = nullptr;
 
 
         evmc::address origin = host.get_tx_context().tx_origin;

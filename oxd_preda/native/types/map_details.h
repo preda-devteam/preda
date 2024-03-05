@@ -302,4 +302,4 @@ struct _MapMutableOp;
 	template<typename MAP_, typename KEY_, typename VAL_, bool is_pod_key, bool is_val_key>	\
 	friend struct _details::_MapMutableOp;													\
 	template<typename MAP_, typename KEY_, typename VAL_, typename prefix>					\
-	friend class _details::_MapJsonify;														\
+	friend class _details::_MapJsonify;														

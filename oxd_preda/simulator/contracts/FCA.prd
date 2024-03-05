@@ -1,0 +1,34 @@
+contract FCA {
+     @address function mint(string symbol, bigint amount) export {
+        token t = __mint(token.symbol_to_id(symbol), amount);
+        if (t.get_id() == 0u64) {
+            __debug.print("Mint failed, symbol:", symbol);
+            return;
+        } 
+        __debug.print("Mint success, symbol:", symbol, ", amount:", amount);
+        t.deposit();
+    }
+
+    @address function _deposit(token t) {
+        t.deposit();
+    }
+
+    @address function transfer(address to) export {
+        token t = __transaction.get_supplied_tokens()[0u];
+        relay@to (^t) {
+            __debug.print("transfer token success, token:", t.get_id(), ", amount:", t.get_amount());
+            t.deposit();
+        }
+    }
+
+    @address function burn() export {
+        token t = __transaction.get_supplied_tokens()[0u];
+        if (__burn(t)) {
+            __debug.print("burn success");
+        } else {
+            __debug.print("burn failed");
+            t.deposit();
+        }
+    }
+
+}

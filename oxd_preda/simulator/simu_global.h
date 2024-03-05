@@ -121,6 +121,7 @@ protected:
 	rvm::BuildNum						_GetContractEffectiveBuild(rvm::ContractId contract) const;
 	const rvm::DeployedContract*		_GetContractDeployed(rvm::ContractVersionId contract) const;
 	void								_FinalizeFunctionInfo(const rvm::ContractVersionId& cvid, const rt::String_Ref& func_prefix, const rvm::ContractModuleID& deploy_id, const rvm::Interface* info, const rvm::ConstData& stub);
+	rvm::TokenMinterFlag				_GetTokenMinterState(rvm::TokenId tid, rvm::ContractId contract) const;
 
 protected:
 	// From GlobalStates
@@ -132,6 +133,7 @@ protected:
 	virtual rvm::BuildNum				GetContractEffectiveBuild(rvm::ContractId contract) const override { return _GetContractEffectiveBuild(contract); }
 
 	virtual const rvm::DeployedContract*GetContractDeployed(rvm::ContractVersionId contract) const override { return _GetContractDeployed(contract); };
+	virtual rvm::TokenMinterFlag		GetTokenMinterState(rvm::TokenId tid, rvm::ContractId contract) const override { return _GetTokenMinterState(tid, contract); }
 
 	// From ExecutionContext
 	virtual void						CommitNewState(rvm::ContractInvokeId contract, uint8_t* state_memory) override;

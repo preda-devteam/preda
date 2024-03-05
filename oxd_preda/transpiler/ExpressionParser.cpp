@@ -570,10 +570,10 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 	{
 		if (subExpRes[0].bIsTypeName)
 		{
-			// type name expression has only 3 possibilities:
+			// type name expression has only 4 cases:
 			// 1. with "()", which evaluates to the constructor
 			// 2. with ".", and evaluates to a sub type
-			// 3. with ".", and evaluates to a static member, currently the only possibilities are:
+			// 3. with ".", and evaluates to a static member, currently the possibilities are:
 			//   a. an enumerator of an enumeration type
 			//   b. function of a contract, which will be routed to the base contract id of that contract type
 			// 4. with "deploy", which evaluates to contract deployment
@@ -617,7 +617,7 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 					itor->second.insert(m_pTranspilerCtx->functionCtx.GetFunctionSignature());
 				}
 
-				outResult.text = subExpRes[0].text + "(" + functionArgumentsSynthesizeResult + ")";
+				outResult.text = "(" + subExpRes[0].text + "(" + functionArgumentsSynthesizeResult + "))";
 				outResult.type = signature.returnType;
 
 				return true;
@@ -1019,6 +1019,7 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 			return false;
 		}
 
+		PredaParser::FunctionCallArgumentsContext* funcArgCtx = ctx->functionCallArguments();
 		std::string functionArgumentsSynthesizeResult;
 		int overloadFuncIndex;
 		if (subExpRes[0].type.baseConcreteType == m_pTranspilerCtx->m_builtInDebugPrintFunctionType)
@@ -1031,18 +1032,41 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 				return true;
 			}
 
-			if (!GenerateDebugPrintArguments(ctx->functionCallArguments(), functionArgumentsSynthesizeResult))
+			functionArgumentsSynthesizeResult = std::to_string((uint32_t)funcArgCtx->start->getLine());
+			std::string printArgs;
+			if (!GenerateDebugPrintArguments(funcArgCtx->expression(), printArgs))
 				return false;
+			functionArgumentsSynthesizeResult += printArgs;
+			overloadFuncIndex = 0;
+		}
+		else if (subExpRes[0].type.baseConcreteType == m_pTranspilerCtx->m_builtInDebugAssertFunctionType)
+		{
+			std::vector<PredaParser::ExpressionContext*> argExprCtxs(std::move(funcArgCtx->expression()));
+			ExpressionResult arg;
+			if (!ParseExpression(argExprCtxs[0], arg))
+				return false;
+			if (arg.type.baseConcreteType && arg.type.baseConcreteType != m_pTranspilerCtx->GetBuiltInBoolType())
+			{
+				m_pErrorPortal->SetAnchor(ctx->start);
+				m_pErrorPortal->AddTypeMismatchError(arg.type.baseConcreteType, m_pTranspilerCtx->GetBuiltInBoolType());
+				return false;
+			}
+			functionArgumentsSynthesizeResult = arg.text + ", " + std::to_string((uint32_t)funcArgCtx->start->getLine());
+			std::vector<PredaParser::ExpressionContext*> printArgCtxs(argExprCtxs.begin() + 1, argExprCtxs.end());
+			std::string printArgs;
+			if (!GenerateDebugPrintArguments(printArgCtxs, printArgs))
+				return false;
+			functionArgumentsSynthesizeResult += printArgs;
 			overloadFuncIndex = 0;
 		}
 		else
 		{
-			overloadFuncIndex = FindMatchingOverloadedFunction(subExpRes[0].type.baseConcreteType, ctx->functionCallArguments(), functionArgumentsSynthesizeResult);
+			overloadFuncIndex = FindMatchingOverloadedFunction(subExpRes[0].type.baseConcreteType, funcArgCtx, functionArgumentsSynthesizeResult);
 			if (overloadFuncIndex == -1)
 				return false;
 
 			if (subExpRes[0].type.baseConcreteType == m_pTranspilerCtx->m_builtInDebugAssertFunctionType)
-				functionArgumentsSynthesizeResult += ", " + std::to_string((uint32_t)ctx->functionCallArguments()->start->getLine());
+				functionArgumentsSynthesizeResult += ", " + std::to_string((uint32_t)funcArgCtx->start->getLine());
 		}
 
 		transpiler::FunctionSignature &signature = subExpRes[0].type.baseConcreteType->vOverloadedFunctions[overloadFuncIndex];
@@ -1087,11 +1111,18 @@ bool ExpressionParser::ParseExpression_Internal(PredaParser::ExpressionContext *
 	}
 	case transpiler::PredaExpressionTypes::Dot:
 	{
-		transpiler::DefinedIdentifierPtr pMember = subExpRes[0].type.baseConcreteType->GetMember(ctx->identifier()->getText(), nullptr);
+		bool bIsStatic = false;
+		transpiler::DefinedIdentifierPtr pMember = subExpRes[0].type.baseConcreteType->GetMember(ctx->identifier()->getText(), &bIsStatic);
 		if (pMember == nullptr)
 		{
 			m_pErrorPortal->SetAnchor(ctx->identifier()->start);
 			m_pErrorPortal->AddNotAMemberOfError(ctx->identifier()->getText(), subExpressions[0]->getText());
+			return false;
+		}
+		if (bIsStatic)
+		{
+			m_pErrorPortal->SetAnchor(ctx->identifier()->start);
+			m_pErrorPortal->AddMemberOnlyAccessibleViaTypeName(ctx->identifier()->getText(), subExpRes[0].type.baseConcreteType->inputName);
 			return false;
 		}
 
@@ -1227,11 +1258,8 @@ int ExpressionParser::FindMatchingOverloadedFunction(const ConcreteTypePtr &call
 	return -1;
 }
 
-bool ExpressionParser::GenerateDebugPrintArguments(PredaParser::FunctionCallArgumentsContext *ctx, std::string &outSynthesizedArgumentsString)
+bool ExpressionParser::GenerateDebugPrintArguments(const std::vector<PredaParser::ExpressionContext*>& argCtxs, std::string& outSynthesizedArgumentsString)
 {
-	std::vector<PredaParser::ExpressionContext *> argCtxs = ctx->expression();
-
-	outSynthesizedArgumentsString = std::to_string((uint32_t)ctx->start->getLine());
 	for (size_t i = 0; i < argCtxs.size(); i++)
 	{
 		ExpressionResult arg;

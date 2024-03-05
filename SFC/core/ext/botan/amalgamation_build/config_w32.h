@@ -13,15 +13,4 @@
 #undef max
 #endif
 
-/*
-
-#ifdef _WIN64
-#undef BOTAN_TARGET_ARCH_IS_X86_32
-#endif
-
-#define BOTAN_USE_STD_TR1
-
-#ifdef X942_DH_PARAMETERS
-#undef X942_DH_PARAMETERS
-#endif
-*/
+#pragma warning(disable:4250) // warning C4250: 'Botan::ECDSA_PrivateKey': inherits 'Botan::ECDSA_PublicKey::Botan::ECDSA_PublicKey::create_verification_op' via dominance

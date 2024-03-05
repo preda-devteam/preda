@@ -173,12 +173,14 @@ namespace _details
 
 #ifndef PLATFORM_DISABLE_LOG
 #define TYPETRAITS_UNITTEST_OUTPUT(x)	os::_details::_UnitTestOutputFilePrefix = x;
-#define TYPETRAITS_UNITTEST(x)			{	rt::String_Ref testcase = os::CommandLine::Get().GetOption("test");		rt::SS name(#x);		\
+#define TYPETRAITS_UNITTEST(x)			{	static const rt::SS test("test");																\
+											if(os::CommandLine::Get().HasOption(test)){														\
+											rt::String_Ref testcase = os::CommandLine::Get().GetOption("test");		rt::SS name(#x);		\
 											if(testcase.IsEmpty() || testcase == name || testcase.FindToken(name, ",+;")>=0)				\
 											{	os::SetLogFile(rt::String_Ref(os::_details::_UnitTestOutputFilePrefix) + #x ".log", false);	\
 												_LOG("=== UnitTest<"<<#x<<">: BEGIN ===");													\
 												rt::UnitTests::x(); _LOG("=== UnitTest<"<<#x<<">: END =====\n");							\
-												_CheckHeap; }}
+												_CheckHeap; }}}
 #define TYPETRAITS_UNITTEST_SECTION(name)	{	_LOG_HIGHLIGHT("\n\n**\n** " name "\n**\n"); }
 
 #else
