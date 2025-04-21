@@ -104,7 +104,7 @@ public:
 	Thread();
 	~Thread();
 
-	operator bool(){ return _hThread; }
+	operator bool() const { return _hThread; }
 	bool	WaitForEnding(UINT time_wait_ms = INFINITE, bool terminate_if_timeout = false);
 	DWORD	GetExitCode() const { return _ExitCode; }
 	bool	IsRunning() const;
@@ -166,35 +166,47 @@ public:
 	};
 };
 
-template<typename FUNC>
-inline uint32_t ParallelLoop(FUNC&& loop_body) // loop_body(int i) should return false to end the loop
+template<typename FUNC, typename T_INDEX>
+inline auto ParallelLoop(FUNC& loop_body, T_INDEX loop_index_begin, T_INDEX loop_index_end) // loop_body(int i) should return false to end the loop (return i<loop_index_max)
 {
-	struct Loop
+	typedef typename rt::TypeTraits<T_INDEX>::t_Signed	T_SI;
+	struct LoopRun
 	{
-		volatile int			LoopIndex = -1;
+		volatile T_SI			LoopIndex;
+		T_SI					LoopIndexEnd;
 		rt::Buffer<os::Thread>	Threads;
-		int						SubThreadCount = 0;
-		volatile int			SubThreadEnded = 0;
-		os::Event				AllSubThreadEnded;
 		FUNC&					LoopFunction;
-		static DWORD call(LPVOID x)
-		{	auto* t = (Loop*)x;
-			while(t->LoopFunction(os::AtomicIncrement(&t->LoopIndex)));
-			os::AtomicDecrement(&t->LoopIndex);
-			if(os::AtomicIncrement(&t->SubThreadEnded) == t->SubThreadCount)
-				t->AllSubThreadEnded.Set();
-			return 0;
+		void Loop()
+		{	for(;;)
+			{	T_SI i = os::AtomicIncrement(&LoopIndex);
+				if(i >= LoopIndexEnd)break;
+				if(!rt::CallLambda(true, LoopFunction, i))break;
+			}
 		}
-		Loop(FUNC&& loop_body):LoopFunction(loop_body)
+		static DWORD call(LPVOID x){ ((LoopRun*)x)->Loop(); return 0; }
+		LoopRun(FUNC& loop_body, T_SI loop_index_begin, T_SI loop_index_end):LoopFunction(loop_body)
 		{
-			Threads.SetSize(SubThreadCount = (os::GetNumberOfPhysicalProcessors()-1));
-			if(SubThreadCount){	AllSubThreadEnded.Reset(); for(auto& th : Threads)th.Create(call, this); }
-			while(LoopFunction(os::AtomicIncrement(&LoopIndex)));
-			if(SubThreadCount)AllSubThreadEnded.WaitSignal();
+			LoopIndex = loop_index_begin - 1;
+			LoopIndexEnd = loop_index_end;
+			VERIFY(Threads.SetSize(os::GetNumberOfPhysicalProcessors()-1));
+			for(auto& th : Threads)th.Create(call, this);
+			Loop();
+			for(auto& th : Threads)th.WaitForEnding();
+			LoopIndex -= (T_SI)(Threads.GetSize() + 1);
 		}
 	};
-	Loop _(loop_body);
+	LoopRun _(loop_body, loop_index_begin, loop_index_end);
 	return _.LoopIndex;
+}
+template<typename FUNC, typename T_INDEX>
+inline auto ParallelLoop(FUNC& loop_body, T_INDEX loop_index_begin = 0) // loop_body(int i) should return false to end the loop (return i<loop_index_max)
+{
+	return ParallelLoop(loop_body, loop_index_begin, rt::TypeTraits<typename rt::TypeTraits<T_INDEX>::t_Signed>::MaxVal());
+}
+template<typename FUNC>
+inline auto ParallelLoop(FUNC& loop_body) // loop_body(int i) should return false to end the loop (return i<loop_index_max)
+{
+	return ParallelLoop(loop_body, 0, rt::TypeTraits<int>::MaxVal());
 }
 
 /**

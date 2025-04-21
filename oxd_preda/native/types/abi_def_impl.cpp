@@ -93,7 +93,7 @@ void BlockchainRuntime_DebugPrint(rvm::DebugMessageType type, const rvm::ConstSt
 		log += sep + rt::SS("[") + timestamp + rt::SS("]") + addr + rt::SS(" [#") + ShardIndexString(ctx->GetShardIndex()) + rt::SS("] [h:") + ctx->GetBlockHeight() + ']';
 		if (ctx->GetInvokeType() == rvm::InvokeContextType::RelayInbound)
 		{
-			log += rt::SS(" <=") + initiatorAddr + rt::SS(" [#") + ShardIndexString(ctx->GetOriginatedShardIndex()) + rt::SS("] [h:") + ShardIndexString((uint32_t)ctx->GetOriginatedBlockHeight()) + ']';
+			log += rt::SS(" <=") + initiatorAddr + rt::SS(" [#") + ShardIndexString(ctx->GetOriginatedShardIndex()) + rt::SS("] [h:") + ctx->GetOriginatedBlockHeight() + ']';
 		}
 		log += ' ' + contract->GetName().Str();
 		if(line >= 0)

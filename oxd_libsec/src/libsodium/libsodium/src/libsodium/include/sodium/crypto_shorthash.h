@@ -7,7 +7,7 @@
 #include "export.h"
 
 #ifdef __cplusplus
-# if __GNUC__
+# ifdef __GNUC__
 #  pragma GCC diagnostic ignored "-Wlong-long"
 # endif
 extern "C" {
@@ -27,7 +27,12 @@ const char *crypto_shorthash_primitive(void);
 
 SODIUM_EXPORT
 int crypto_shorthash(unsigned char *out, const unsigned char *in,
-                     unsigned long long inlen, const unsigned char *k);
+                     unsigned long long inlen, const unsigned char *k)
+            __attribute__ ((nonnull(1, 4)));
+
+SODIUM_EXPORT
+void crypto_shorthash_keygen(unsigned char k[crypto_shorthash_KEYBYTES])
+            __attribute__ ((nonnull));
 
 #ifdef __cplusplus
 }

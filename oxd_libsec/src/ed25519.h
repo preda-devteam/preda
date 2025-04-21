@@ -2,7 +2,6 @@
 
 extern "C" 
 {
-#define SODIUM_STATIC
 #include "./libsodium/libsodium/src/libsodium/include/sodium.h"
 }
 

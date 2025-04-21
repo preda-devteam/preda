@@ -14,7 +14,7 @@
 
 struct PredaLogMessages;
 class CContractSymbolDatabaseForTranspiler;
-
+#define ENABLE_EVM
 
 // std::to_underlying is only available in c++ 23, a custom version to be used here
 template<class EnumRef>
@@ -57,8 +57,6 @@ private:
 	//rvm::DeployError CompileContract(const rvm::DAppName &DApp, const rvm::ContractName &name, const char *source_code, CContractSymbolDatabaseForTranspiler *symbol_db, bool transpile_only, std::string &out_intermediate_code, ContractDatabaseEntry &out_entry, rvm::StringStream *out_compile_messages);
 	
 	bool GetCppCompilerVersion(std::tuple<uint32_t, uint32_t, uint32_t> &outVersion);
-	template<typename T>
-	void mergeTwoImportList(std::vector<T>& all_import_list, std::vector<T>& incoming_import_list);
 
 	bool _Compile(IContractFullNameToModuleIdLookupTable *lookup, const rvm::ConstString* dapp_name, uint32_t contract_count, const rvm::ConstData* deploy_data_array, rvm::CompilationFlag flag, rvm::CompiledModules** compiled_output, rvm::LogMessageOutput* log_msg_output);
 
@@ -102,6 +100,8 @@ public:
 	virtual bool StateJsonify(rvm::ContractInvokeId contract, const rvm::ConstData* pState, rvm::StringStream* json_out) const override;
 	virtual bool StateJsonParse(rvm::ContractInvokeId contract, const rvm::ConstString* json, rvm::DataBuffer* state_out, rvm::LogMessageOutput *log) const override;
 
+	virtual bool ScatteredStateKeyJsonify(rvm::ContractInvokeId contract, const rvm::ConstData* key_data, rvm::StringStream* json_out) const override;
+
 	virtual bool ArgumentsJsonify(rvm::ContractInvokeId contract, rvm::OpCode opCode, const rvm::ConstData* args_serialized, rvm::StringStream* json_out) const override;
 	virtual bool ArgumentsJsonParse(rvm::ContractInvokeId contract, rvm::OpCode opCode, const rvm::ConstString* json, rvm::DataBuffer* args_out, rvm::LogMessageOutput *log) const override;
 
@@ -125,6 +125,8 @@ public:
 	bool Deploy(const rvm::GlobalStates* chain_state, rvm::CompiledModules* linked, const rvm::ContractVersionId* target_cvids, rvm::DataBuffer** out_stub, rvm::LogMessageOutput* log_msg_output);
 
 	bool VariableJsonify(rvm::ContractModuleID deployId, const char *type_string, const uint8_t *args_serialized, uint32_t args_size, std::string &outJson, const rvm::ChainStates* ps) const;
+	bool ScatteredStateValueJsonify(rvm::ContractInvokeId contract, const rvm::ConstData* value_data, rvm::StringStream* json_out) const;
+	bool GetScatteredVariableName(rvm::ContractInvokeId ciid, rvm::StringStream* ret) const;
 
 	virtual ~CContractDatabase() {}
 

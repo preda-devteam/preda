@@ -264,6 +264,8 @@ namespace transpiler {
 		uint32_t numUnnamedScopes = 0;																		// number of unnamed scopes under this type
 		uint64_t supportedOperatorMask = 0ll;																// bitmask for common operators. TODO: extend to support operator overloading based on the operand type
 		uint32_t nestingPropagatableFlags = 0;																// flags that should propagate to nesting types e.g. int32 -> array<int32> -> map<address, array<int32>>
+		uint16_t fixedSizeInBytes = 0;																		// available when the current type is size-fixed
+		uint16_t scatteredScopeKeySize = 0;																	// available when the current type is scattered type
 		std::string doxygenComment;						//doxygen tag and comments.
 		ConcreteType(TypeCategory inTypeCategory);
 

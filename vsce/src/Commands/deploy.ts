@@ -53,7 +53,7 @@ async function quickPick(
         "Skip the current smart contract deployment, because i have already deployed it, there is no need to deploy it again",
     },
   ];
-  // 显示快速选择框
+
   const selectedOption = await vscode.window.showQuickPick(options, {
     placeHolder,
   });

@@ -680,6 +680,7 @@ protected:
 
 public:
 	Process();
+	~Process();
 
 	bool		Launch(LPCSTR cmdline, LPCSTR pWorkDirectory = nullptr, LPVOID pEnvVariable = nullptr);
 	bool		WaitForEnding(DWORD timeout = INFINITE); ///< return false when timeout

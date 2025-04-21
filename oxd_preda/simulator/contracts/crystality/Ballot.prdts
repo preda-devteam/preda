@@ -1,0 +1,51 @@
+// set random seed, default value is timestamp
+random.reseed
+
+// allocate some address for the test
+allocate.address $~count$
+
+// set gas limit
+chain.gaslimit 256
+
+// deploy contract
+chain.deploy @1 Ballot.xtl
+
+// log
+log.highlight "Token test"
+log "Perparing test transactions"
+
+log.highlight "Ballot test: Step 1" 
+// call Ballot.init at address_0
+Ballot.init @0 { "names": ["Spring", "Yarn", "Combat"] } 
+
+// run the chain
+chain.run 
+// print chain info
+chain.info 
+ 
+log.highlight "Ballot test: Step 2 "
+// call Ballot.vote at all address
+txn2[] = Ballot.vote @all { "proposal_index": $random(0,2)$, "case_num": 1 } 
+// print chain info
+chain.info 
+chain.run
+chain.info 
+ 
+log.highlight "Ballot test: Step 3" 
+// call Ballot.finalize at address_0 to collect votes
+txn3 = Ballot.finalize @0 {} 
+ 
+chain.info
+log "Executing"
+
+// start stopwatch
+stopwatch.restart
+// run the chain to excute transactions
+chain.run
+// stop stopwatch to report performance
+stopwatch.report
+
+chain.info
+
+viz.shard #g Ballot
+viz.shard #all Ballot

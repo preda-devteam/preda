@@ -1,6 +1,6 @@
 # CMakeList.txt: preda_preoject
 #
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.16)
 
 # Enable Hot Reload for MSVC compilers if supported.
 if(POLICY CMP0135)
@@ -68,6 +68,7 @@ target_include_directories(preda_engine
   PRIVATE
   ../3rdParty/wasmtime/include
   ../3rdParty/evmc/include
+  ../3rdParty/
 )
 
 set_target_properties(preda_engine PROPERTIES

@@ -71,10 +71,10 @@ if(DOWNLOAD_3RDPARTY)
     # # download and install mingw64
     if(WIN32)
         message("CMAKE_HOST_SYSTEM_NAME: ${CMAKE_HOST_SYSTEM_NAME}, begin download mingw64 package")
-        set(URL "https://github.com/preda-devteam/preda/releases/download/mingw64/x86_64-8.1.0-release-win32-seh-rt_v6-rev0.7z")
-        set(SHA256 "73797B9A1D0B007DBDD6F010E6064DC0AA4DF835B042F6947F73A3BF9CC348C5")
-        file(DOWNLOAD ${URL} ${DOWNLOAD_DIR}/x86_64-8.1.0-release-win32-seh-rt_v6-rev0.7z SHOW_PROGRESS EXPECTED_HASH SHA256=${SHA256})
-        file(ARCHIVE_EXTRACT INPUT ${DOWNLOAD_DIR}/x86_64-8.1.0-release-win32-seh-rt_v6-rev0.7z DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/bin/)
+        set(URL "https://github.com/preda-devteam/preda/releases/download/mingw64/x86_64-13.2.0-release-win32-seh-ucrt-rt_v11-rev1.7z")
+        set(SHA256 "74ca64c55220edd3196681782fbff653c2b9cb4f427f9e532ab6e9a0823dc997")
+        file(DOWNLOAD ${URL} ${DOWNLOAD_DIR}/x86_64-13.2.0-release-win32-seh-ucrt-rt_v11-rev1.7z SHOW_PROGRESS EXPECTED_HASH SHA256=${SHA256})
+        file(ARCHIVE_EXTRACT INPUT ${DOWNLOAD_DIR}/x86_64-13.2.0-release-win32-seh-ucrt-rt_v11-rev1.7z DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/bin/)
     endif(WIN32)
 
     # # download emscripten
@@ -116,19 +116,22 @@ if(DOWNLOAD_3RDPARTY)
         set(URL "https://github.com/ethereum/solidity/releases/download/${SOLC_VERSION}/solc-windows.exe")
         set(SHA256 "3413D777E5A08E7240C5DC7E6A61AFBC5FB78949BA0AA81CA3C9E9AD31D03490")
         file(DOWNLOAD ${URL} ${DOWNLOAD_DIR}/solc/solc-windows.exe SHOW_PROGRESS EXPECTED_HASH SHA256=${SHA256})
-        file(INSTALL ${DOWNLOAD_DIR}/solc/solc-windows.exe DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/bin/solc FOLLOW_SYMLINK_CHAIN USE_SOURCE_PERMISSIONS)
+        file(INSTALL ${DOWNLOAD_DIR}/solc/solc-windows.exe DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/bin/solc
+				 FOLLOW_SYMLINK_CHAIN PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
     elseif(CMAKE_HOST_SYSTEM_NAME MATCHES "Linux")
         message("CMAKE_HOST_SYSTEM_NAME: ${CMAKE_HOST_SYSTEM_NAME}, begin download solc package")
         set(URL "https://github.com/ethereum/solidity/releases/download/${SOLC_VERSION}/solc-static-linux")
         set(SHA256 "95E6ED4949A63AD89AFB443ECBA1FB8302DD2860EE5E9BAACE3E674A0F48AA77")
         file(DOWNLOAD ${URL} ${DOWNLOAD_DIR}/solc-static-linux SHOW_PROGRESS EXPECTED_HASH SHA256=${SHA256})
-        file(INSTALL ${DOWNLOAD_DIR}/solc-static-linux DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/bin/solc USE_SOURCE_PERMISSIONS)
+        file(INSTALL ${DOWNLOAD_DIR}/solc-static-linux DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/bin/solc
+				 PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
     elseif(CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
         message("CMAKE_HOST_SYSTEM_NAME: ${CMAKE_HOST_SYSTEM_NAME}, begin download solc package")
         set(URL "https://github.com/ethereum/solidity/releases/download/${SOLC_VERSION}/solc-macos")
         set(SHA256 "8F15287C799AD2B33F241D1252226ABDA5D4BC3EF6BE40B946923178FC57D397")
         file(DOWNLOAD ${URL} ${DOWNLOAD_DIR}/solc-macos SHOW_PROGRESS EXPECTED_HASH SHA256=${SHA256})
-        file(INSTALL ${DOWNLOAD_DIR}/solc-macos DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/bin/solc FOLLOW_SYMLINK_CHAIN USE_SOURCE_PERMISSIONS)
+        file(INSTALL ${DOWNLOAD_DIR}/solc-macos DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/bin/solc FOLLOW_SYMLINK_CHAIN
+				 PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
     else()
         message("current OS platform unkonw,${CMAKE_HOST_SYSTEM_NAME} download solc latest failed.....")
     endif()
@@ -175,8 +178,8 @@ if(WIN32)
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(antlr4-runtime PRIVATE
-            $<$<CONFIG:Debug>:/ZI /JMC /W4 /sdl /MP /RTC1 /FC /Od /wd4251>
-            $<$<CONFIG:Release>:/Zi /W4 /sdl /Gy /MP /O2 /FC /Oi /GL /wd4251>
+            $<$<CONFIG:Debug>:/ZI /JMC /W4 /MP /RTC1 /FC /Od /wd4251>
+            $<$<CONFIG:Release>:/Zi /W4 /Gy /MP /O2 /FC /Oi /GL /wd4251>
         )
     endif()
 
@@ -186,12 +189,14 @@ if(WIN32)
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
         ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
     )
-    set_property(TARGET antlr4-runtime PROPERTY CXX_STANDARD 14)
+    set_property(TARGET antlr4-runtime PROPERTY CXX_STANDARD 17)
 elseif(UNIX OR APPLE)
     set(BUILD_SHARED_LIBS ON)
     set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
     set(CMAKE_MACOSX_RPATH TRUE)
     set(CMAKE_INSTALL_NAME_DIR "@rpath")
+	set(ANTLR_BUILD_CPP_TESTS OFF)
+	set(ANTLR_BUILD_STATIC OFF)
     add_subdirectory(./3rdParty/antlr4/runtime/Cpp)
 endif()
 
@@ -203,33 +208,3 @@ add_subdirectory(transpiler)
 
 # ############## build chain_simulator #################
 add_subdirectory(simulator)
-
-# add_custom_target(3rdParty
-# WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-# COMMENT "copy evmone and wasmtime library to bin/bin_<CONFIG> dir"
-# )
-######
-# if(WIN32)
-# add_custom_command(TARGET 3rdParty POST_BUILD
-# WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-# COMMAND ${CMAKE_COMMAND} -E copy 3rdParty/evmone/win/bin/evmone.dll ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
-# COMMAND ${CMAKE_COMMAND} -E copy 3rdParty/wasmtime/lib/wasmtime.dll ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
-# )
-# elseif(UNIX AND NOT APPLE)
-# add_custom_command(TARGET 3rdParty POST_BUILD
-# WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-# COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a 3rdParty/evmone/linux/lib/libevmone.* ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
-# COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a 3rdParty/wasmtime/lib/libwasmtime.so ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
-# )
-# elseif(APPLE)
-# add_custom_command(TARGET 3rdParty POST_BUILD
-# WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-# COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a 3rdParty/evmone/darwin/lib/libevmone.* ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
-# COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a 3rdParty/wasmtime/lib/libwasmtime.* ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
-# )
-# endif()
-
-# set_target_properties(3rdParty PROPERTIES
-# EXCLUDE_FROM_ALL true
-# EXCLUDE_FROM_DEFAULT_BUILD true
-# )

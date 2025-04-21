@@ -19,8 +19,8 @@ Sep 2023
       - [2.2.4 Other Built-in Value Types](#224-other-built-in-value-types)
     - [2.3 Reference Types](#23-reference-types)
       - [2.3.1 Built-in Generic Containers](#231-built-in-generic-containers)
-        - [2.3.1.1 Dynamic Array : array](#2311-dynamic-array--array)
-        - [2.3.1.2 Key-Value Map: map](#2312-key-value-map-map)
+        - [2.3.1.1 Dynamic Array : array and scattered_array](#2311-dynamic-array--array)
+        - [2.3.1.2 Key-Value Map: map and scattered_map](#2312-key-value-map-map)
       - [2.3.2 string](#232-string)
       - [2.3.3 token](#233-token)
       - [2.3.4 Structures](#234-structures)
@@ -232,9 +232,9 @@ arithmetic              | +, -, \*, /, %, +=, -=, \*=, /=, %=        |          
 negation                | -                                          |          |     |
 bitwise                 | ~, &, ^, \|, <<, >>, &=, ^=, \|=, <<=, >>= |          |     |
 
-##### 2.3.1.1 Dynamic Array : array
+##### 2.3.1.1 Dynamic Array : array and scattered_array
 
-An **array** is an array of dynamic size containing elements of the same type. It supports the bracket operator **"\[\]"**, the index type must be **uint32**. The corresponding value type is the first template parameter given at definition, e.g. **array\<int64\>**. **array** has the following built-in member functions that could be access through the dot operator **"."**:
+An **array** is an array of dynamic size containing elements of the same type. A **scattered_array** is a simulated array implemented by **scattered_map**. They both support the bracket operator **"\[\]"**, the index type must be **uint32**. The corresponding value type is the first template parameter given at definition, e.g. **array\<int64\>**, **scattered_array\<int64\>**. Both of the dynamic array have the following built-in member functions that could be access through the dot operator **"."**:
 
 | function | return type |       arguments      | is const |                  description                 |
 |:--------:|:-----------:|:--------------------:|:--------:|:--------------------------------------------:|
@@ -243,9 +243,9 @@ An **array** is an array of dynamic size containing elements of the same type. I
 |   push   |     None    | valueType newElement |    No    | append a new element to the end of the array |
 |    pop   |     None    |         None         |    No    |    remove the last element from the array    |
 
-##### 2.3.1.2 Key-Value Map: map
+##### 2.3.1.2 Key-Value Map: map and scattered_map
 
-A **map** is a mapping from keys to values. It supports the bracket operator **"\[\]"**. The key type and value type are the first and second template parameter given at definition, e.g. **map\<address, string\>**. **map** has the following built-in member functions that could be access through the dot operator **"."**:
+A **map** is a mapping from keys to values. It is stored as a block of data while scattered_map stores data in scattered blocks. They have different ways of obtaining and updating states. **map** reads all elements of the map from a data block before transaction and writes all elements to a new one after transaction. However, **scattered_map** reads the needed elements from the corresponding scattered block during transcation and updates the modified elements after transaction. Thus, it is suggested to use a **scattered_map" when the map size is large since cost of the updating operation of a **map** increases as the size increases. They both support the bracket operator **"\[\]"**. The key type and value type are the first and second template parameter given at definition, e.g. **map\<address, string\>, scattered_map\<address, string\>**. They have the following built-in member functions that could be access through the dot operator **"."**:
 
 | function | return type |     arguments    | is const |                  description                 |
 |:--------:|:-----------:|:----------------:|:--------:|:--------------------------------------------:|
@@ -923,7 +923,7 @@ contract B implements A.Addable, Printable {        // use "implements" to imple
     return total;
   }
   function Print() public const {                   // Print() for Printable
-    __debug.print(globalTotal);
+    __debug.print(total);
   }
   @address function Add(uint64 value) public {      // Add() for A.Addable
     relay@global (^value) {                         // global scope is read only in other scopes, must use relay to modify its state

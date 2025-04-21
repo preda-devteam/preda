@@ -1,0 +1,96 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.13;
+
+contract Ballot {
+    struct Proposal {
+        string name;
+        uint64 totalVotedWeight;
+    }
+
+    struct BallotResult {
+        string topVoted;
+        uint32 caseId;
+    }
+
+    address @global controller;
+	uint32 @global current_case;
+    Proposal[] @global proposals;
+    BallotResult @global last_result;
+
+    uint32 @global shardGatherRatio;
+
+    // shard scope
+    uint64[] @local votedWeights;
+
+    function shardGather_reset() @global internal { 
+        shardGatherRatio = 0; 
+    }
+
+    function shardGather_gather() @global internal returns (bool) {
+        shardGatherRatio += uint32(0x80000000) >> block.shardorder;
+        return shardGatherRatio == uint32(0x80000000);
+    }
+
+    function init(string[] memory names) @address public {
+        // require(controller == msg.sender);
+        // require(last_result.caseId >= current_case);
+        relay @global (^names){
+			for (uint32 i = 0; i < names.length; i++) {
+				Proposal memory proposal;
+				proposal.name = names[i];
+				proposal.totalVotedWeight = 0;
+				proposals.push(proposal);
+			}
+			current_case++;
+			last_result.caseId = 0;
+			last_result.topVoted = "";
+			relay @locals (){
+				 while(votedWeights.length < proposals.length){
+					votedWeights.push(0);
+				}
+			}
+		}
+    }
+
+    function vote(
+        uint32 proposal_index, 
+        uint32 case_num
+    ) @address public returns (bool) {
+        if (proposal_index < proposals.length) {
+            votedWeights[proposal_index] += 1;
+			return true;
+        }
+		return false;
+    }
+
+    function finalize() @address public {
+        // require(controller == msg.sender);
+        // require(last_result.caseId < current_case);
+        relay@global (){
+        	// ... maybe do something in each shard
+			shardGather_reset();
+			relay@locals (){
+				relay@global (var shardVotes = votedWeights){
+					//BEGIN: code for scattering
+					for (uint32 i = 0; i < shardVotes.length; i++) {
+						proposals[i].totalVotedWeight += uint64(shardVotes[i]);
+					}
+					//END
+
+					if (shardGather_gather()) {
+						//BEGIN: code for gathering
+						last_result.caseId = current_case;
+						uint64 w = 0;
+						for (uint32 i = 0; i < proposals.length; i++) {
+							if (proposals[i].totalVotedWeight > w) {
+								last_result.topVoted = proposals[i].name;
+								w = proposals[i].totalVotedWeight;
+							}
+						}
+						//END                     
+					}
+				}
+			}
+		}
+    }
+}

@@ -24,43 +24,51 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/types.h>
-
+#include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include <sys/types.h>
+
+#include "core.h"
 #include "crypto_auth_hmacsha256.h"
+#include "crypto_pwhash_scryptsalsa208sha256.h"
 #include "pbkdf2-sha256.h"
-#include "sysendian.h"
+#include "private/common.h"
 #include "utils.h"
 
 /**
- * PBKDF2_SHA256(passwd, passwdlen, salt, saltlen, c, buf, dkLen):
+ * escrypt_PBKDF2_SHA256(passwd, passwdlen, salt, saltlen, c, buf, dkLen):
  * Compute PBKDF2(passwd, salt, c, dkLen) using HMAC-SHA256 as the PRF, and
  * write the output to buf.  The value dkLen must be at most 32 * (2^32 - 1).
  */
 void
-PBKDF2_SHA256(const uint8_t * passwd, size_t passwdlen, const uint8_t * salt,
-              size_t saltlen, uint64_t c, uint8_t * buf, size_t dkLen)
+escrypt_PBKDF2_SHA256(const uint8_t *passwd, size_t passwdlen,
+                      const uint8_t *salt, size_t saltlen, uint64_t c,
+                      uint8_t *buf, size_t dkLen)
 {
     crypto_auth_hmacsha256_state PShctx, hctx;
-    size_t          i;
-    uint8_t         ivec[4];
-    uint8_t         U[32];
-    uint8_t         T[32];
-    uint64_t        j;
-    int             k;
-    size_t          clen;
+    size_t                       i;
+    uint8_t                      ivec[4];
+    uint8_t                      U[32];
+    uint8_t                      T[32];
+    uint64_t                     j;
+    int                          k;
+    size_t                       clen;
 
-    if (dkLen > 0x1fffffffe0UL) {
-        abort();
+#if SIZE_MAX > 0x1fffffffe0ULL
+    COMPILER_ASSERT(crypto_pwhash_scryptsalsa208sha256_BYTES_MAX
+                    <= 0x1fffffffe0ULL);
+    if (dkLen > 0x1fffffffe0ULL) {
+        sodium_misuse(); /* LCOV_EXCL_LINE */
     }
+#endif
     crypto_auth_hmacsha256_init(&PShctx, passwd, passwdlen);
     crypto_auth_hmacsha256_update(&PShctx, salt, saltlen);
 
     for (i = 0; i * 32 < dkLen; i++) {
-        be32enc(ivec, (uint32_t)(i + 1));
+        STORE32_BE(ivec, (uint32_t)(i + 1));
         memcpy(&hctx, &PShctx, sizeof(crypto_auth_hmacsha256_state));
         crypto_auth_hmacsha256_update(&hctx, ivec, 4);
         crypto_auth_hmacsha256_final(&hctx, U);

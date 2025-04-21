@@ -1,6 +1,6 @@
 # CMakeList.txt: preda_preoject
 #
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.16)
 
 # Enable Hot Reload for MSVC compilers if supported.
 if(POLICY CMP0135)
@@ -16,17 +16,22 @@ file(GLOB TRANSPILER_SOURCES
   ./*.cpp
   ./*.h
 )
-file(GLOB_RECURSE TRANSPILER_FILES
+file(GLOB TRANSPILER_FILES
   ./transpiler/*.cpp
   ./transpiler/*.h
 )
-file(GLOB_RECURSE ANTLR_GEN
+file(GLOB ANTLR_GEN
   ./antlr_generated/*.cpp
   ./antlr_generated/*.h
 )
+file(GLOB CRYSTILITY_ANTLR_GEN
+  ./antlr_generated/crystality/*.cpp
+  ./antlr_generated/crystality/*.h
+)
 source_group("transpiler" FILES ${TRANSPILER_FILES})
 source_group("antlr_generated" FILES ${ANTLR_GEN})
-add_library(transpiler SHARED ${TRANSPILER_SOURCES} ${TRANSPILER_FILES} ${ANTLR_GEN})
+source_group("antlr_generated/crystality" FILES ${CRYSTILITY_ANTLR_GEN})
+add_library(transpiler SHARED ${TRANSPILER_SOURCES} ${TRANSPILER_FILES} ${ANTLR_GEN} ${CRYSTILITY_ANTLR_GEN})
 
 # find_library(ANTLR4 antlr4-runtime ${CMAKE_SOURCE_DIR}/bin/bin_${CMAKE_BUILD_TYPE}/$<0:>)
 if(WIN32)
@@ -46,11 +51,11 @@ if(WIN32)
     set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "")
     set(CMAKE_SHARED_LINKER_FLAGS_DEBUG "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} /DEBUG:FULL /INCREMENTAL")
     set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE_INIT} /DEBUG:FULL /OPT:REF /OPT:ICF /LTCG:incremental")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /W3 /sdl /Gy /Gd /Oi /FC /permissive- /GL")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /W3 /sdl /MP /Gy /Gd /Oi /FC /permissive- /GL")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /ZI /JMC /sdl /MP /permissive- /FC")
   endif()
 
-  set_property(TARGET transpiler PROPERTY CXX_STANDARD 14)
+  set_property(TARGET transpiler PROPERTY CXX_STANDARD 17)
 elseif(UNIX AND NOT APPLE)
   add_dependencies(transpiler antlr4_shared)
   target_include_directories(transpiler PRIVATE
@@ -66,17 +71,11 @@ elseif(UNIX AND NOT APPLE)
     PREFIX ""
     SUFFIX ".so"
   )
-  if(CMAKE_CONFIGURATION_TYPES)
-    add_custom_command(TARGET transpiler POST_BUILD
-      COMMENT "Copy antlr4_shared library to libdirectory......"
-      COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a ${CMAKE_HOME_DIRECTORY}/dist/$<CONFIG>/libantlr4-runtime.so* ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
-    )
-  else()
-    add_custom_command(TARGET transpiler POST_BUILD
-      COMMENT "Copy antlr4_shared library to libdirectory......"
-      COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a ${CMAKE_HOME_DIRECTORY}/dist/libantlr4-runtime.so* ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
-    )
-  endif()
+  add_custom_command(TARGET transpiler POST_BUILD
+  	COMMENT "Copy antlr4_shared library to libdirectory......."
+  	COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:antlr4_shared> ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
+  	COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_LINKER_FILE:antlr4_shared> ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
+	)
 elseif(APPLE)
   file(GLOB MAC_SOURCE_FILE ../../SFC/libs/mac/*.a)
   add_dependencies(transpiler antlr4_shared)
@@ -90,18 +89,12 @@ elseif(APPLE)
     PREFIX ""
     SUFFIX ".dylib"
   )
+  add_custom_command(TARGET transpiler POST_BUILD
+	COMMENT "Copy antlr4_shared library to libdirectory......."
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:antlr4_shared> ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_LINKER_FILE:antlr4_shared> ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
+)
   mac_link_rule(transpiler)
-  if(CMAKE_CONFIGURATION_TYPES)
-    add_custom_command(TARGET transpiler POST_BUILD
-      COMMENT "Copy antlr4_shared library to libdirectory......"
-      COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a ${CMAKE_HOME_DIRECTORY}/dist/$<CONFIG>/libantlr4-runtime.* ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
-    )
-  else()
-    add_custom_command(TARGET transpiler POST_BUILD
-      COMMENT "Copy antlr4_shared library to libdirectory......"
-      COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a ${CMAKE_HOME_DIRECTORY}/dist/libantlr4-runtime.* ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/$<0:>
-    )
-  endif()
 endif()
 
 target_include_directories(transpiler PRIVATE

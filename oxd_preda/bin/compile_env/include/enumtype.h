@@ -84,7 +84,7 @@ namespace prlrt {
 			*(enum_base_type*)buffer = (enum_base_type)v;
 		}
 
-		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
+		bool map_from_serialized_data(const uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
 			if (bufferSize < fixed_size_in_bytes::value)
 				return false;

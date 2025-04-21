@@ -1,0 +1,50 @@
+random.reseed
+allocate.address 10000
+chain.gaslimit 256
+
+chain.deploy @1 AirDrop.xtl
+
+log.highlight "Airdrop test"
+
+AirDrop._deposit @0 { "amount": 1000000 }
+chain.run
+
+log "Perparing test transactions ($~count$)"
+AirDrop.transfer_n * $~count$ @0 { "recipients": [ \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }, \
+	{ "to": "$@random$", "amount": 100 }, { "to": "$@random$", "amount": 200 }, { "to": "$@random$", "amount": 150 }, { "to": "$@random$", "amount": 50 }  \
+]}
+
+chain.info
+log "Executing"
+
+stopwatch.restart
+chain.run
+stopwatch.report
+
+chain.info
+
+viz.addr @0 AirDrop

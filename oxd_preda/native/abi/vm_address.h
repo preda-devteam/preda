@@ -61,6 +61,9 @@ struct Address
 	uint32_t	_CheckSum;
 	uint32_t	e;
 	};
+	bool operator ==(const Address& y) {
+    	return (!memcmp(_, y._, RVM_HASH_SIZE) && _CheckSum == y._CheckSum);
+	}
 };
 typedef const Address ConstAddress;
 static_assert(sizeof(Address) == 36);

@@ -1,0 +1,1 @@
+java -jar antlr-4.12.0-complete.jar -Dlanguage=Cpp -listener -o ..\transpiler\antlr_generated\crystality Crystality.g4

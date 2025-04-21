@@ -1,5 +1,5 @@
 
-// Generated from Preda.g4 by ANTLR 4.9.3
+// Generated from Preda.g4 by ANTLR 4.12.0
 
 #pragma once
 
@@ -98,8 +98,14 @@ public:
   virtual void enterMapTypeName(PredaParser::MapTypeNameContext *ctx) = 0;
   virtual void exitMapTypeName(PredaParser::MapTypeNameContext *ctx) = 0;
 
+  virtual void enterScatteredMapTypeName(PredaParser::ScatteredMapTypeNameContext *ctx) = 0;
+  virtual void exitScatteredMapTypeName(PredaParser::ScatteredMapTypeNameContext *ctx) = 0;
+
   virtual void enterArrayTypeName(PredaParser::ArrayTypeNameContext *ctx) = 0;
   virtual void exitArrayTypeName(PredaParser::ArrayTypeNameContext *ctx) = 0;
+
+  virtual void enterScatteredArrayTypeName(PredaParser::ScatteredArrayTypeNameContext *ctx) = 0;
+  virtual void exitScatteredArrayTypeName(PredaParser::ScatteredArrayTypeNameContext *ctx) = 0;
 
   virtual void enterUserDefinedTypeName(PredaParser::UserDefinedTypeNameContext *ctx) = 0;
   virtual void exitUserDefinedTypeName(PredaParser::UserDefinedTypeNameContext *ctx) = 0;

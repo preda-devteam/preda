@@ -211,7 +211,7 @@ template<typename T> inline constexpr bool		CONTRACT_SCOPE_IS_ENUMERABLE(T x){ r
 enum class				TokenId		:uint64_t{};
 inline constexpr		TokenId		TokenIdMake(char x0, char x1, char x2, char x3 = 0){ return (TokenId)(x0|(x1<<8)|(x2<<16)|(x3<<24)); }
 static const constexpr	TokenId		TokenIdInvalid	= (TokenId)0;
-static const constexpr	TokenId		TokenIdCoreCoin = TokenIdMake('B', 'R', 'X');
+static const constexpr	TokenId		TokenIdCoreCoin = TokenIdMake('D', 'I', 'O');
 static const constexpr	TokenId		TokenIdNonFungibleBit = (TokenId)0x8000'0000'0000'0000ull;
 inline					TokenId		TokenIdFromSymbol(const rt::String_Ref& symbol)
 									{

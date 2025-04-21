@@ -58,6 +58,10 @@ namespace transpiler {
 		MoveOnly = 1 << 0,
 		HasBlob = 1 << 1,
 		HasAsset = 1 << 2,
+		CantBeContained = 1 << 3,							// as element type of array / map / scattered_array / scattered_map, or as member of struct
+		CantBePassedToRelay = 1 << 4,
+		GlobalAndShardOnly = 1 << 5,
+		IsScatteredType = 1 << 6,
 	};
 
 struct PredaTranspilerContext : public BaseTranspilerContext {
@@ -96,6 +100,8 @@ struct PredaTranspilerContext : public BaseTranspilerContext {
 	ConcreteTypePtr GetBuiltInTokenType() { return m_builtInTokenType; }
 	std::shared_ptr<TemplateType> GetBuiltInArrayType() { return m_builtInArrayType; }
 	std::shared_ptr<TemplateType> GetBuiltInMapType() { return m_builtInMapType; }
+	std::shared_ptr<TemplateType> GetBuiltInScatteredMapType() { return m_builtInScatteredMapType; }
+	std::shared_ptr<TemplateType> GetBuiltInScatteredArrayType() { return m_builtInScatteredArrayType; }
 
 	// For fast indexing, we just put in plain array
 	ConcreteTypePtr m_builtInUintType[7];
@@ -134,6 +140,8 @@ struct PredaTranspilerContext : public BaseTranspilerContext {
 
 	std::shared_ptr<TemplateType> m_builtInArrayType;
 	std::shared_ptr<TemplateType> m_builtInMapType;
+	std::shared_ptr<TemplateType> m_builtInScatteredMapType;
+	std::shared_ptr<TemplateType> m_builtInScatteredArrayType;
 
 	ConcreteTypePtr m_builtInDebugPrintFunctionType;
 	ConcreteTypePtr m_builtInDebugAssertFunctionType;

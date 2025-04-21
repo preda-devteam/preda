@@ -141,7 +141,7 @@ struct STRUCT_INTERNAL_NAME {
 		EXPAND_STRUCT_MEMBER_LIST
 	}
 
-	bool map_from_serialized_data(uint8_t *&buffer, prlrt::serialize_size_type &bufferSize, bool bDeep)
+	bool map_from_serialized_data(const uint8_t *&buffer, prlrt::serialize_size_type &bufferSize, bool bDeep)
 	{
 		if (!prlrt::util_rip_struct_serialized_header(num_members::value, buffer, bufferSize))
 			return false;

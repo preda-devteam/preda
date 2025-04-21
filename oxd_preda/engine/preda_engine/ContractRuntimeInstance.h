@@ -2,6 +2,9 @@
 
 #include <string>
 #include <iostream>
+#ifndef __APPLE__
+#include <memory_resource>
+#endif
 #include <wasmtime.hh> // wasmtime need string and iostream but did not include them
 
 #include "ContractData.h"
@@ -17,7 +20,7 @@ class ContractModuleLoaded {
 public:
 	virtual ~ContractModuleLoaded() = default;
 
-	virtual std::unique_ptr<ContractRuntimeInstance> NewInstance(CExecutionEngine&, rvm::ContractVersionId cvId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit) = 0;
+	virtual ContractRuntimeInstance* NewInstance(CExecutionEngine&, rvm::ContractVersionId cvId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit) = 0;
 };
 
 class ContractModule {
@@ -30,6 +33,10 @@ public:
 };
 
 class ContractRuntimeInstance {
+private:
+#ifndef __APPLE__
+	static thread_local std::pmr::unsynchronized_pool_resource tl_memory_pool;
+#endif
 public:
 	rvm::ContractModuleID mId;
 	
@@ -65,4 +72,13 @@ public:
 	virtual uint64_t GetRemainingGas() = 0;
 
 	virtual uint32_t SetRemainingGas(uint64_t remainingGas) = 0;
+
+	virtual uint32_t CommitJournaledStates(bool isGlobalContext) = 0;
+	
+#ifndef __APPLE__
+	static std::pmr::unsynchronized_pool_resource* GetThreadLocalMemoryPool()
+	{
+		return &tl_memory_pool;
+	}
+#endif
 };

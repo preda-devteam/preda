@@ -15,6 +15,7 @@ public:
 	typedef uint32_t (*FNInitGasTable)(uint16_t* gas_cost_tbl, uint8_t gas_tble_size);
 	typedef uint64_t(*FNGetRemainingGas)();
 	typedef uint32_t (*FNSetRemainingGas)(uint64_t remainingGas);
+	typedef uint32_t (*FNCommitJournaledStates)(void* pContractInstance, bool isGlobalContext);
 
 	FNCreateContractInstance fnCreateInstance;
 	FNDestroyContractInstance fnDestroyContractInstance;
@@ -26,16 +27,20 @@ public:
 	FNInitGasTable fnInitGasTable;
 	FNGetRemainingGas fnGetRemainingGas;
 	FNSetRemainingGas fnSetRemainingGas;
+	FNCommitJournaledStates fnCommitJournaledStates;
 
 	std::unique_ptr<ContractModuleLoaded> LoadToEngine(CExecutionEngine&) override;
 };
+#ifndef __APPLE__
+thread_local std::pmr::unsynchronized_pool_resource ContractRuntimeInstance::tl_memory_pool;
+#endif
 
 class ContractModuleDLLLoaded : public ContractModuleLoaded {
 private:
 	ContractModuleDLL& m_dll;
 public:
 	ContractModuleDLLLoaded(ContractModuleDLL& dll) : m_dll(dll) {}
-	std::unique_ptr<ContractRuntimeInstance> NewInstance(CExecutionEngine& engine, rvm::ContractVersionId contractId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit) override;
+	ContractRuntimeInstance* NewInstance(CExecutionEngine& engine, rvm::ContractVersionId contractId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit) override;
 };
 
 std::unique_ptr<ContractModuleLoaded> ContractModuleDLL::LoadToEngine(CExecutionEngine&) {
@@ -64,6 +69,7 @@ std::unique_ptr<ContractModule> ContractModule::FromLibrary(const ContractDataba
 	dllModule->fnInitGasTable = (ContractModuleDLL::FNInitGasTable)os::GetDynamicLibrarySymbol(mod, ("Contract_" + exportUniqueStr + "_InitGasTable").c_str());
 	dllModule->fnGetRemainingGas = (ContractModuleDLL::FNGetRemainingGas)os::GetDynamicLibrarySymbol(mod, ("Contract_" + exportUniqueStr + "_GetRemainingGas").c_str());
 	dllModule->fnSetRemainingGas = (ContractModuleDLL::FNSetRemainingGas)os::GetDynamicLibrarySymbol(mod, ("Contract_" + exportUniqueStr + "_SetRemainingGas").c_str());
+	dllModule->fnCommitJournaledStates = (ContractModuleDLL::FNCommitJournaledStates)os::GetDynamicLibrarySymbol(mod, ("Contract_" + exportUniqueStr + "_CommitJournaledStates").c_str());
 	if (dllModule->fnCreateInstance == nullptr
 		|| dllModule->fnDestroyContractInstance == nullptr
 		|| dllModule->fnMapContractContextToInstance == nullptr
@@ -73,7 +79,8 @@ std::unique_ptr<ContractModule> ContractModule::FromLibrary(const ContractDataba
 		|| dllModule->fnSerializeOutContractContext == nullptr
 		|| dllModule->fnInitGasTable == nullptr
 		|| dllModule->fnGetRemainingGas == nullptr
-		|| dllModule->fnSetRemainingGas == nullptr)
+		|| dllModule->fnSetRemainingGas == nullptr
+		|| dllModule->fnCommitJournaledStates == nullptr)
 		return nullptr;
 	return dllModule;
 }
@@ -86,7 +93,10 @@ public:
 
 	bool DestroyContractInstance() override {
 		m_mod.fnDestroyContractInstance(m_instance);
-		delete this;
+		this->~ContractRuntimeInstanceDLL();
+#ifndef __APPLE__
+		GetThreadLocalMemoryPool()->deallocate(this, sizeof(*this));
+#endif
 		return true;
 	}
 
@@ -128,17 +138,27 @@ public:
 	{
 		return m_mod.fnSetRemainingGas(remainingGas);
 	}
+
+	uint32_t CommitJournaledStates(bool isGlobalContext) override
+	{
+		return m_mod.fnCommitJournaledStates(m_instance, isGlobalContext);
+	}
 };
 
 
-std::unique_ptr<ContractRuntimeInstance> ContractModuleDLLLoaded::NewInstance(CExecutionEngine& engine, rvm::ContractVersionId contractId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit)
+ContractRuntimeInstance* ContractModuleDLLLoaded::NewInstance(CExecutionEngine& engine, rvm::ContractVersionId contractId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit)
 {
 	static_assert(sizeof(uint64_t) == sizeof(rvm::ContractVersionId), "rvm::ContractVersionId is no longer a 64-bit integer, need to change contract CreateInstance() argument type");
 	void* pInstance = m_dll.fnCreateInstance(&engine.runtimeInterface(), uint64_t(contractId), (const uint64_t*)importedContractIds, numImportedContracts, gas_limit);
 	if (!pInstance) {
 		return nullptr;
 	}
-	return std::make_unique<ContractRuntimeInstanceDLL>(m_dll, pInstance);
+#ifndef __APPLE__
+	ContractRuntimeInstanceDLL *ret = (ContractRuntimeInstanceDLL*)ContractRuntimeInstance::GetThreadLocalMemoryPool()->allocate(sizeof(ContractRuntimeInstanceDLL));
+	return new (ret) ContractRuntimeInstanceDLL(m_dll, pInstance);
+#else 
+	return new ContractRuntimeInstanceDLL(m_dll, pInstance);
+#endif
 }
 
 struct WASMEntryPoints {
@@ -156,6 +176,7 @@ struct WASMEntryPoints {
 	wasmtime::TypedFunc<std::tuple<WasmPtrT, uint32_t>, uint32_t> fnInitGasTable; 
 	wasmtime::TypedFunc<std::tuple<>, uint64_t> fnGetRemainingGas; 
 	wasmtime::TypedFunc<std::tuple<uint64_t>, uint32_t> fnSetRemainingGas; 
+	wasmtime::TypedFunc<std::tuple<WasmPtrT, uint32_t>, uint32_t> fnCommitJournaledStates; 
 
 	using FnInitTables = wasmtime::TypedFunc<std::monostate, std::monostate>;
 };
@@ -174,7 +195,7 @@ private:
 	WASMEntryPoints m_entry_points;
 public:
 	ContractModuleWASMLoaded(WASMEntryPoints entry_points) : m_entry_points(std::move(entry_points)) {}
-	std::unique_ptr<ContractRuntimeInstance> NewInstance(CExecutionEngine&, rvm::ContractVersionId contractId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit) override;
+	ContractRuntimeInstance* NewInstance(CExecutionEngine&, rvm::ContractVersionId contractId, const rvm::ContractVersionId* importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit) override;
 };
 
 class WASMMemory {
@@ -275,6 +296,7 @@ std::unique_ptr<ContractModuleLoaded> ContractModuleWASM::LoadToEngine(CExecutio
 	auto fnInitGasTable = TypedFuncExtract<decltype(WASMEntryPoints::fnInitGasTable)>::Get(ctx, instance, ("Contract_" + exportUniqueStr + "_InitGasTable"));
 	auto fnGetRemainingGas = TypedFuncExtract<decltype(WASMEntryPoints::fnGetRemainingGas)>::Get(ctx, instance, ("Contract_" + exportUniqueStr + "_GetRemainingGas"));
 	auto fnSetRemainingGas = TypedFuncExtract<decltype(WASMEntryPoints::fnSetRemainingGas)>::Get(ctx, instance, ("Contract_" + exportUniqueStr + "_SetRemainingGas"));
+	auto fnCommitJournaledStates = TypedFuncExtract<decltype(WASMEntryPoints::fnCommitJournaledStates)>::Get(ctx, instance, ("Contract_" + exportUniqueStr + "_CommitJournaledStates"));
 
 	if (
 		!fnCreateContract ||
@@ -287,7 +309,8 @@ std::unique_ptr<ContractModuleLoaded> ContractModuleWASM::LoadToEngine(CExecutio
 		!fnInitTables ||
 		!fnInitGasTable ||
 		!fnGetRemainingGas ||
-		!fnSetRemainingGas)
+		!fnSetRemainingGas ||
+		!fnCommitJournaledStates)
 		return nullptr;
 
 	{
@@ -308,7 +331,8 @@ std::unique_ptr<ContractModuleLoaded> ContractModuleWASM::LoadToEngine(CExecutio
 		fnSerializeOutContract.value(),
 		fnInitGasTable.value(),
 		fnGetRemainingGas.value(),
-		fnSetRemainingGas.value()
+		fnSetRemainingGas.value(),
+		fnCommitJournaledStates.value()
 	};
 
 	return std::make_unique<ContractModuleWASMLoaded>(std::move(pEntryPoints));
@@ -358,6 +382,7 @@ public:
 
 	uint32_t SetRemainingGas(uint64_t remainingGas) override;
 
+	uint32_t CommitJournaledStates(bool isGlobalContext) override;
 };
 
 ContractRuntimeInstanceWASM::ContractRuntimeInstanceWASM(
@@ -371,7 +396,10 @@ ContractRuntimeInstanceWASM::ContractRuntimeInstanceWASM(
 bool ContractRuntimeInstanceWASM::DestroyContractInstance()
 {
 	auto r = m_entry_points.fnDestroyContract.call(m_entry_points.store.context(), { m_wasm_contract });
-	delete this;
+	this->~ContractRuntimeInstanceWASM();
+#ifndef __APPLE__
+	GetThreadLocalMemoryPool()->deallocate(this, sizeof(*this));
+#endif
 	return bool(r);
 }
 
@@ -446,8 +474,10 @@ uint32_t ContractRuntimeInstanceWASM::ContractCall(uint32_t functionId, const vo
 
 uint32_t ContractRuntimeInstanceWASM::GetContractContextSerializeSize(prlrt::ContractContextType type)
 {
+	m_engine.runtimeInterface().PushExecStack();
 	auto r = m_entry_points.fnGetContractSerializeSize.call(m_entry_points.store.context(), { m_wasm_contract, (uint32_t)type });
-	if (!r) {
+	prlrt::ExceptionType exc = m_engine.runtimeInterface().PopExecStack();
+	if (exc != prlrt::ExceptionType::NoException || !r) {
 		return 0;
 	}
 	return r.unwrap();
@@ -512,7 +542,7 @@ inline T WasmPtrToPtr(wasmtime::Span<uint8_t> mem, WasmPtrT offset) {
 	return offset == 0 ? nullptr : (T)(mem.begin() + offset);
 }
 
-std::unique_ptr<ContractRuntimeInstance> ContractModuleWASMLoaded::NewInstance(CExecutionEngine& engine, rvm::ContractVersionId contractId, const rvm::ContractVersionId *importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit)
+ContractRuntimeInstance* ContractModuleWASMLoaded::NewInstance(CExecutionEngine& engine, rvm::ContractVersionId contractId, const rvm::ContractVersionId *importedContractIds, uint32_t numImportedContracts, uint64_t gas_limit)
 {
 	WASMRuntime *rt = engine.wasm_runtime();
 	if (!rt) {
@@ -538,8 +568,12 @@ std::unique_ptr<ContractRuntimeInstance> ContractModuleWASMLoaded::NewInstance(C
 	if (!contractInstance) {
 		return nullptr;
 	}
-
-	return std::make_unique<ContractRuntimeInstanceWASM>(engine, *rt, m_entry_points, contractInstance);
+#ifndef __APPLE__
+	ContractRuntimeInstanceWASM* ret = (ContractRuntimeInstanceWASM*)ContractRuntimeInstance::GetThreadLocalMemoryPool()->allocate(sizeof(ContractRuntimeInstanceWASM));
+	return new (ret) ContractRuntimeInstanceWASM(engine, *rt, m_entry_points, contractInstance);
+#else
+	return new ContractRuntimeInstanceWASM(engine, *rt, m_entry_points, contractInstance);
+#endif
 }
 
 uint32_t ContractRuntimeInstanceWASM::InitGasTable(uint16_t* gas_cost_tbl, uint8_t gas_tbl_size) 
@@ -577,4 +611,17 @@ uint32_t ContractRuntimeInstanceWASM::SetRemainingGas(uint64_t remainingGas)
 		return uint32_t(prlrt::ExecutionError::WASMTrapError);
 	}
 	return r.unwrap();
+}
+
+uint32_t ContractRuntimeInstanceWASM::CommitJournaledStates(bool isGlobalContext) 
+{
+	m_engine.runtimeInterface().PushExecStack();
+	auto r = m_entry_points.fnCommitJournaledStates.call(m_entry_points.store.context(), {m_wasm_contract, isGlobalContext});
+	prlrt::ExceptionType exc = m_engine.runtimeInterface().PopExecStack();
+
+	if (exc != prlrt::ExceptionType::NoException) {
+		return uint32_t(prlrt::ExecutionError::RuntimeException) | (uint32_t(exc) << 8);
+	}
+	if(!r) return 0;
+	return r.unwrap();	
 }

@@ -60,9 +60,9 @@ Source: ".\..\..\bundle\PREDA\examples\*"; DestDir: "{app}\examples"; Components
 Source: ".\..\..\bundle\PREDA\extensions\*"; DestDir: "{app}\extensions"; Components: FullInstall; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: ".\..\..\bundle\PREDA\scripts\*"; DestDir: "{app}\scripts"; Components: FullInstall; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: ".\..\..\bundle\PREDA\mingw64\*"; DestDir: "{app}\mingw64"; Components: FullInstall; Flags: ignoreversion recursesubdirs createallsubdirs
-
+Source: ".\..\..\bundle\PREDA\bin\wasmtime.dll"; DestDir: "{app}\bin"; Components: FullInstall; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: ".\..\..\bundle\PREDA\emscripten\*"; DestDir: "{app}\emscripten"; Components: Wasm; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: ".\..\..\bundle\PREDA\bin\wasmtime.dll"; DestDir: "{app}\bin"; Components: Wasm; Flags: ignoreversion recursesubdirs createallsubdirs
+
 
 [Icons]
 

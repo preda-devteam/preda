@@ -1,0 +1,1 @@
+java -jar antlr-4.12.0-complete.jar -Dlanguage=Cpp -listener -o ..\simulator\antlr_generated PredaScript.g4

@@ -1,0 +1,20 @@
+random.reseed
+allocate.address $~count$
+
+chain.deploy @1 ERC20.xtl 
+
+ERC20.mint @all {"amount": 10000000}
+chain.info
+chain.run
+chain.info
+
+ERC20.transfer * $~count$ @random { "recipient": "$@random$", "amount": $random(1000, 2000)*100$ }
+chain.info
+
+stopwatch.restart
+chain.run
+stopwatch.report
+chain.info
+
+viz.shard #g ERC20
+viz.addr @0 ERC20

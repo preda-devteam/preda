@@ -81,7 +81,7 @@ if(BUNDLE_OPS)
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_PATH}/PREDA/bin
       COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_PATH}/PREDA/examples
-      # COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_PATH}/PREDA/solc
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_PATH}/PREDA/solc
       COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_PATH}/PREDA/scripts
       COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_PATH}/PREDA/extensions
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/oxd_preda/bin/compile_env ${BUNDLE_PATH}/PREDA/compile_env
@@ -89,7 +89,7 @@ if(BUNDLE_OPS)
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/docs ${BUNDLE_PATH}/PREDA/docs
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/oxd_preda/bin/emscripten ${BUNDLE_PATH}/PREDA/emscripten
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/oxd_preda/bin/mingw64 ${BUNDLE_PATH}/PREDA/mingw64
-      # COMMAND ${CMAKE_COMMAND} -E copy ${SOLC} ${BUNDLE_PATH}/PREDA/solc
+      COMMAND ${CMAKE_COMMAND} -E copy ${SOLC} ${BUNDLE_PATH}/PREDA/solc
       COMMAND ${CMAKE_COMMAND} -E copy ${PS1} ${BUNDLE_PATH}/PREDA/scripts
       COMMAND ${CMAKE_COMMAND} -E copy ${LATEST_VSIX_FILE} ${BUNDLE_PATH}/PREDA/extensions/preda.vsix
       COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/preda_engine.dll ${BUNDLE_PATH}/PREDA/bin
@@ -118,12 +118,12 @@ if(BUNDLE_OPS)
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/oxd_preda/simulator/contracts ${BUNDLE_PATH}/preda-toolchain/opt/PREDA/examples
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/oxd_preda/bin/emscripten ${BUNDLE_PATH}/preda-toolchain/opt/PREDA/emscripten
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/docs ${BUNDLE_PATH}/preda-toolchain/opt/PREDA/docs
-      # COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/oxd_preda/bin/solc ${BUNDLE_PATH}/preda-toolchain/opt/PREDA/solc
+      COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/oxd_preda/bin/solc ${BUNDLE_PATH}/preda-toolchain/opt/PREDA/solc
       COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/* ${BUNDLE_PATH}/preda-toolchain/opt/PREDA/bin
       COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a ${CMAKE_CURRENT_SOURCE_DIR}/installer/linux/* ${BUNDLE_PATH}/preda-toolchain/opt/PREDA/scripts
       COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/installer/linux/postinstall_linux.sh ${BUNDLE_PATH}/preda-toolchain/DEBIAN/postinst
       COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/installer/linux/control_linux ${BUNDLE_PATH}/preda-toolchain/DEBIAN/control
-      COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_HOME_DIRECTORY}/dist/libantlr4-runtime.so.4.9.3 ${BUNDLE_PATH}/preda-toolchain/usr/lib
+      COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a ${CMAKE_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/libantlr4-runtime.* ${BUNDLE_PATH}/preda-toolchain/usr/lib
       COMMAND ${CMAKE_COMMAND} -E copy ${LATEST_VSIX_FILE} ${BUNDLE_PATH}/preda-toolchain/opt/PREDA/extensions/preda.vsix
     )
     add_custom_command(TARGET bundle_package POST_BUILD
@@ -139,14 +139,14 @@ if(BUNDLE_OPS)
       COMMENT "prepare bundle env, copying directory to bundle_path.............."
       COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_PATH}/PREDA/bin
       COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_PATH}/PREDA/examples
-      # COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_PATH}/PREDA/solc
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_PATH}/PREDA/solc
       COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_PATH}/PREDA/scripts
       COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_PATH}/PREDA/extensions
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/oxd_preda/bin/compile_env ${BUNDLE_PATH}/PREDA/compile_env
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/oxd_preda/simulator/contracts ${BUNDLE_PATH}/PREDA/examples
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/oxd_preda/bin/emscripten ${BUNDLE_PATH}/PREDA/emscripten
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/docs ${BUNDLE_PATH}/PREDA/docs
-      # COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/oxd_preda/bin/solc ${BUNDLE_PATH}/PREDA/solc
+      COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/oxd_preda/bin/solc ${BUNDLE_PATH}/PREDA/solc
       COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a ${CMAKE_CURRENT_SOURCE_DIR}/bin/bin_$<LOWER_CASE:$<CONFIG>>/* ${BUNDLE_PATH}/PREDA/bin
       COMMAND ${CMAKE_COMMAND} -E chdir ./ cp -a ${CMAKE_CURRENT_SOURCE_DIR}/installer/mac/* ${BUNDLE_PATH}/PREDA/scripts/
       COMMAND ${CMAKE_COMMAND} -E copy ${LATEST_VSIX_FILE} ${BUNDLE_PATH}/PREDA/extensions/preda.vsix

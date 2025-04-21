@@ -9,11 +9,11 @@ namespace transpiler{
 	/*
 		BuiltInArrayType : Built-in array template type
 	*/
-	BuiltInArrayType::BuiltInArrayType(PredaTranspilerContext *inTranspilerContext)
+	BuiltInArrayType::BuiltInArrayType(PredaTranspilerContext *inTranspilerContext, std::string arrayTypeName)
 	{
 		assert(inTranspilerContext != nullptr);
 		pTranspilerContext = inTranspilerContext;
-		inputName = "array";				// It doesn't matter much if it matches exactly the convention in input source code, as long as the corresponding parser references the same string.
+		inputName = arrayTypeName;				// It doesn't matter much if it matches exactly the convention in input source code, as long as the corresponding parser references the same string.
 		numExpectedTemplateParams = 1;		// only one template parameter
 	}
 
@@ -27,9 +27,9 @@ namespace transpiler{
 		ConcreteTypePtr pConcreteType = Allocator::New<ConcreteType>(ConcreteType::ReferenceType);
 		if (pConcreteType)
 		{
-			pConcreteType->inputName = "array<" + valueType->inputName + ">";
-			pConcreteType->outputFullName = typeOutputPrefix + "array<" + valueType->outputFullName + ">";
-			pConcreteType->exportName = "array " + valueType->exportName;
+			pConcreteType->inputName = inputName + "<" + valueType->inputName + ">";
+			pConcreteType->outputFullName = typeOutputPrefix + inputName + "<" + valueType->outputFullName + ">";
+			pConcreteType->exportName = inputName + " " + valueType->exportName;
 			pConcreteType->supportedOperatorMask = uint64_t(OperatorTypeBitMask::AssignmentBit) | uint64_t(OperatorTypeBitMask::BracketBit) | uint64_t(OperatorTypeBitMask::DotBit);
 			pConcreteType->boxBracketOperator.insert(std::make_pair(pTranspilerContext->GetBuiltInIntegerType(32, false), valueType));		// arrays support box bracket operator with uint as index type, and value type is the first template parameter type
 			pConcreteType->nestingPropagatableFlags |= valueType->nestingPropagatableFlags;
@@ -83,19 +83,19 @@ namespace transpiler{
 	}
 
 	// Unique instance of type definition
-	std::shared_ptr<BuiltInArrayType> BuiltInArrayType::CreateType(PredaTranspilerContext *inTranspilerContext)
+	std::shared_ptr<BuiltInArrayType> BuiltInArrayType::CreateType(PredaTranspilerContext *inTranspilerContext, std::string arrayTypeName)
 	{
-		return Allocator::New<BuiltInArrayType>(inTranspilerContext);
+		return Allocator::New<BuiltInArrayType>(inTranspilerContext, arrayTypeName);
 	}
 
 	/*
 		BuiltInMapType : Built-in map template type
 	*/
-	BuiltInMapType::BuiltInMapType(PredaTranspilerContext *inTranspilerContext)
+	BuiltInMapType::BuiltInMapType(PredaTranspilerContext *inTranspilerContext, std::string mapTypeName)
 	{
 		assert(inTranspilerContext != nullptr);
 		pTranspilerContext = inTranspilerContext;
-		inputName = "map";
+		inputName = mapTypeName;
 		numExpectedTemplateParams = 2;		// two template parameter (keyType and valueType)
 	}
 
@@ -110,9 +110,9 @@ namespace transpiler{
 		ConcreteTypePtr pConcreteType = Allocator::New<ConcreteType>(ConcreteType::ReferenceType);
 		if (pConcreteType)
 		{
-			pConcreteType->inputName = "map<" + templateParams[0]->inputName + ", " + templateParams[1]->inputName + ">";
-			pConcreteType->outputFullName = typeOutputPrefix + "map<" + templateParams[0]->outputFullName + ", " + templateParams[1]->outputFullName + ">";
-			pConcreteType->exportName = "map " + templateParams[0]->exportName + " " + templateParams[1]->exportName;
+			pConcreteType->inputName = inputName + "<" + templateParams[0]->inputName + ", " + templateParams[1]->inputName + ">";
+			pConcreteType->outputFullName = typeOutputPrefix + inputName + "<" + templateParams[0]->outputFullName + ", " + templateParams[1]->outputFullName + ">";
+			pConcreteType->exportName = inputName + " " + templateParams[0]->exportName + " " + templateParams[1]->exportName;
 			pConcreteType->supportedOperatorMask = uint64_t(OperatorTypeBitMask::AssignmentBit) | uint64_t(OperatorTypeBitMask::BracketBit) | uint64_t(OperatorTypeBitMask::DotBit);
 			pConcreteType->boxBracketOperator.insert(std::make_pair(templateParams[0], templateParams[1]));		// maps support box bracket operator with first template parameter as index type and second template parameter as value type
 			pConcreteType->nestingPropagatableFlags |= templateParams[1]->nestingPropagatableFlags;
@@ -147,8 +147,8 @@ namespace transpiler{
 	}
 
 	// Unique instance of type definition
-	std::shared_ptr<BuiltInMapType> BuiltInMapType::CreateType(PredaTranspilerContext *inTranspilerContext)
+	std::shared_ptr<BuiltInMapType> BuiltInMapType::CreateType(PredaTranspilerContext *inTranspilerContext, std::string mapTypeName)
 	{
-		return Allocator::New<BuiltInMapType>(inTranspilerContext);
+		return Allocator::New<BuiltInMapType>(inTranspilerContext, mapTypeName);
 	}
 }

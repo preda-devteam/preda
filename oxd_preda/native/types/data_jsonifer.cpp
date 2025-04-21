@@ -27,11 +27,11 @@ bool TypeStrStreamSeekForwardOneType(std::stringstream &typeStrStream, std::stri
 
 		return true;
 	}
-	else if(curType == "array")
+	else if(curType == "array" || curType == "scattered_array")
 	{
 		return TypeStrStreamSeekForwardOneType(typeStrStream);
 	}
-	else if(curType == "map")
+	else if(curType == "map" || curType == "scattered_map")
 	{
 		if(!TypeStrStreamSeekForwardOneType(typeStrStream))
 			return false;
@@ -47,6 +47,15 @@ bool TypeStrStreamSeekForwardOneType(std::stringstream &typeStrStream, std::stri
 		return true;
 	}
 
+	return true;
+}
+
+bool TypeStrStreamSeekForwardTwoTypes(std::stringstream &typeStrStream, std::string *pOutType = nullptr)
+{
+	if(!TypeStrStreamSeekForwardOneType(typeStrStream, pOutType))
+		return false;
+	if(!TypeStrStreamSeekForwardOneType(typeStrStream, pOutType))
+		return false;
 	return true;
 }
 
@@ -458,6 +467,51 @@ bool RvmDataJsonifier::_Jsonify(std::string &outJson, const uint8_t* &pData, uin
 			if(!TypeStrStreamSeekForwardOneType(m_typeStrStream))
 				return false;
 		}
+
+		return true;
+	}
+	// as for scattered map or scattered array, read 4 byte length from the data pointer
+	else if(curType == "scattered_array")
+	{
+		if(!pData)
+		{
+			outJson = "0";
+			if (!TypeStrStreamSeekForwardOneType(m_typeStrStream))
+				return false;
+			return true;
+		}
+
+		if(dataSize < 4)
+			return false;
+
+		//outJson = "[]";
+		outJson = std::to_string(*(uint32_t*)pData);
+		pData += sizeof(uint32_t);
+		dataSize -= sizeof(uint32_t);
+		if (!TypeStrStreamSeekForwardOneType(m_typeStrStream))
+			return false;
+
+		return true;
+	}
+	else if(curType == "scattered_map")
+	{
+		if(!pData)
+		{
+			outJson = "0";
+			if (!TypeStrStreamSeekForwardTwoTypes(m_typeStrStream))
+				return false;
+			return true;
+		}
+
+		if(dataSize < 4)
+			return false;
+
+		//outJson = "{}";
+		outJson = std::to_string(*(uint32_t*)pData);
+		pData += sizeof(uint32_t);
+		dataSize -= sizeof(uint32_t);
+		if (!TypeStrStreamSeekForwardTwoTypes(m_typeStrStream))
+			return false;
 
 		return true;
 	}
@@ -1205,6 +1259,40 @@ bool RvmDataJsonParser::JsonParse(const rt::String_Ref &jsonStr, std::vector<uin
 				return SetError(jsonStr.Begin(), JsonParseErrorCode::TypeStreamFormatError, "Internal error. Type stream has invalid format.");
 		}
 
+		return true;
+	}
+	else if(curType == "scattered_map")
+	{
+		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_NUMBER)
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting number.");
+
+		outBuffer.resize(4);
+		if(!IsIntegerLiteralInRange(jsonStr, 32, false))
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonConversionFailure, "Invalid literal for " + curType);
+
+		if(jsonStr.ToNumber<uint32_t>(*(uint32_t*)(&outBuffer[0])) == 0)
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonConversionFailure, "Cannot convert number to " + curType + ".");
+
+		if(!TypeStrStreamSeekForwardTwoTypes(m_typeStrStream))
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::TypeStreamFormatError, "Internal error. Type stream has invalid format.");
+
+		return true;
+	}
+	else if(curType == "scattered_array")
+	{
+		if(rt::JsonKeyValuePair::GetValueType(jsonStr) != rt::JSON_NUMBER)
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonDataTypeMismatch, "Data type mismatch. Expecting number.");
+
+		outBuffer.resize(4);
+		if(!IsIntegerLiteralInRange(jsonStr, 32, false))
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonConversionFailure, "Invalid literal for " + curType);
+
+		if(jsonStr.ToNumber<uint32_t>(*(uint32_t*)(&outBuffer[0])) == 0)
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::JsonConversionFailure, "Cannot convert number to " + curType + ".");
+
+		if(!TypeStrStreamSeekForwardOneType(m_typeStrStream))
+			return SetError(jsonStr.Begin(), JsonParseErrorCode::TypeStreamFormatError, "Internal error. Type stream has invalid format.");
+			
 		return true;
 	}
 	else if(curType == "hash")

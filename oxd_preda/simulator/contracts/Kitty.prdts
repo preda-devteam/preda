@@ -5,28 +5,29 @@ chain.gaslimit 256
 
 chain.deploy @1 Kitty.prd
 
-log.highlight Kitty breeding test
+log.highlight "Kitty breeding test"
 
-log init states
+log "init states"
 KittyBreeding.mint { genes: "$bigint.random(32)$", gender: true, owner: "$@all$" }
+chain.info 
 chain.run 
 
 KittyBreeding.mint { genes: "$bigint.random(32)$", gender: false, owner: "$@all$" }
 chain.run 
 chain.info 
 
-log.highlight generating test transactions
+log.highlight "generating test transactions"
 
 KittyBreeding.breed*$~count$ @random { m: $random(1, ~count-1)$, s: $random(~count+1, ~count*2-1)$, gender : false }
 chain.info 
 
-log.highlight executing
+log.highlight "executing"
 stopwatch.restart
 chain.run
 stopwatch.report
 chain.info 
 
-log.highlight collect new born
+log.highlight "collect new born"
 
 KittyBreeding.registerNewBorns #all {}
 chain.run

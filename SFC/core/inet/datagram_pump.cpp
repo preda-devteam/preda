@@ -303,6 +303,9 @@ namespace _details
 bool DatagramSocket::RecvBlock::PumpNext()
 {
 	ASSERT(Packet.RecvBuf == (LPBYTE)DataBuf);
+#ifdef PLATFORM_DEBUG_BUILD
+	rt::Zero(Packet.RecvBuf, Packet.RecvBufSize);
+#endif
 	WSABUF b = { (UINT)Packet.RecvBufSize, (LPSTR)Packet.RecvBuf };
 
 	Packet.PeerAddressSize = sizeof(InetAddrV6);

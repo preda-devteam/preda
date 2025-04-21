@@ -38,7 +38,7 @@ namespace prlrt {
 		}
 
 		BigintPtr _v = 0;
-		uint8_t *mapped_data = nullptr;
+		const uint8_t *mapped_data = nullptr;
 
 		inline uint32_t gas_coefficient() const
 		{
@@ -437,7 +437,7 @@ namespace prlrt {
 			PREDA_CALL(BigintEmbed, _v, buffer);
 		}
 
-		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
+		bool map_from_serialized_data(const uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
 			uint32_t consumed = PREDA_CALL(BigintInitFromEmbedded, _v, buffer, bufferSize);
 			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_MAP_STATIC] + (uint64_t)gas_costs[PRDOP_SERIALIZE_DYNAMIC] * consumed);

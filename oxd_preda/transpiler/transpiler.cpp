@@ -5,8 +5,8 @@
 #include <sstream>
 
 #include "antlr4-runtime.h"
-
 #include "PredaRealListener.h"
+#include "CrystalityRealListener.h"
 #include "transpiler.h"
 
 //static void f(transpiler::ConcreteTypePtr tmp, int level)
@@ -337,7 +337,26 @@ public:
 	{
 		return m_listener.m_stateVariableHasBlob[uint8_t(scope)];
 	}
-
+	virtual uint32_t GetNumScatteredStateVariable() const override
+	{
+		return (uint32_t)m_listener.m_scatteredStateVariables.size();
+	}
+	virtual const char* GetScatteredStateVariableTypeSignature(uint32_t scatteredStateIdx) const override
+	{
+		return m_listener.m_scatteredStateVariables[scatteredStateIdx].pIdentifier->qualifiedType.baseConcreteType->exportName.c_str();
+	}
+	virtual const char* GetScatteredStateVariableName(uint32_t scatteredStateIdx) const override
+	{
+		return m_listener.m_scatteredStateVariables[scatteredStateIdx].pIdentifier->inputName.c_str();
+	}
+	virtual uint16_t GetScatteredStateVariableScopeKeySize(uint32_t scatteredStateIdx) const override
+	{
+		return m_listener.m_scatteredStateVariables[scatteredStateIdx].pIdentifier->qualifiedType.baseConcreteType->scatteredScopeKeySize;
+	}
+	virtual uint8_t GetScatteredStateVariableSlotId(uint32_t scatteredStateIdx) const override
+	{
+		return m_listener.m_scatteredStateVariables[scatteredStateIdx].slotId;
+	}
 	virtual uint32_t GetNumEnumTypes() const override
 	{
 		return (uint32_t)m_listener.m_exportedEnums.size();
@@ -416,6 +435,98 @@ public:
 	}
 };
 
+class CrystalityTranspiler : public transpiler::ICrystalityTranspiler {
+private:
+	antlr4::ANTLRInputStream m_inputStream;
+	CrystalityLexer m_lexer;
+	antlr4::CommonTokenStream m_tokenStream;
+	CrystalityParser m_parser;
+	antlr4::tree::ParseTree *m_pParseTree;
+	CrystalityRealListener m_listener;
+public:
+	CrystalityTranspiler(const char* options):
+		m_lexer(&m_inputStream),
+		m_tokenStream(&m_lexer),
+		m_parser(&m_tokenStream),
+		m_pParseTree(nullptr)
+	{
+		m_lexer.removeErrorListeners();
+		m_lexer.addErrorListener(&m_listener);
+		m_parser.removeErrorListeners();
+		m_parser.addErrorListener(&m_listener);
+	};
+public:
+	// from ICrystalityTranspiler
+	virtual void Release()
+	{
+		delete this;
+	}
+	virtual bool BuildParseTree(const char *sourceCode)
+	{
+		m_inputStream.load(sourceCode);
+		m_pParseTree = m_parser.sourceUnit();
+		if (m_listener.GetErrorSize() > 0)
+		{
+			return false;
+		}
+		return true;
+	}
+	virtual bool Transpile()
+	{
+		if (m_pParseTree == nullptr)
+			return false;
+
+		PredaParseTreeWalker walker;
+
+		m_listener.SetWalker(&walker);
+
+		walker.walk(&m_listener, m_pParseTree);
+
+		if (m_listener.GetErrorSize() != 0)
+			return false;
+
+		return true;
+	}
+
+	virtual uint32_t GetNumStorageVariables() const
+	{
+		return m_listener.p_vizVariables.size();
+	}
+
+	virtual const char* GetStorageVariableType(uint32_t idx) const
+	{
+		return idx > m_listener.p_vizVariables.size() - 1 ? nullptr : m_listener.p_vizVariables[idx].type.c_str();
+	}
+
+	virtual const char* GetStorageVariableName(uint32_t idx) const
+	{
+		return idx > m_listener.p_vizVariables.size() - 1 ? nullptr : m_listener.p_vizVariables[idx].name.c_str();
+	}
+
+	virtual const char* GetStorageVariableScope(uint32_t idx) const
+	{
+		return idx > m_listener.p_vizVariables.size() - 1 ? nullptr : m_listener.p_vizVariables[idx].scope.c_str();
+	}
+
+	virtual const char* GetOutput() const 
+	{
+		return m_listener.GetStandardSolidityCode();
+	}
+
+	virtual uint32_t GetNumTranspileErrors() const
+	{
+		return 0;
+	}
+	virtual const char* GetTranspileErrorMsg(uint32_t errorIdx) const
+	{
+		return nullptr;
+	}
+	virtual void GetTranspileErrorPos(uint32_t errorIdx, uint32_t &line, uint32_t &pos) const
+	{
+		return;
+	}
+};
+
 extern "C"{
 #if	defined(__linux__) || defined(__linux) || defined(__APPLE__)
 	__attribute__((visibility("default"))) transpiler::ITranspiler* CreateTranspilerInstance(const char *options)
@@ -424,5 +535,14 @@ extern "C"{
 #endif
 	{
 		return new CTranspiler(options);
+	}
+
+#if	defined(__linux__) || defined(__linux) || defined(__APPLE__)
+	__attribute__((visibility("default"))) transpiler::ICrystalityTranspiler* CreateCrystalityTranspilerInstance(const char *options)
+#elif defined(_WIN32)
+	__declspec(dllexport) transpiler::ICrystalityTranspiler* CreateCrystalityTranspilerInstance(const char *options)
+#endif
+	{
+		return new CrystalityTranspiler(options);
 	}
 }

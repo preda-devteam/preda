@@ -307,7 +307,7 @@ public:
 	void Attach(SOCKET hSocket);
 	Socket();
 	Socket(SOCKET s);
-	~Socket(){ Close(); }
+	virtual ~Socket(){ Close(); }
 	
 	operator		SOCKET() const { return _hSocket; }
 	bool			IsEmpty() const { return _hSocket == INVALID_SOCKET; }
@@ -539,6 +539,8 @@ enum _tagHttpStatus
 	HTTP_PROXY_AUTH				= 407,
 	HTTP_TIMEOUT				= 408,
 	HTTP_CONFLICT				= 409,
+	HTTP_LENGTH_REQUIRED		= 411,
+	HTTP_RANGE_NOT_SATISFIABLE	= 416,
 
 	HTTP_INTERNAL_ERROR			= 500,
 	HTTP_NOT_IMPLEMENTED		= 501,

@@ -6,13 +6,21 @@
 
 namespace prlrt {
 
+#if !defined(__wasm32__) && !defined(__APPLE__)
+	void relay_serialize_args(std::vector<uint8_t, std::pmr::polymorphic_allocator<uint8_t>> &outBuffer)
+#else
 	void relay_serialize_args(std::vector<uint8_t> &outBuffer)
+#endif
 	{
 		return;
 	}
 
 	template<typename TFirstArg, typename ...Args>
+#if !defined(__wasm32__) && !defined(__APPLE__)
+	void relay_serialize_args(std::vector<uint8_t, std::pmr::polymorphic_allocator<uint8_t>> &outBuffer, TFirstArg &&first_arg, Args &&...args)
+#else
 	void relay_serialize_args(std::vector<uint8_t> &outBuffer, TFirstArg &&first_arg, Args &&...args)
+#endif
 	{
 		serialize_size_type s = first_arg.get_serialize_size();
 		outBuffer.resize(outBuffer.size() + s);
@@ -22,7 +30,11 @@ namespace prlrt {
 	}
 
 	template<typename ...Args>
+#if !defined(__wasm32__) && !defined(__APPLE__)
+	void relay_serialize_args(std::vector<uint8_t, std::pmr::polymorphic_allocator<uint8_t>>& outBuffer, bool first_arg, Args &&...args)
+#else
 	void relay_serialize_args(std::vector<uint8_t>& outBuffer, bool first_arg, Args &&...args)
+#endif
 	{
 		serialize_size_type s = 1;
 		outBuffer.resize(outBuffer.size() + 1);
@@ -47,7 +59,11 @@ namespace prlrt {
 	void relay(const TScope &scope_key, uint32_t scope_type, uint32_t opCode, Args&& ...args)
 	{
 		burn_gas((uint64_t)gas_costs[PRDOP_RELAY]);
+#if !defined(__wasm32__) && !defined(__APPLE__)
+		std::vector<uint8_t, std::pmr::polymorphic_allocator<uint8_t>> args_serialized((std::pmr::polymorphic_allocator<uint8_t>)(&g_memory_pool));
+#else
 		std::vector<uint8_t> args_serialized;
+#endif
 		g_inRelaySerialization = true;
 		relay_serialize_args(args_serialized, args...);
 		g_inRelaySerialization = false;
@@ -61,7 +77,11 @@ namespace prlrt {
 	{
 		uint32_t shardNum = (1 << PREDA_CALL(Block_GetShardOrder));
 		burn_gas((uint64_t)gas_costs[PRDOP_RELAY] * shardNum);
+#if !defined(__wasm32__) && !defined(__APPLE__)
+		std::vector<uint8_t, std::pmr::polymorphic_allocator<uint8_t>> args_serialized((std::pmr::polymorphic_allocator<uint8_t>)(&g_memory_pool));
+#else
 		std::vector<uint8_t> args_serialized;
+#endif
 		g_inRelaySerialization = true;
 		relay_serialize_args(args_serialized, args...);
 		g_inRelaySerialization = false;
@@ -74,7 +94,11 @@ namespace prlrt {
 	void relay_global(uint32_t opCode, Args&& ...args)
 	{
 		burn_gas((uint64_t)gas_costs[PRDOP_GLOBAL_RELAY]);
+#if !defined(__wasm32__) && !defined(__APPLE__)
+		std::vector<uint8_t, std::pmr::polymorphic_allocator<uint8_t>> args_serialized((std::pmr::polymorphic_allocator<uint8_t>)(&g_memory_pool));
+#else
 		std::vector<uint8_t> args_serialized;
+#endif
 		g_inRelaySerialization = true;
 		relay_serialize_args(args_serialized, args...);
 		g_inRelaySerialization = false;
@@ -87,7 +111,11 @@ namespace prlrt {
 	void relay_next(uint32_t opCode, Args&& ...args)
 	{
 		burn_gas((uint64_t)gas_costs[PRDOP_RELAY]);
+#if !defined(__wasm32__) && !defined(__APPLE__)
+		std::vector<uint8_t, std::pmr::polymorphic_allocator<uint8_t>> args_serialized((std::pmr::polymorphic_allocator<uint8_t>)(&g_memory_pool));
+#else
 		std::vector<uint8_t> args_serialized;
+#endif
 		g_inRelaySerialization = true;
 		relay_serialize_args(args_serialized, args...);
 		g_inRelaySerialization = false;

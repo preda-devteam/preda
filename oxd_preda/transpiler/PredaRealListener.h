@@ -109,6 +109,13 @@ public:
 	bool m_stateVariableHasAsset[uint32_t(transpiler::ScopeType::Num)];
 	std::vector<std::string> m_stateVariableDoxygenComment[uint32_t(transpiler::ScopeType::Num)];
 
+	struct ScatteredTypeDefinition
+	{
+		uint8_t slotId;
+		transpiler::DefinedIdentifierPtr pIdentifier;
+	};
+	std::vector<ScatteredTypeDefinition> m_scatteredStateVariables;
+
 	struct ContractEnum
 	{
 		std::string doxygenComment;
@@ -221,6 +228,7 @@ private:
 	size_t ExportFunction(transpiler::FunctionRef functionRef);
 	void PropagateFunctionFlagAcrossCallingGraph();
 	void TraverseAllFunctions();
+	void DefineScatteredStateVariable(transpiler::DefinedIdentifierPtr pIdentifier, PredaParser::StateVariableDeclarationContext *ctx);
 
 public:
 	// interface inherited from PredaListener

@@ -41,6 +41,7 @@
 #include "../os/thread_primitive.h"
 #include "string_type_ops.h"
 #include <algorithm>
+#include <utility>
 
 namespace rt
 {
@@ -56,7 +57,7 @@ namespace _details
 		template<typename... ARGS>
 		static void ctor(t_Val*p, t_Val*end, ARGS && ... args){ for(;p<end;p++) new (p) t_Val(args...); }
 		template<typename T>
-		static void ctor(t_Val*p, const T& x){ new (p) t_Val(x); }
+		static void ctor(t_Val* p, T&& x) { new (p) t_Val(std::forward<T>(x)); }
 		template<typename T>
 		static void ctor(t_Val*p, t_Val*end, const T*from){ for(;p<end;p++) new (p) t_Val(*from++); }
 		template<typename T>
@@ -680,13 +681,13 @@ public: // operations
 				return x;
 			}
 	template<typename T>
-	t_Val&	push_back(const T& x)
+	t_Val&	push_back(T&& x)
 			{	VERIFY(_SC::_expand_entries());
 				t_Val& ret = _SC::_ptr()[_SC::_len-1];
-				_SC::_xt::ctor(&ret, x);
+				_SC::_xt::ctor(&ret, std::forward<T>(x));
 				return ret;
 			}
-	t_Val&	push_back(const t_Val& x){ return push_back<t_Val>(x); }
+	t_Val&	push_back(t_Val&& x) { return push_back<t_Val>(std::forward<t_Val>(x)); }
 	template<typename ... ARGS>
 	t_Val&	push_back_with(ARGS && ... ctor_args)
 			{	VERIFY(_SC::_expand_entries());

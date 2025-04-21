@@ -163,6 +163,83 @@ void SecureAddress::ToString(rt::String& append) const
 	}
 }
 
+bool SecuritySuite::IsPossibleAddressDialectString(const rt::String_Ref& s, bool allow_substitute) const
+{
+	auto ss = Id();
+	switch(ss)
+	{
+	case oxd::SEC_SUITE_ETHEREUM:
+		{	
+			if(s.GetLength() > 0)
+			{
+				if(s[0] != '0')return false;
+			}
+
+			if(s.GetLength() > 1)
+			{
+				if(s[0] == 'x'){}
+				else if(s[0] == 'X')
+				{
+					if(!allow_substitute)return false;
+				}
+			}
+
+			for(uint32_t i=2; i<s.GetLength(); i++)
+			{
+				auto c = s[i];
+				if((c>='0' && c<='9') || (c>='a' && c<='f'))continue;
+				if(allow_substitute && c>='A' && c<='F')continue;
+				return false;
+			}
+		}
+		break;
+	case oxd::SEC_SUITE_BITCOIN_P2PKH:
+		{
+			for(uint32_t i=2; i<s.GetLength(); i++)
+			{
+				auto c = s[i];
+				if(c>='0' && c<='9')continue;
+				if(c>='a' && c<='z')
+				{
+					if(c == 'l')return false;
+					continue;
+				}
+				if(c>='A' && c<='F')
+				{
+					if(c == 'I' || c == 'O')return false;
+					continue;
+				}
+				return false;
+			}
+		}
+		break;
+	case oxd::SEC_SUITE_ED25519:
+		{
+			for(uint32_t i=0; i<s.GetLength(); i++)
+			{
+				auto c = s[i];
+				if(c>='0' && c<='9')continue;
+				if(c>='a' && c<='z')
+				{
+					if(!allow_substitute && (c == 'l' || c == 'i' || c == 'o' || c == 'u'))return false;
+					continue;
+				}
+				if(c>='A' && c<='F')
+				{
+					if(!allow_substitute)return false;
+					continue;
+				}
+				return false;
+			}
+		}
+		break;
+	default:
+		return false;
+	}
+
+	return true;
+}
+
 void SecureAddress::ToDialectString(rt::String& append) const
 {
 	auto ss = GetSecuritySuiteId();

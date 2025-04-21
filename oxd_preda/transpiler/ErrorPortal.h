@@ -132,4 +132,9 @@ public:
 	void AddInternalError(antlr4::Token *token, const std::string &msg);
 
 	void AddCompileWarning(uint32_t line, uint32_t pos, const std::string &msg);
+
+	void AddScatteredMapDefinedinStructError();
+	void AddScatteredTypesScopeError();
+	void AddScatteredTypesAsRelayParamsError();
+	void AddExceedScatteredTypesNumberLimitError();
 };

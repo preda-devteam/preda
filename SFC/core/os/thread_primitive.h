@@ -272,7 +272,7 @@ public:
 		else
 		{	while(!bSet)
 			{	if(hEvent.wait_for(lock, std::chrono::milliseconds(Timeout)) == std::cv_status::timeout)
-					return true;
+					return false;
 				if(bIsPulsed){ bIsPulsed = false; return true; }				
 			}	
 		}

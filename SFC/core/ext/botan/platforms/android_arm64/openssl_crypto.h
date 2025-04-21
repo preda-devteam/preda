@@ -200,7 +200,7 @@ public:
         for(UINT i=0; i<Len; i++, p++, c++)
         {    IV ^= *p;
             Encrypt(&IV, c, DataBlockSize);
-            c->CopyTo(IV);
+            c->CopyTo(IV.GetBytes());
         }
     }
     void            DecryptBlockChained(LPCVOID pCrypt, LPVOID pPlain, UINT Len, UINT nonce)
@@ -272,7 +272,7 @@ public:
         for(UINT i=0; i<Len; i++, p++, c++)
         {    IV ^= *p;
             Encrypt(&IV, c, DataBlockSize);
-            c->CopyTo(IV);
+            c->CopyTo(IV.GetBytes());
         }
     }
     void            DecryptBlockChained(LPCVOID pCrypt, LPVOID pPlain, UINT Len, UINT nonce)

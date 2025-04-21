@@ -127,8 +127,8 @@ INLFUNC Cipher(){int len=0; ASSERT(ippStsNoErr == IPPCALL(ippsAESGetSize)(&len))
 INLFUNC void SetKey(LPCVOID key, UINT len){BYTE hash[NativeKeySize];if(len != NativeKeySize){ComputeKey(hash, key, len);key = hash;}IPPCALL(ippsAESInit)((LPCBYTE)key, NativeKeySize,(IppsAESSpec*)_Context , _details::_cipher_spec<_METHOD>::ContextSize);if(len != NativeKeySize){rt::Zero(hash);}}\
 		INLFUNC void Encrypt(LPCVOID pPlain, LPVOID pCrypt, UINT Len){ASSERT((Len%DataBlockSize) == 0);IPPCALL(ippsAESEncryptECB)((LPCBYTE)pPlain,(LPBYTE)pCrypt,(int)Len,(IppsAESSpec*)_Context);}\
 		INLFUNC void Decrypt(LPCVOID pCrypt, LPVOID pPlain, UINT Len){ASSERT((Len%DataBlockSize) == 0); IPPCALL(ippsAESDecryptECB)((LPCBYTE)pCrypt,(LPBYTE)pPlain,(int)Len,(IppsAESSpec*)_Context);}\
-		INLFUNC void EncryptBlockChained(LPCVOID pPlain, LPVOID pCrypt, UINT Len, UINT nonce){_details::CipherInitVec<DataBlockSize> IV(nonce);ASSERT((Len%DataBlockSize) == 0); IPPCALL(ippsAESEncryptCBC)((LPCBYTE)pPlain,(LPBYTE)pCrypt,(int)Len,(IppsAESSpec*)_Context,IV);}\
-		INLFUNC void DecryptBlockChained(LPCVOID pCrypt, LPVOID pPlain, UINT Len, UINT nonce){_details::CipherInitVec<DataBlockSize> IV(nonce);ASSERT((Len%DataBlockSize) == 0);IPPCALL(ippsAESDecryptCBC)((LPCBYTE)pCrypt,(LPBYTE)pPlain,(int)Len,(IppsAESSpec*)_Context,IV);}\
+		INLFUNC void EncryptBlockChained(LPCVOID pPlain, LPVOID pCrypt, UINT Len, UINT nonce){_details::CipherInitVec<DataBlockSize> IV(nonce);ASSERT((Len%DataBlockSize) == 0); IPPCALL(ippsAESEncryptCBC)((LPCBYTE)pPlain,(LPBYTE)pCrypt,(int)Len,(IppsAESSpec*)_Context,(const Ipp8u *)IV);}\
+		INLFUNC void DecryptBlockChained(LPCVOID pCrypt, LPVOID pPlain, UINT Len, UINT nonce){_details::CipherInitVec<DataBlockSize> IV(nonce);ASSERT((Len%DataBlockSize) == 0);IPPCALL(ippsAESDecryptCBC)((LPCBYTE)pCrypt,(LPBYTE)pPlain,(int)Len,(IppsAESSpec*)_Context,(const Ipp8u *)IV);}\
 };\
 
 DEF_AES_CIPHER(CIPHER_AES128)
@@ -271,7 +271,7 @@ public:
                         for(UINT i=0; i<Len; i++, p++, c++)
                         {    IV ^= *p;
                             Encrypt(&IV, c, DataBlockSize);
-                            c->CopyTo(IV);
+                            c->CopyTo((LPBYTE)IV);
                         }
                     }
     void            DecryptBlockChained(LPCVOID pCrypt, LPVOID pPlain, UINT Len, UINT nonce)

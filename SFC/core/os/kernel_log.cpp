@@ -285,7 +285,7 @@ namespace _details
 	void __ConsoleLogWriteDefault(LPCSTR log, int type, LPVOID)
 	{	
 		ASSERT(type >=0 && (type&rt::LOGTYPE_LEVEL_MASK) <rt::LOGTYPE_MAX);
-		int cat[] = { ANDROID_LOG_VERBOSE, ANDROID_LOG_DEBUG, ANDROID_LOG_INFO, ANDROID_LOG_WARN, ANDROID_LOG_ERROR };
+		int cat[] = { ANDROID_LOG_VERBOSE, ANDROID_LOG_DEBUG, ANDROID_LOG_INFO, ANDROID_LOG_INFO, ANDROID_LOG_WARN, ANDROID_LOG_ERROR };
 		__android_log_write(cat[type&rt::LOGTYPE_LEVEL_MASK], "CPF", log);
 	}
 }} //  namespace os::_details

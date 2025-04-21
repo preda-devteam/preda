@@ -354,7 +354,8 @@ bool JsonObject::GetNextKeyValuePair(JsonKeyValuePair& kvp) const
 
 void JsonObject::Override(const rt::String_Ref& base, const rt::String_Ref& sub, rt::String& derived, bool append)
 {	
-	ASSERT(base.Begin() != sub.Begin());
+	ASSERT(!base.IsReferring(derived));
+	ASSERT(!sub.IsReferring(derived));
 
 	typedef rt::hash_map<rt::String_Ref, rt::String_Ref, rt::String_Ref::hash_compare> t_ValList;
 	t_ValList	vals;
@@ -391,6 +392,10 @@ void JsonObject::Override(const rt::String_Ref& base, const rt::String_Ref& sub,
 
 void JsonObject::Override(const rt::String_Ref& base, const rt::String_Ref& key, const rt::String_Ref& val_raw, rt::String& derived, bool append)
 {
+	ASSERT(!base.IsReferring(derived));
+	ASSERT(!key.IsReferring(derived));
+	ASSERT(!val_raw.IsReferring(derived));
+
 	typedef rt::hash_map<rt::String_Ref, rt::String_Ref, rt::String_Ref::hash_compare> t_ValList;
 
 	t_ValList	vals;
@@ -420,7 +425,10 @@ void JsonObject::Override(const rt::String_Ref& base, const rt::String_Ref& key,
 }
 
 void JsonObject::RemoveKeys(const rt::String_Ref& source, const rt::String_Ref& keys_to_exclude, rt::String& removed)
-{	
+{
+	ASSERT(!source.IsReferring(removed));
+	ASSERT(!keys_to_exclude.IsReferring(removed));
+
 	rt::String_Ref keys[256];
 	UINT co = keys_to_exclude.Split(keys, sizeofArray(keys), ",;|");
 	if(co == 0){ removed = source; return; }
@@ -446,6 +454,9 @@ SKIP_THE_KEY:
 
 void JsonObject::RetainKeys(const rt::String_Ref& source, const rt::String_Ref& keys_to_retain, rt::String& out)
 {
+	ASSERT(!source.IsReferring(out));
+	ASSERT(!keys_to_retain.IsReferring(out));
+
 	rt::String_Ref keys[256];
 	UINT co = keys_to_retain.Split(keys, sizeofArray(keys), ",;|");
 	if (co == 0) { out = "{ }"; return; }

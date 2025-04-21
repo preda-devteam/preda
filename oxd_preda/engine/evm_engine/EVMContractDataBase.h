@@ -14,7 +14,7 @@
 #include "../../native/abi/vm_interfaces.h"
 #include "../../../SFC/core/ext/rocksdb/rocksdb.h"
 
-namespace preda_evm {
+namespace xtl {
 	class ContractDatabase : public rvm::RvmEngine {
 		friend class CRuntimeInterface;
 		os::CriticalSection m_barrier;
@@ -23,7 +23,7 @@ namespace preda_evm {
 		std::string m_modulePath;
 		rvm::BlockchainRuntime* m_pRuntimeAPI = nullptr;
 
-		std::map<ContractModuleID, ContractDatabaseEntry> m_contracts;
+		std::map<rvm::ContractId, ContractDatabaseEntry> m_contracts;
 
 		// temporary workaround for deploy ID generation. (Now increments by 1 for each deployment, should be some hash based on source or intermediate code + deploy data (contract id, imported contract ids, etc.))
 		int64_t m_nextDeployId = 1;
@@ -37,46 +37,48 @@ namespace preda_evm {
 		virtual rvm::ConstString GetVendorInfo() const override;
 
 		// Build a collection of contracts
-		virtual bool Compile(const rvm::ChainStates* chain_state, const rvm::ConstString* dapp_name, uint32_t contract_count, const rvm::ConstData* deploy_data_array, rvm::CompilationFlag flag, rvm::CompiledModules** compiled_output, rvm::DataBuffer* dependency, rvm::LogMessageOutput* log_msg_output) override;
-		virtual bool Link(rvm::CompiledModules* compiled, rvm::LogMessageOutput* log_msg_output) override;
-		virtual bool ValidateDependency(const rvm::ChainStates* chain_state, rvm::CompiledModules* compiled, const rvm::ConstData* dependency) override;
+		virtual rvm::ConstString GetContractName(const rvm::ConstData* source_code) override;
+		virtual bool			 Compile(	const rvm::ConstString*	dapp_name,
+											uint32_t				contract_count, 
+											const rvm::ConstData*	deploy_data_array,
+											rvm::CompilationFlag	flag,
+											rvm::CompiledModules**	compiled_output,
+											rvm::LogMessageOutput*	log_msg_output
+								 ) override;
+		virtual bool			 Recompile(	const rvm::ConstString*	dapp_name,
+											const rvm::ConstData*	dependency_data,
+											uint32_t				contract_count, 
+											const rvm::ConstData*	deploy_data_array,
+											rvm::CompilationFlag	flag,
+											rvm::CompiledModules**	compiled_output,
+											rvm::LogMessageOutput*	log_msg_output
+								 ) override;
+		virtual bool			 Link(		rvm::CompiledModules*	compiled,
+											rvm::LogMessageOutput*	log_msg_output
+								 ) override;
+		virtual void			 CancelCurrentBuildingTask() override;
 
-		//virtual bool Undeploy(rvm::RVM_CONTRACT_ID contract) override;
-		//virtual uint32_t GetDependingContracts(rvm::RVM_CONTRACT_ID contract, uint32_t buildNum, rvm::RVM_CONTRACT_ID *out_depending_contracts, uint32_t buffer_size) override;
-
-		virtual rvm::ExecuteUnit* CreateExecuteUnit() override;
+		virtual rvm::ExecutionUnit* CreateExecuteUnit() override;
 
 		// interfaces from ContractRepository
-		virtual bool StateJsonify(rvm::BuildNum build_num, rvm::ContractScopeId contract, const rvm::ConstData* pState, rvm::StringStream* json_out, const rvm::ChainStates* ps) const override;
-		virtual bool StateJsonParse(rvm::BuildNum build_num, rvm::ContractScopeId contract, const rvm::ConstString* json, rvm::DataBuffer* state_out, const rvm::ChainStates* ps, rvm::LogMessageOutput* og) const override;
+		virtual bool StateJsonify(rvm::ContractInvokeId contract, const rvm::ConstData* contract_state, rvm::StringStream* json_out) const override;
+		virtual bool StateJsonParse(rvm::ContractInvokeId contract, const rvm::ConstString* json, rvm::DataBuffer* state_out, rvm::LogMessageOutput* error_out) const override;
 
-		virtual bool ArgumentsJsonify(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::OpCode opCode, const rvm::ConstData* args_serialized, rvm::StringStream* json_out, const rvm::ChainStates* ps) const override;
-		virtual bool ArgumentsJsonParse(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::OpCode opCode, const rvm::ConstString* json, rvm::DataBuffer* args_out, const rvm::ChainStates* ps, rvm::LogMessageOutput* log) const override;
+		virtual bool ScatteredStateKeyJsonify(rvm::ContractInvokeId contract, const rvm::ConstData* key_data, rvm::StringStream* json_out) const override;
 
-		virtual rvm::ContractScopeId GetScopeDefinition(rvm::ContractScopeId cid) const override
-		{
-			// TODO: implement
-			return cid;
-		}
+		virtual bool ArgumentsJsonify(rvm::ContractInvokeId contract, rvm::OpCode opCode, const rvm::ConstData* args_serialized, rvm::StringStream* json_out) const override;
+		virtual bool ArgumentsJsonParse(rvm::ContractInvokeId contract, rvm::OpCode opCode, const rvm::ConstString* json, rvm::DataBuffer* args_out, rvm::LogMessageOutput* error_out) const override;
 
-
+		virtual rvm::ContractScopeId GetScopeDefinition(rvm::ContractScopeId cid) const override;
 		virtual const rvm::Contract* GetContract(const rvm::ContractModuleID* deploy_id) const override;
-		const rvm::Contract* GetContract(ContractModuleID deploy_id) const;
-		virtual const rvm::Interface* GetInterface(const rvm::InterfaceModuleID* deploy_id) const override
-		{
-			// TODO
-			return nullptr;
-		}
+		virtual uint32_t GetContractEnumSignatures(rvm::ContractVersionId contract, rvm::StringStream* signature_out) const override;
+		virtual bool GetContractFunctionArgumentsSignature(rvm::ContractInvokeId contract, rvm::OpCode opcode, rvm::StringStream* signature_out) const override;
+		virtual bool GetContractStateSignature(rvm::ContractInvokeId contract, rvm::StringStream* signature_out) const override;
 
+		const rvm::Contract* GetContract(rvm::ContractId cid) const;
+		const ContractDatabaseEntry* FindContractEntry(rvm::ContractId deployId) const;
 
-		virtual uint32_t GetContractEnumSignatures(rvm::BuildNum build_num, rvm::ContractId contract, rvm::StringStream* signature_out, const rvm::ChainStates* ps = nullptr) const override;
-		virtual bool GetContractFunctionArgumentsSignature(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::OpCode opcode, rvm::StringStream* signature_out, const rvm::ChainStates* ps = nullptr) const override;
-		virtual bool GetContractStateSignature(rvm::BuildNum build_num, rvm::ContractScopeId contract, rvm::StringStream* signature_out, const rvm::ChainStates* ps = nullptr) const override;
-
-		const ContractDatabaseEntry* FindContractEntry(ContractModuleID deployId) const;
-
-		bool Deploy(const rvm::ChainStates* chain_state, const rvm::ContractId* contractIds, const evmc::address* deploy_address, rvm::CompiledModules* linked, rvm::ContractModuleID* deployment_identifiers_out, rvm::InterfaceModuleID** interface_deployment_ids_out, rvm::LogMessageOutput* log_msg_output);
-
+		bool Deploy(const rvm::GlobalStates* chain_state, rvm::CompiledModules* linked, const evmc::address* deploy_address, const rvm::ContractId* cids);
 		virtual ~ContractDatabase();
 	};
 }

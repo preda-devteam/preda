@@ -1,5 +1,5 @@
 
-// Generated from Preda.g4 by ANTLR 4.9.3
+// Generated from Preda.g4 by ANTLR 4.12.0
 
 #pragma once
 
@@ -15,215 +15,223 @@
 class  PredaBaseVisitor : public PredaVisitor {
 public:
 
-  virtual antlrcpp::Any visitPredaSource(PredaParser::PredaSourceContext *ctx) override {
+  virtual std::any visitPredaSource(PredaParser::PredaSourceContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDirective(PredaParser::DirectiveContext *ctx) override {
+  virtual std::any visitDirective(PredaParser::DirectiveContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitImportDirective(PredaParser::ImportDirectiveContext *ctx) override {
+  virtual std::any visitImportDirective(PredaParser::ImportDirectiveContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitAnnotation(PredaParser::AnnotationContext *ctx) override {
+  virtual std::any visitAnnotation(PredaParser::AnnotationContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitAnnotationItem(PredaParser::AnnotationItemContext *ctx) override {
+  virtual std::any visitAnnotationItem(PredaParser::AnnotationItemContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDoxygen(PredaParser::DoxygenContext *ctx) override {
+  virtual std::any visitDoxygen(PredaParser::DoxygenContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitContractDefinition(PredaParser::ContractDefinitionContext *ctx) override {
+  virtual std::any visitContractDefinition(PredaParser::ContractDefinitionContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitInterfaceRef(PredaParser::InterfaceRefContext *ctx) override {
+  virtual std::any visitInterfaceRef(PredaParser::InterfaceRefContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitContractPart(PredaParser::ContractPartContext *ctx) override {
+  virtual std::any visitContractPart(PredaParser::ContractPartContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitStateVariableDeclaration(PredaParser::StateVariableDeclarationContext *ctx) override {
+  virtual std::any visitStateVariableDeclaration(PredaParser::StateVariableDeclarationContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitConstVariableDeclaration(PredaParser::ConstVariableDeclarationContext *ctx) override {
+  virtual std::any visitConstVariableDeclaration(PredaParser::ConstVariableDeclarationContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitScope(PredaParser::ScopeContext *ctx) override {
+  virtual std::any visitScope(PredaParser::ScopeContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitStructDefinition(PredaParser::StructDefinitionContext *ctx) override {
+  virtual std::any visitStructDefinition(PredaParser::StructDefinitionContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitInterfaceDefinition(PredaParser::InterfaceDefinitionContext *ctx) override {
+  virtual std::any visitInterfaceDefinition(PredaParser::InterfaceDefinitionContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitEnumDefinition(PredaParser::EnumDefinitionContext *ctx) override {
+  virtual std::any visitEnumDefinition(PredaParser::EnumDefinitionContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitFunctionDefinition(PredaParser::FunctionDefinitionContext *ctx) override {
+  virtual std::any visitFunctionDefinition(PredaParser::FunctionDefinitionContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitFunctionDeclaration(PredaParser::FunctionDeclarationContext *ctx) override {
+  virtual std::any visitFunctionDeclaration(PredaParser::FunctionDeclarationContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitFunctionReturnTypeName(PredaParser::FunctionReturnTypeNameContext *ctx) override {
+  virtual std::any visitFunctionReturnTypeName(PredaParser::FunctionReturnTypeNameContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitFunctionParameterList(PredaParser::FunctionParameterListContext *ctx) override {
+  virtual std::any visitFunctionParameterList(PredaParser::FunctionParameterListContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitFunctionParameter(PredaParser::FunctionParameterContext *ctx) override {
+  virtual std::any visitFunctionParameter(PredaParser::FunctionParameterContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitAccessSpecifier(PredaParser::AccessSpecifierContext *ctx) override {
+  virtual std::any visitAccessSpecifier(PredaParser::AccessSpecifierContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitVariableDeclaration(PredaParser::VariableDeclarationContext *ctx) override {
+  virtual std::any visitVariableDeclaration(PredaParser::VariableDeclarationContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitTypeNameOrAuto(PredaParser::TypeNameOrAutoContext *ctx) override {
+  virtual std::any visitTypeNameOrAuto(PredaParser::TypeNameOrAutoContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitTypeName(PredaParser::TypeNameContext *ctx) override {
+  virtual std::any visitTypeName(PredaParser::TypeNameContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitFundamentalTypeName(PredaParser::FundamentalTypeNameContext *ctx) override {
+  virtual std::any visitFundamentalTypeName(PredaParser::FundamentalTypeNameContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitBuiltInContainerTypeName(PredaParser::BuiltInContainerTypeNameContext *ctx) override {
+  virtual std::any visitBuiltInContainerTypeName(PredaParser::BuiltInContainerTypeNameContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitMapKeyTypeName(PredaParser::MapKeyTypeNameContext *ctx) override {
+  virtual std::any visitMapKeyTypeName(PredaParser::MapKeyTypeNameContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitMapTypeName(PredaParser::MapTypeNameContext *ctx) override {
+  virtual std::any visitMapTypeName(PredaParser::MapTypeNameContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitArrayTypeName(PredaParser::ArrayTypeNameContext *ctx) override {
+  virtual std::any visitScatteredMapTypeName(PredaParser::ScatteredMapTypeNameContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitUserDefinedTypeName(PredaParser::UserDefinedTypeNameContext *ctx) override {
+  virtual std::any visitArrayTypeName(PredaParser::ArrayTypeNameContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitUserBlockStatement(PredaParser::UserBlockStatementContext *ctx) override {
+  virtual std::any visitScatteredArrayTypeName(PredaParser::ScatteredArrayTypeNameContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitStatement(PredaParser::StatementContext *ctx) override {
+  virtual std::any visitUserDefinedTypeName(PredaParser::UserDefinedTypeNameContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitExpressionStatement(PredaParser::ExpressionStatementContext *ctx) override {
+  virtual std::any visitUserBlockStatement(PredaParser::UserBlockStatementContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitIfStatement(PredaParser::IfStatementContext *ctx) override {
+  virtual std::any visitStatement(PredaParser::StatementContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitIfWithBlock(PredaParser::IfWithBlockContext *ctx) override {
+  virtual std::any visitExpressionStatement(PredaParser::ExpressionStatementContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitElseWithBlock(PredaParser::ElseWithBlockContext *ctx) override {
+  virtual std::any visitIfStatement(PredaParser::IfStatementContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitElseIfWithBlock(PredaParser::ElseIfWithBlockContext *ctx) override {
+  virtual std::any visitIfWithBlock(PredaParser::IfWithBlockContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitWhileStatement(PredaParser::WhileStatementContext *ctx) override {
+  virtual std::any visitElseWithBlock(PredaParser::ElseWithBlockContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRelayStatement(PredaParser::RelayStatementContext *ctx) override {
+  virtual std::any visitElseIfWithBlock(PredaParser::ElseIfWithBlockContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRelayType(PredaParser::RelayTypeContext *ctx) override {
+  virtual std::any visitWhileStatement(PredaParser::WhileStatementContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRelayLambdaDefinition(PredaParser::RelayLambdaDefinitionContext *ctx) override {
+  virtual std::any visitRelayStatement(PredaParser::RelayStatementContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRelayLambdaParameter(PredaParser::RelayLambdaParameterContext *ctx) override {
+  virtual std::any visitRelayType(PredaParser::RelayTypeContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitForStatement(PredaParser::ForStatementContext *ctx) override {
+  virtual std::any visitRelayLambdaDefinition(PredaParser::RelayLambdaDefinitionContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDoWhileStatement(PredaParser::DoWhileStatementContext *ctx) override {
+  virtual std::any visitRelayLambdaParameter(PredaParser::RelayLambdaParameterContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitContinueStatement(PredaParser::ContinueStatementContext *ctx) override {
+  virtual std::any visitForStatement(PredaParser::ForStatementContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitBreakStatement(PredaParser::BreakStatementContext *ctx) override {
+  virtual std::any visitDoWhileStatement(PredaParser::DoWhileStatementContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitReturnStatement(PredaParser::ReturnStatementContext *ctx) override {
+  virtual std::any visitContinueStatement(PredaParser::ContinueStatementContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitVariableDeclarationStatement(PredaParser::VariableDeclarationStatementContext *ctx) override {
+  virtual std::any visitBreakStatement(PredaParser::BreakStatementContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitLocalVariableDeclaration(PredaParser::LocalVariableDeclarationContext *ctx) override {
+  virtual std::any visitReturnStatement(PredaParser::ReturnStatementContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitExpression(PredaParser::ExpressionContext *ctx) override {
+  virtual std::any visitVariableDeclarationStatement(PredaParser::VariableDeclarationStatementContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitPrimaryExpression(PredaParser::PrimaryExpressionContext *ctx) override {
+  virtual std::any visitLocalVariableDeclaration(PredaParser::LocalVariableDeclarationContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitFunctionCallArguments(PredaParser::FunctionCallArgumentsContext *ctx) override {
+  virtual std::any visitExpression(PredaParser::ExpressionContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitIdentifier(PredaParser::IdentifierContext *ctx) override {
+  virtual std::any visitPrimaryExpression(PredaParser::PrimaryExpressionContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitFunctionCallArguments(PredaParser::FunctionCallArgumentsContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitIdentifier(PredaParser::IdentifierContext *ctx) override {
     return visitChildren(ctx);
   }
 

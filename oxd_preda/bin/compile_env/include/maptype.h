@@ -17,9 +17,9 @@ namespace prlrt {
 		using index_type = uint32_t;			// depends on vectorType (for ::size_type)
 
 		map_type m;
-		uint8_t *mapped_data = nullptr;
-		uint8_t *mapped_key_data = nullptr;
-		uint8_t *mapped_element_data = nullptr;
+		const uint8_t *mapped_data = nullptr;
+		const uint8_t *mapped_key_data = nullptr;
+		const uint8_t *mapped_element_data = nullptr;
 		serialize_size_type mapped_element_data_size = 0;
 		index_type num_entry_in_mapped_data = 0;
 		//index_type num_valid_entry_in_mapped_data = 0;
@@ -108,8 +108,15 @@ namespace prlrt {
 
 		element_type& get_mapped_element_fixed_element_type_size(const index_type &index) const
 		{
-			uint8_t *element_buffer = mapped_element_data + serialize_size_type(element_type::fixed_size_in_bytes::value * index);
-			return *(element_type*)element_buffer;
+			auto itor = mapped_data_element_cache.find(index);
+			if (itor != mapped_data_element_cache.end())
+				return itor->second;
+
+			const uint8_t *element_buffer = mapped_element_data + serialize_size_type(element_type::fixed_size_in_bytes::value * index);
+			auto ret_it = mapped_data_element_cache.insert(std::make_pair(index, element_type()));
+			ret_it.first->second = *reinterpret_cast<const element_type*>(element_buffer); 
+
+			return ret_it.first->second;
 		}
 
 		element_type& get_mapped_element_non_fixed_element_type_size(const index_type &index) const
@@ -126,7 +133,7 @@ namespace prlrt {
 			if (element_buffer_start_offset > element_buffer_end_offset || element_buffer_end_offset > mapped_element_data_size)
 				preda_exception::throw_exception("deserialization error in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
 
-			uint8_t *element_buffer_start = mapped_element_data + element_buffer_start_offset;
+			const uint8_t *element_buffer_start = mapped_element_data + element_buffer_start_offset;
 			serialize_size_type element_size = element_buffer_end_offset - element_buffer_start_offset;
 
 			element_type element;
@@ -226,7 +233,7 @@ namespace prlrt {
 			}
 		}
 
-		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
+		bool map_from_serialized_data(const uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
 			m.clear();
 			mapped_data = nullptr;
@@ -270,7 +277,7 @@ namespace prlrt {
 			bufferSize -= expectedElementDataSize;
 
 			// TODO: Do not de-serialize all the keys when mapping, but on-demand when used.
-			uint8_t *read_ptr = mapped_key_data;
+			const uint8_t *read_ptr = mapped_key_data;
 			serialize_size_type read_buffer_size = serialize_size_type(num_valid_entry_in_mapped_data * key_type::fixed_size_in_bytes::value);
 			for (index_type index = 0; index < num_valid_entry_in_mapped_data; index++)
 			{
@@ -332,9 +339,7 @@ namespace prlrt {
 
 		value_type& operator[](const key_type &key)
 		{
-			uint64_t len = ptr->length();
-			double gas_co = len > 1 ? log2(len) : 1.0;
-			burn_gas((uint64_t)((double)gas_costs[PRDOP_MAP_OP_SIMPLE] * (gas_co + 1)));
+			burn_gas_traverse_map(ptr->length());
 			disable_burn_gas();
 			value_type& ret = (*(ptr.get()))[key];
 			enable_burn_gas();
@@ -343,9 +348,7 @@ namespace prlrt {
 
 		const value_type& operator[](const key_type &key) const
 		{
-			uint64_t len = ptr->length();
-			double gas_co = len > 1 ? log2(len) : 1.0;
-			burn_gas((uint64_t)((double)gas_costs[PRDOP_MAP_OP_SIMPLE] * (gas_co + 1)));
+			burn_gas_traverse_map(ptr->length());
 			disable_burn_gas();
 			const value_type& ret = (*((const implementation_type*)ptr.get()))[key];
 			enable_burn_gas();
@@ -354,9 +357,7 @@ namespace prlrt {
 
 		__prlt_bool __prli_has(const key_type &key) const
 		{
-			uint64_t len = ptr->length();
-			double gas_co = len > 1 ? log2(len) : 1.0;
-			burn_gas((uint64_t)((double)gas_costs[PRDOP_MAP_OP_SIMPLE] * (gas_co + 1)));
+			burn_gas_traverse_map(ptr->length());
 			disable_burn_gas();
 			__prlt_bool ret = __prlt_bool(ptr->has(key));
 			enable_burn_gas();
@@ -365,9 +366,7 @@ namespace prlrt {
 
 		void __prli_erase(const key_type &key) const
 		{
-			uint64_t len = ptr->length();
-			double gas_co = len > 1 ? log2(len) : 1.0;
-			burn_gas((uint64_t)((double)gas_costs[PRDOP_MAP_OP_SIMPLE] * (gas_co + 1)));
+			burn_gas_traverse_map(ptr->length());
 			disable_burn_gas();
 			ptr->erase(key);
 			enable_burn_gas();
@@ -386,7 +385,7 @@ namespace prlrt {
 			ptr->serialize_out(buffer, for_debug);
 		}
 
-		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
+		bool map_from_serialized_data(const uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
 			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_MAP_STATIC]);
 			return ptr->map_from_serialized_data(buffer, bufferSize, bDeep);

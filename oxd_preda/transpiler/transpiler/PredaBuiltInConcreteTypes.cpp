@@ -15,6 +15,7 @@ namespace transpiler {
 			| uint64_t(OperatorTypeBitMask::ModuloBit)
 			| uint64_t(OperatorTypeBitMask::AssignmentModuloBit)
 			| uint64_t(OperatorTypeBitMask::GenericComparisonBits);
+		concreteType->fixedSizeInBytes = bitWidth / 8;
 		if (bSigned)
 			concreteType->supportedOperatorMask |= uint64_t(OperatorTypeBitMask::UnaryMinusBit);
 		else
@@ -31,6 +32,7 @@ namespace transpiler {
 			| uint64_t(OperatorTypeBitMask::AddSubMulDivBits)
 			| uint64_t(OperatorTypeBitMask::GenericComparisonBits)
 			| uint64_t(OperatorTypeBitMask::UnaryMinusBit);
+		concreteType->fixedSizeInBytes = (floatWidth / 8) + 4;
 		return concreteType;
 	}
 
@@ -45,6 +47,7 @@ namespace transpiler {
 		outputFullName = typeOutputPrefix + inputName;
 		exportName = inputName;
 		supportedOperatorMask = uint64_t(OperatorTypeBitMask::AssignmentBit) | uint64_t(OperatorTypeBitMask::LogicalBits) | uint64_t(OperatorTypeBitMask::EqualityComparisonBits);
+		fixedSizeInBytes = sizeof(bool);
 	}
 
 	std::shared_ptr<BuiltInBoolType> BuiltInBoolType::CreateType()
@@ -62,6 +65,7 @@ namespace transpiler {
 		outputFullName = typeOutputPrefix + inputName;
 		exportName = inputName;
 		supportedOperatorMask = uint64_t(OperatorTypeBitMask::AssignmentBit) | uint64_t(OperatorTypeBitMask::GenericComparisonBits) | uint64_t(OperatorTypeBitMask::DotBit);
+		fixedSizeInBytes = 36;
 	}
 
 	std::shared_ptr<BuiltInAddressType> BuiltInAddressType::CreateType()
@@ -98,6 +102,7 @@ namespace transpiler {
 		exportName = inputName;
 		supportedOperatorMask = uint64_t(OperatorTypeBitMask::AssignmentBit) | uint64_t(OperatorTypeBitMask::GenericComparisonBits);
 		nestingPropagatableFlags |= uint32_t(PredaTypeNestingPropagatableFlags::HasBlob);
+		fixedSizeInBytes = 36;
 	}
 
 	std::shared_ptr<BuiltInBlobType> BuiltInBlobType::CreateType()
@@ -116,6 +121,7 @@ namespace transpiler {
 		outputFullName = typeOutputPrefix + inputName;
 		exportName = inputName;
 		supportedOperatorMask = uint64_t(OperatorTypeBitMask::AssignmentBit) | uint64_t(OperatorTypeBitMask::GenericComparisonBits);
+		fixedSizeInBytes = 32;
 	}
 
 	std::shared_ptr<BuiltInHashType> BuiltInHashType::CreateType()

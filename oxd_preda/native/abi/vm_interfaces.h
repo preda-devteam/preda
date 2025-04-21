@@ -104,6 +104,8 @@ struct ContractRepository // expose all deployed contracts for both PREDA and bc
 	virtual bool					StateJsonify(ContractInvokeId contract, const ConstData* contract_state, StringStream* json_out) const = 0;
 	virtual bool					StateJsonParse(ContractInvokeId contract, const ConstString* json, DataBuffer* state_out, LogMessageOutput* error_out = nullptr) const = 0;
 
+	virtual bool					ScatteredStateKeyJsonify(ContractInvokeId contract, const ConstData* key_data, StringStream* json_out) const = 0;
+
 	virtual bool					ArgumentsJsonify(ContractInvokeId contract, OpCode opcode, const ConstData* args_serialized, StringStream* json_out) const = 0;
 	virtual bool					ArgumentsJsonParse(ContractInvokeId contract, OpCode opcode, const ConstString* json, DataBuffer* args_serialized, LogMessageOutput* error_out = nullptr) const = 0;
 

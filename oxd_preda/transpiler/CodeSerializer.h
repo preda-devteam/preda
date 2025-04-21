@@ -9,7 +9,8 @@ private:
 
 public:
 	void AddLine(const std::string &line);
+	void AddMacroLine(const std::string& line);
 	void PushIndent();
 	void PopIndent();
-	std::string GetCode();
+	std::string GetCode() const;
 };

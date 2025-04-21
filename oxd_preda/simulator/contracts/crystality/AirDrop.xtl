@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.17;
+
+contract AirDrop {
+    struct Payment {
+        address to;
+        uint amount;
+    }
+
+    uint @address balance;
+
+    function transfer_n(Payment[] memory recipients) @address public returns (bool) {
+        uint total = 0;
+        for (uint i = 0; i < recipients.length; i++) {
+            require(recipients[i].amount >= 0);
+            total += recipients[i].amount;
+        }
+        if (total <= balance) {
+            balance -= total;
+            for (uint i = 0; i < recipients.length; i++) {
+                if (recipients[i].amount > 0) {
+                    relay@recipients[i].to _deposit(recipients[i].amount);
+                }
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    function _deposit(uint amount) @address public {
+        balance += amount;
+    } 
+}

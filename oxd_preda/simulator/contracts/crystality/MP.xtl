@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.13;
+contract Million_Pixel {
+	struct Land {
+		bool flag;
+		address owner;
+	}
+
+	Land @uint32 land;
+	
+	function occupy(uint16 x, uint16 y) @address external{
+		require(msg.sender == msg.scope);
+		uint32 index = uint32(x) * 65536 + uint32(y);
+		relay@index (var sender = msg.scope){
+			if(true == land.flag){
+				return;
+			}
+			land.flag = true;
+			land.owner = sender;
+		}
+	}
+
+}

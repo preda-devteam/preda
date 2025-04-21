@@ -33,6 +33,11 @@ namespace _details
 
 CRuntimeInterface::CRuntimeInterface(CContractDatabase *pDB)
 	: m_pDB(pDB)
+#ifndef __APPLE__
+	, m_memory_pool()
+	, m_contractStack(std::pmr::polymorphic_allocator<ContractStackEntry>(&m_memory_pool))
+	, m_contractStateModifiedFlags(std::pmr::polymorphic_allocator<std::pair<const rvm::ContractVersionId, std::array<bool, uint8_t(prlrt::ContractContextType::Num)>>>(&m_memory_pool))
+#endif
 {
 }
 
@@ -556,8 +561,11 @@ bool CRuntimeInterface::AllowedToMint(uint64_t id)
 
 void CRuntimeInterface::ReportReturnValue(const char *type_export_name, const uint8_t *serialized_data, uint32_t serialized_data_size)
 {
-	//DebugPrintBufferAppendSerializedData(type_export_name, serialized_data, serialized_data_size);
-	//DebugPrintOutputBuffer();
+	const rvm::ConstData data{serialized_data, serialized_data_size};
+	m_pExecutionContext->SetReturnValue(&data);
+	auto* d = m_pExecutionContext->SetReturnValueClaim(data.DataSize);
+	memcpy(d, data.DataPtr, data.DataSize);
+	m_pExecutionContext->SetReturnValueFinalize(data.DataSize);
 }
 
 void CRuntimeInterface::DebugPrintBufferAppendSerializedData(const char *type_export_name, const uint8_t *serialized_data, uint32_t serialized_data_size)
@@ -653,6 +661,64 @@ bool CRuntimeInterface::BurnGas(uint64_t gas_cost)
 	}
 
 	m_remainingGas -= gas_cost;
+	return true;
+}
+
+bool CRuntimeInterface::GetState(uint64_t cvid, uint8_t scope_id, uint8_t slot_id, const uint8_t* key_data, uint32_t key_data_size, const uint8_t*& value_data, uint32_t& value_data_size)
+{
+	rvm::Scope scope = rvm::Scope(scope_id);
+	ASSERT(scope == rvm::Scope::Global || scope == rvm::Scope::Shard);
+	rvm::ScopeType scope_type = (scope == rvm::Scope::Global? rvm::ScopeType::ScatteredMapOnGlobal : rvm::ScopeType::ScatteredMapOnShard);
+	scope = rvm::SCOPE_MAKE(scope_type, rvm::SCOPEKEYTYPED_BYSIZE(key_data_size), slot_id);
+	rvm::ContractScopeId csid = rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(rvm::ContractVersionId(cvid)), scope);
+	rvm::ScopeKey sk{key_data, key_data_size};
+	rvm::ConstStateData ret = m_pExecutionContext->GetState(csid, &sk);
+ 	if(!ret.DataPtr)
+		return false;
+	value_data_size = ret.DataSize;
+	value_data = ret.DataPtr;
+	return true;
+}
+
+void CRuntimeInterface::SetState(uint64_t cvid, uint8_t scope_id, uint8_t slot_id, const uint8_t* key_data, uint32_t key_data_size, const uint8_t* value_data, uint32_t value_data_size)
+{
+	rvm::Scope scope = rvm::Scope(scope_id);
+	ASSERT(scope == rvm::Scope::Global || scope == rvm::Scope::Shard);
+	rvm::ScopeType scope_type = (scope == rvm::Scope::Global? rvm::ScopeType::ScatteredMapOnGlobal : rvm::ScopeType::ScatteredMapOnShard);
+	scope = rvm::SCOPE_MAKE(scope_type, rvm::SCOPEKEYTYPED_BYSIZE(key_data_size), slot_id);
+	rvm::ContractInvokeId ciid = rvm::CONTRACT_SET_SCOPE(rvm::ContractVersionId(cvid), scope);
+	rvm::ScopeKey sk{key_data, key_data_size};
+	uint8_t* commit_data = m_pExecutionContext->AllocateStateMemory(value_data_size);
+	std::memcpy(commit_data, value_data, value_data_size);
+	CommitJournaledStates2Cache(ciid, sk, commit_data);
+}
+
+uint32_t CRuntimeInterface::GetStateSize(uint64_t cvid, uint8_t scope_id, uint8_t slot_id, const uint8_t* key_data, uint32_t key_data_size)
+{
+	rvm::Scope scope = rvm::Scope(scope_id);
+	ASSERT(scope == rvm::Scope::Global || scope == rvm::Scope::Shard);
+	rvm::ScopeType scope_type = (scope == rvm::Scope::Global? rvm::ScopeType::ScatteredMapOnGlobal : rvm::ScopeType::ScatteredMapOnShard);
+	scope = rvm::SCOPE_MAKE(scope_type, rvm::SCOPEKEYTYPED_BYSIZE(key_data_size), slot_id);
+	rvm::ContractScopeId csid = rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(rvm::ContractVersionId(cvid)), scope);
+	rvm::ScopeKey sk{key_data, key_data_size};
+	rvm::ConstStateData ret = m_pExecutionContext->GetState(csid, &sk);
+	if(!ret.DataPtr)
+		return 0;
+	return ret.DataSize;
+}
+
+bool CRuntimeInterface::GetStateData(uint64_t cvid, uint8_t scope_id, uint8_t slot_id, const uint8_t* key_data, uint32_t key_data_size, uint8_t* value_data)
+{
+	rvm::Scope scope = rvm::Scope(scope_id);
+	ASSERT(scope == rvm::Scope::Global || scope == rvm::Scope::Shard);
+	rvm::ScopeType scope_type = (scope == rvm::Scope::Global? rvm::ScopeType::ScatteredMapOnGlobal : rvm::ScopeType::ScatteredMapOnShard);
+	scope = rvm::SCOPE_MAKE(scope_type, rvm::SCOPEKEYTYPED_BYSIZE(key_data_size), slot_id);
+	rvm::ContractScopeId csid = rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(rvm::ContractVersionId(cvid)), scope);
+	rvm::ScopeKey sk{key_data, key_data_size};
+	rvm::ConstStateData ret = m_pExecutionContext->GetState(csid, &sk);
+	if(!ret.DataPtr)
+		return false;
+	std::memcpy(value_data, ret.DataPtr, ret.DataSize);
 	return true;
 }
 

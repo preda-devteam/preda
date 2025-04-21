@@ -78,16 +78,18 @@
 #pragma GCC diagnostic ignored "-Wswitch"
 #pragma GCC diagnostic ignored "-Wmisleading-indentation"
 #pragma GCC diagnostic ignored "-Warray-bounds"
-#pragma GCC diagnostic ignored "-Wextern-initializer"
 #pragma GCC diagnostic ignored "-Wmissing-braces"
 #pragma GCC diagnostic ignored "-Winvalid-offsetof"
-#pragma GCC diagnostic ignored "-Wdefaulted-function-deleted"
-#pragma GCC diagnostic ignored "-Wfor-loop-analysis"
-#pragma GCC diagnostic ignored "-Wunused-private-field"
 #if defined(__GNUC__)
 #pragma GCC diagnostic ignored "-Wnonnull-compare"
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
+#if defined(__clang__)
+#pragma GCC diagnostic ignored "-Wextern-initializer"
+#pragma GCC diagnostic ignored "-Wdefaulted-function-deleted"
+#pragma GCC diagnostic ignored "-Wfor-loop-analysis"
+#pragma GCC diagnostic ignored "-Wunused-private-field"
 #endif
 #endif
 

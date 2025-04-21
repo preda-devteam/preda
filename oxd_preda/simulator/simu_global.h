@@ -2,7 +2,6 @@
 #include "../native/abi/vm_interfaces.h"
 #include "simu_shard.h"
 
-
 namespace oxd
 {
 
@@ -57,6 +56,7 @@ public:
 	bool		VerifyDependency(const rvm::GlobalStates* global_state) const;
 	bool		Deploy(rvm::ExecutionUnit* exec, rvm::ExecutionContext* exec_ctx);
 	rvm::InvokeResult	InvokeConstructor(rvm::ExecutionUnit* exec, rvm::ExecutionContext* exec_ctx, uint32_t gas_limit);
+	uint32_t	CalcDeployGasBurnt();
 
 	auto*		GetContractModuleIds() const { ASSERT(_Stage == STAGE_DEPLOY); return (const rvm::ContractModuleID*)_ContractModuleIds; }
 	bool		IsCompiled() const { return _Stage >= STAGE_COMPILE; }
@@ -107,7 +107,8 @@ class SimuGlobalShard: public SimuShard
 {	// SimuGlobalShard is single-threaded when writing
 	// SimuGlobalShard is being read when there is no writing thread
 	friend class SimuShard;
-	friend class Simulator;
+	friend class ChainSimulator;
+	friend class PredaTxnComposer;
 
 protected:
 	bool								_bDeploying;
@@ -149,7 +150,7 @@ public:
 	void		Term();
 	auto&		GetExecuteUnits(){ return _ExecUnits; }
 
-	SimuGlobalShard(Simulator* simu, uint64_t time_base, uint32_t shard_order);
+	SimuGlobalShard(ChainSimulator* simu, uint64_t time_base, uint32_t shard_order);
 	virtual ~SimuGlobalShard(){ Term(); }
 };
 

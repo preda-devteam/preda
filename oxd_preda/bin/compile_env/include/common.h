@@ -1,6 +1,9 @@
 #pragma once
 #include <cstdint>
 #include <cstring>
+#if !defined(__wasm32__) && !defined(__APPLE__)
+#include <memory_resource>
+#endif
 #include "typeidentifier.h"
 #include "runtime_interface.h"
 
@@ -10,8 +13,11 @@ namespace prlrt {
 
 	extern thread_local IRuntimeInterface* g_executionEngineInterface;
 	extern thread_local bool g_inRelaySerialization;
+#if !defined(__wasm32__) && !defined(__APPLE__)
+	extern thread_local std::pmr::unsynchronized_pool_resource g_memory_pool;
+#endif
 
-	bool util_rip_struct_serialized_header(prlrt::serialize_size_type num_member, uint8_t *&buffer, prlrt::serialize_size_type &bufferSize)
+	bool util_rip_struct_serialized_header(prlrt::serialize_size_type num_member, const uint8_t *&buffer, prlrt::serialize_size_type &bufferSize)
 	{
 		if (bufferSize < 1)
 			return false;

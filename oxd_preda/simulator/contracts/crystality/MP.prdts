@@ -1,0 +1,13 @@
+random.reseed 88
+
+allocate.address 10000
+
+chain.deploy @0 MP.xtl
+
+Million_Pixel.occupy @all { "x" : $random(0, 99)$, "y" : $random(0, 99)$}
+chain.info
+
+stopwatch.restart
+chain.run
+stopwatch.report
+chain.info

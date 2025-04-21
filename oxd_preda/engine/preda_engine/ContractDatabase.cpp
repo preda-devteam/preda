@@ -207,6 +207,35 @@ bool ReadEntryFromJson(const rt::JsonObject &json, ContractDatabaseEntry &outEnt
 	}
 
 	{
+		data = json.GetValue("scattered_states", bExist);
+		if (!bExist) return false;
+		rt::JsonArray ssArray(data);
+		rt::JsonObject ssJson;
+		for (int i = 0; i < (int)ssArray.GetSize(); ++i)
+		{
+			ssArray.GetNextObjectRaw(ssJson);
+
+			uint16_t scope_key_size = ssJson.GetValueAs<uint16_t>("scope_key_size", bExist);
+			if (!bExist) return false;
+
+			uint8_t slot_id = ssJson.GetValueAs<uint8_t>("slot_id", bExist);
+			if (!bExist) return false;
+
+			std::string type_signature = rt::String(ssJson.GetValue("type_signature", bExist)).GetString();
+			if (!bExist) return false;
+
+			std::string name = rt::String(ssJson.GetValue("name", bExist)).GetString();
+			if (!bExist) return false;
+
+			outEntry.compileData.scatteredTypeStateVarInfo.emplace_back();
+			outEntry.compileData.scatteredTypeStateVarInfo.back().scopeKeySize = scope_key_size;
+			outEntry.compileData.scatteredTypeStateVarInfo.back().slotId = slot_id;
+			outEntry.compileData.scatteredTypeStateVarInfo.back().typeSignature = type_signature;
+			outEntry.compileData.scatteredTypeStateVarInfo.back().name = name;
+		}
+	}
+
+	{
 		rt::String_Ref tmp = json.GetValue("global_deploy_function", bExist);
 		if (!bExist) return false;
 		tmp.ToNumber(outEntry.compileData.globalDeployFunctionIdx);
@@ -375,9 +404,18 @@ bool CContractDatabase::Initialize(const char* module_path, const char* db_path,
 
 	{
 #if	defined(__linux__) || defined(__linux)
-		HANDLE handle_antlr = os::LoadDynamicLibrary((m_modulePath + "libantlr4-runtime.so.4.9.3").c_str());
+		HANDLE handle_antlr = os::LoadDynamicLibrary((m_modulePath + "libantlr4-runtime.so.4.12.0").c_str());
 		if (handle_antlr == nullptr)
+		{
+			if (initErrorMsg)
+			{
+				constexpr static char errorMsg[] = "[PRD]: Unable to load antlr4 library\n";
+				static uint32_t errorMsgLen = uint32_t(strlen(errorMsg));
+				initErrorMsg->StrPtr = errorMsg;
+				initErrorMsg->Length = errorMsgLen;
+			}
 			return false;
+		}
 		HANDLE handle = os::LoadDynamicLibrary((m_modulePath + "transpiler.so").c_str());
 #elif defined(_WIN32)
 		HANDLE handle = os::LoadDynamicLibrary((m_modulePath + "transpiler.dll").c_str());
@@ -463,6 +501,31 @@ bool CContractDatabase::Initialize(const char* module_path, const char* db_path,
 		GetEnvironmentVariableW(L"PATH", buffer, 32767);
 		wcscat_s(buffer, os::__UTF16((";" + m_modulePath + "../mingw64/bin/").c_str()));
 		SetEnvironmentVariableW(L"PATH", buffer);
+	}
+
+	HANDLE handle_libgccseh = os::LoadDynamicLibrary((m_modulePath + "../mingw64/bin/libgcc_s_seh-1.dll").c_str());
+	if (handle_libgccseh == nullptr)
+	{
+		if (initErrorMsg)
+		{
+			constexpr static char errorMsg[] = "[PRD]: Unable to load mingw64 library libgcc_s_seh-1.dll\n";
+			static uint32_t errorMsgLen = uint32_t(strlen(errorMsg));
+			initErrorMsg->StrPtr = errorMsg;
+			initErrorMsg->Length = errorMsgLen;
+		}
+		return false;
+	}
+	HANDLE handle_libstdcpp = os::LoadDynamicLibrary((m_modulePath + "../mingw64/bin/libstdc++-6.dll").c_str());
+	if (handle_libstdcpp == nullptr)
+	{
+		if (initErrorMsg)
+		{
+			constexpr static char errorMsg[] = "[PRD]: Unable to load mingw64 library libstdc++-6.dll\n";
+			static uint32_t errorMsgLen = uint32_t(strlen(errorMsg));
+			initErrorMsg->StrPtr = errorMsg;
+			initErrorMsg->Length = errorMsgLen;
+		}
+		return false;
 	}
 
 	if (m_runtime_mode == RuntimeMode::WASM || m_runtime_mode == RuntimeMode::CWASM) {
@@ -626,8 +689,6 @@ void CContractDatabase::Release()
 
 const ContractDatabaseEntry* CContractDatabase::FindContractEntry(const rvm::ContractModuleID &moduleId) const
 {
-	EnterCSBlock(m_barrier);
-
 	auto itor = m_contracts.find(moduleId);
 	if (itor == m_contracts.end())
 		return nullptr;
@@ -1178,6 +1239,14 @@ bool CContractDatabase::CompileContract(const rvm::ConstString* dapp_name, CCont
 			}
 			out_compile_data.scopeStateVarMeta[i].hasAsset = pTranspiler->ScopeStateVariableHasAsset(scope);
 			out_compile_data.scopeStateVarMeta[i].hasBlob = pTranspiler->ScopeStateVariableHasBlob(scope);
+		}
+
+		out_compile_data.scatteredTypeStateVarInfo.resize(pTranspiler->GetNumScatteredStateVariable());
+		for (uint32_t i = 0; i < pTranspiler->GetNumScatteredStateVariable(); i++){
+			out_compile_data.scatteredTypeStateVarInfo[i].scopeKeySize = pTranspiler->GetScatteredStateVariableScopeKeySize(i);
+			out_compile_data.scatteredTypeStateVarInfo[i].slotId = pTranspiler->GetScatteredStateVariableSlotId(i);
+			out_compile_data.scatteredTypeStateVarInfo[i].typeSignature = pTranspiler->GetScatteredStateVariableTypeSignature(i);
+			out_compile_data.scatteredTypeStateVarInfo[i].name  = pTranspiler->GetScatteredStateVariableName(i);
 		}
 
 		for (uint32_t i = 0; i < pTranspiler->GetNumImportedContracts(); i++)
@@ -1765,35 +1834,6 @@ bool CContractDatabase::Deploy(const rvm::GlobalStates* chain_state, rvm::Compil
 	return bSuccess;
 }
 
-template<typename T>
-void CContractDatabase::mergeTwoImportList(std::vector<T>& all_import_list, std::vector<T>& incoming_import_list)
-{
-	//1. current iterator points to all_import_list's beginning element
-	//2. for every element in the incoming_import_list, if an element exists in the all_import_list, we do not insert the element but we move the current iterator to that position
-	//3. if an element does not exist in the all_import_list, we insert it at the current position and current position++;
-	//4. if all_import_list is empty, we assign incoming_import_list to all_import_list
-	//5. import_list include the target contract id
-	if(all_import_list.empty()){
-		all_import_list = incoming_import_list;
-		return;
-	}
-	typename std::vector<T>::iterator current = all_import_list.begin();
-  	for(int i = 0; i < incoming_import_list.size(); i++)
-	{
-		typename std::vector<T>::iterator last = std::find(all_import_list.begin(), all_import_list.end(), incoming_import_list[i]);
-    	if (last == all_import_list.end())
-		{
-      		last = current;
-      		current = all_import_list.insert(last, incoming_import_list[i]);
-    	}
-    	else
-		{
-      		current = last;
-    	}
-		current++;
-	}
-}
-
 std::string CContractDatabase::ConvertEntryToJson(const ContractDatabaseEntry *pEntry)
 {
 	std::string json;
@@ -1879,6 +1919,18 @@ std::string CContractDatabase::ConvertEntryToJson(const ContractDatabaseEntry *p
 
 		}
 		json += (i < pEntry->compileData.structs.size() - 1) ? "]\n\t},\n" : "]\n\t}\n";
+	}
+	json+= "\t],\n";
+
+	json += "\t\"scattered_states\": [\n";
+	for(size_t i = 0 ; i < pEntry->compileData.scatteredTypeStateVarInfo.size(); ++i)
+	{
+		json += "\t\t{\n";
+		json += "\t\t\t\"scope_key_size\": " + std::to_string(pEntry->compileData.scatteredTypeStateVarInfo[i].scopeKeySize)  + ",\n";
+		json += "\t\t\t\"slot_id\": " + std::to_string(pEntry->compileData.scatteredTypeStateVarInfo[i].slotId) + ",\n";
+		json += "\t\t\t\"type_signature\": \"" + pEntry->compileData.scatteredTypeStateVarInfo[i].typeSignature + "\",\n";
+		json += "\t\t\t\"name\": \"" + pEntry->compileData.scatteredTypeStateVarInfo[i].name + "\"\n";
+		json += i < pEntry->compileData.scatteredTypeStateVarInfo.size() - 1 ? "\t\t},\n" : "\t\t}\n";
 	}
 	json+= "\t],\n";
 
@@ -2206,6 +2258,9 @@ std::vector<ContractEnum> CSymbolDatabaseForJsonifier::s_builtInEnums = {
 bool CContractDatabase::StateJsonify(rvm::ContractInvokeId contract, const rvm::ConstData* pState, rvm::StringStream* json_out) const
 {
 	EnterCSBlock(m_barrier);
+	rvm::Scope scope = rvm::CONTRACT_SCOPE(contract);
+	if(rvm::SCOPE_TYPE(scope) == rvm::ScopeType::ScatteredMapOnGlobal || rvm::SCOPE_TYPE(scope) == rvm::ScopeType::ScatteredMapOnShard)
+		return ScatteredStateValueJsonify(contract, pState, json_out);
 
 	const rvm::DeployedContract *deployedContract = m_pRuntimeAPI->GetContractDeployed(rvm::CONTRACT_UNSET_SCOPE(contract));
 	if (!deployedContract)
@@ -2214,7 +2269,6 @@ bool CContractDatabase::StateJsonify(rvm::ContractInvokeId contract, const rvm::
 	if (pContractEntry == nullptr)
 		return false;
 	const std::string *pSig = nullptr;
-	rvm::Scope scope = rvm::CONTRACT_SCOPE(contract);
 	transpiler::ScopeType predaScope = _details::RvmScopeToPredaScope(scope);
 	if (predaScope == transpiler::ScopeType::None)
 		return false;
@@ -2295,6 +2349,97 @@ bool CContractDatabase::StateJsonParse(rvm::ContractInvokeId contract, const rvm
 	if (ret.size() > 0)
 		memcpy(pWrite, &ret[0], ret.size());
 
+	return true;
+}
+
+bool CContractDatabase::ScatteredStateKeyJsonify(rvm::ContractInvokeId contract, const rvm::ConstData* key_data, rvm::StringStream* json_out) const
+{
+	EnterCSBlock(m_barrier);
+
+	const rvm::DeployedContract *deployedContract = m_pRuntimeAPI->GetContractDeployed(rvm::CONTRACT_UNSET_SCOPE(contract));
+	if (!deployedContract)
+		return false;
+	const ContractDatabaseEntry *pContractEntry = FindContractEntry(deployedContract->Module);
+	if (pContractEntry == nullptr)
+		return false;
+
+	rvm::Scope scope = rvm::CONTRACT_SCOPE(contract);
+	uint16_t scopeKeySize = (uint16_t)rvm::SCOPEKEY_SIZE(rvm::SCOPE_KEYSIZETYPE(scope));
+	uint8_t	slotId = rvm::SCOPE_SLOT(scope);
+	std::string typeSignature;
+	for(const auto& info : pContractEntry->compileData.scatteredTypeStateVarInfo)
+	{
+		if(scopeKeySize == info.scopeKeySize && slotId == info.slotId)
+		{
+			if(info.typeSignature.find("scattered_array") != std::string::npos)
+				typeSignature = "uint32";
+			else if(info.typeSignature.find("scattered_map") != std::string::npos)
+			{
+				auto key_start = info.typeSignature.find(" ") + 1;
+				auto key_end = info.typeSignature.find(" ", key_start);
+				typeSignature = info.typeSignature.substr(key_start, key_end - key_start);
+			}
+		}
+	}
+
+	CSymbolDatabaseForJsonifier symbolDb(this, m_pRuntimeAPI);
+	rvm::RvmDataJsonifier jsonifier(typeSignature.c_str(), &symbolDb);
+	std::string jsonStr;
+	if (jsonifier.Jsonify(jsonStr, key_data->DataPtr, (uint32_t)key_data->DataSize, true) != int32_t(key_data->DataSize))
+		return false;
+	
+	if (jsonStr.length() >= 2 && jsonStr[0] == '\"' && jsonStr.back() == '\"')
+		jsonStr = jsonStr.substr(1, jsonStr.length() - 2);
+
+	json_out->Append(jsonStr.c_str(), uint32_t(jsonStr.length()));
+	return true;
+}
+
+bool CContractDatabase::ScatteredStateValueJsonify(rvm::ContractInvokeId contract, const rvm::ConstData* value_data, rvm::StringStream* json_out) const
+{
+	EnterCSBlock(m_barrier);
+
+	const rvm::DeployedContract *deployedContract = m_pRuntimeAPI->GetContractDeployed(rvm::CONTRACT_UNSET_SCOPE(contract));
+	if (!deployedContract)
+		return false;
+	const ContractDatabaseEntry *pContractEntry = FindContractEntry(deployedContract->Module);
+	if (pContractEntry == nullptr)
+		return false;
+
+	rvm::Scope scope = rvm::CONTRACT_SCOPE(contract);
+	uint16_t scopeKeySize = (uint16_t)rvm::SCOPEKEY_SIZE(rvm::SCOPE_KEYSIZETYPE(scope));
+	uint8_t	slotId = rvm::SCOPE_SLOT(scope);
+	std::string typeSignature;
+	for(const auto& info : pContractEntry->compileData.scatteredTypeStateVarInfo)
+	{
+		if(scopeKeySize == info.scopeKeySize && slotId == info.slotId)
+		{
+			if(info.typeSignature.find("scattered_array") != std::string::npos)
+			{
+				auto value_start = info.typeSignature.find(" ") + 1;
+				typeSignature = info.typeSignature.substr(value_start);
+				break;
+			}
+			else if(info.typeSignature.find("scattered_map") != std::string::npos)
+			{
+				auto key_start = info.typeSignature.find(" ") + 1;
+				auto value_start = info.typeSignature.find(" ", key_start) + 1;
+				typeSignature = info.typeSignature.substr(value_start);
+				break;
+			}
+		}
+	}
+
+	CSymbolDatabaseForJsonifier symbolDb(this, m_pRuntimeAPI);
+	std::string expandedSig;
+	if (!symbolDb.ExpandUserDefinedTypesInTypeString(typeSignature, expandedSig))
+		return false;
+	rvm::RvmDataJsonifier jsonifier(expandedSig.c_str(), &symbolDb);
+	std::string jsonStr;
+	if (jsonifier.Jsonify(jsonStr, value_data->DataPtr, (uint32_t)value_data->DataSize, true) != int32_t(value_data->DataSize))
+		return false;
+
+	json_out->Append(jsonStr.c_str(), uint32_t(jsonStr.length()));
 	return true;
 }
 
@@ -2521,6 +2666,9 @@ bool CContractDatabase::GetContractFunctionArgumentsSignature(rvm::ContractInvok
 bool CContractDatabase::GetContractStateSignature(rvm::ContractInvokeId contract, rvm::StringStream* signature_out) const
 {
 	EnterCSBlock(m_barrier);
+	rvm::Scope scope = rvm::CONTRACT_SCOPE(contract);
+	if(rvm::SCOPE_TYPE(scope) == rvm::ScopeType::ScatteredMapOnGlobal || rvm::SCOPE_TYPE(scope) == rvm::ScopeType::ScatteredMapOnShard)
+		return GetScatteredVariableName(contract, signature_out);
 
 	const rvm::DeployedContract* deployedContract = m_pRuntimeAPI->GetContractDeployed(rvm::CONTRACT_UNSET_SCOPE(contract));
 	if (!deployedContract)
@@ -2529,7 +2677,6 @@ bool CContractDatabase::GetContractStateSignature(rvm::ContractInvokeId contract
 	if (pContractEntry == nullptr)
 		return false;
 	const std::string *pSig = nullptr;
-	rvm::Scope scope = rvm::CONTRACT_SCOPE(contract);
 	transpiler::ScopeType predaScope = _details::RvmScopeToPredaScope(scope);
 	if (predaScope == transpiler::ScopeType::None)
 		return false;
@@ -2579,4 +2726,32 @@ uint32_t CContractDatabase::GetContractEnumSignatures(rvm::ContractVersionId con
 	signature_out->Append(ret.c_str(), uint32_t(ret.size()));
 
 	return numEnum;
+}
+
+bool CContractDatabase::GetScatteredVariableName(rvm::ContractInvokeId ciid, rvm::StringStream* ret) const
+{
+	EnterCSBlock(m_barrier);
+	const rvm::DeployedContract *deployedContract = m_pRuntimeAPI->GetContractDeployed(rvm::CONTRACT_UNSET_SCOPE(ciid));
+	if (!deployedContract)
+		return false;
+	const ContractDatabaseEntry *pContractEntry = FindContractEntry(deployedContract->Module);
+	if (pContractEntry == nullptr)
+		return false;
+
+	rvm::Scope scope = rvm::CONTRACT_SCOPE(ciid);
+	rvm::ScopeType scope_type = rvm::SCOPE_TYPE(scope);
+	ASSERT(scope_type == rvm::ScopeType::ScatteredMapOnGlobal || scope_type == rvm::ScopeType::ScatteredMapOnShard);
+	int scope_key_size = (int)rvm::SCOPE_KEYSIZE(scope);
+	uint8_t slot_id = rvm::SCOPE_SLOT(scope);
+
+	for(const auto& scattered_var : pContractEntry->compileData.scatteredTypeStateVarInfo)
+	{
+		if(scope_key_size == scattered_var.scopeKeySize && slot_id == scattered_var.slotId){
+			ret->Append(scattered_var.name.c_str(), (uint32_t)scattered_var.name.length());
+			ret->Append(" ", 1);
+			ret->Append(scattered_var.typeSignature.c_str(), (uint32_t)scattered_var.typeSignature.find_first_of(' '));
+			return true;
+		}
+	}
+	return false;
 }

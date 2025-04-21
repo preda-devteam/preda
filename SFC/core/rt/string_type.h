@@ -379,32 +379,17 @@ public:
 				{	int ret = memcmp(_SC::_p,x.Begin(),min(GetLength(),x.GetLength())*sizeof(char));
 					return (ret > 0) || (ret==0 && (GetLength() >= x.GetLength()));
 				}
-	/**
-	 * @brief editing distance <= 1
-	 * 
-	 * @tparam StrT 
-	 * @param x 
-	 * @return true 
-	 * @return false 
-	 */
 	template< class StrT >
-	bool		IsSimilarTo(const StrT& x) const  
+	bool		IsSimilarTo(const StrT& x) const // editing distance <= 1
 				{	if(abs((SSIZE_T)_SC::_len - (SSIZE_T)x._len) > 1)return false;
 					auto len_max = rt::max(_SC::_len, x._len);
 					auto match_len = CommonPrefixLength(x) + CommonSuffixLength(x);
 					return match_len >= len_max - 1;
 				}
-	/**
-	 * @brief (*this) is a part of x
-	 * 
-	 * @tparam StrT 
-	 * @param x 
-	 * @return true 
-	 * @return false 
-	 */
 	template< class StrT >
-	bool		IsReferring(const StrT& x)  
-				{	return Begin() >= x.Begin() && (End() <= x.End());
+	bool		IsReferring(const StrT& x) const // (*this) is overlapped with `x`
+				{	if(_SC::IsEmpty())return false;
+					return (Begin()>=x.Begin() && Begin()<x.End()) || (End()>x.Begin() && End()<=x.End()) || (Begin()<x.Begin() && End()>x.End());
 				}
 public:
 	SIZE_T		CommonPrefixLength(const t_StrRef& x) const { SIZE_T i=0; SIZE_T len = rt::min(GetLength(), x.GetLength()); for(;i<len && _SC::_p[i] == x[i];i++){}; return i; }
@@ -1728,19 +1713,19 @@ protected:
 				return true;
 			}
 public:
-	String(){ _leng_reserved = 0; _p = nullptr; _len = 0; }
+	String() noexcept { _leng_reserved = 0; _p = nullptr; _len = 0; }
 	String(const String& x){ _leng_reserved = 0; _p = nullptr; _len = 0; *this = (String_Ref&)x; }
-	String(String&& x){ rt::Copy<sizeof(String)>(this, &x); rt::Zero(x); }
+	String(String&& x) noexcept { rt::Copy<sizeof(String)>(this, &x); rt::Zero(x); }
 	String(const String_Ref& x){ _leng_reserved = 0; _p = nullptr; _len = 0; *this = x; }
 	String(const char* x){ _leng_reserved = 0; _p = nullptr; _len = 0; operator = (x); }
 	String(const char* p, SIZE_T len){ _leng_reserved = 0; _p = nullptr; _len = 0; *this = String_Ref(p,len); }
 	String(const char* p, const char* end){ _leng_reserved = 0; _p = nullptr; _len = 0; *this = String_Ref(p,end); }
     String(const char c, int count){ _leng_reserved = 0; _p = nullptr; _len = 0; for (int i = 0; i < count; i++) *this += c; }
 	template<typename T>
-	String(const T& string_expr){ _p = nullptr; _leng_reserved = _len = 0; (*this) = string_expr; }
+	String(T&& string_expr){ _p = nullptr; _leng_reserved = _len = 0; (*this) = std::forward<T>(string_expr); }
 	~String(){ _SafeFree32AL(_p); }
 
-	String&		  operator = (String&& x){ rt::Copy(*this, x); x._p = nullptr; x._len = x._leng_reserved = 0; return *this; }
+	String&		  operator = (String&& x) noexcept { rt::Copy(*this, x); x._p = nullptr; x._len = x._leng_reserved = 0; return *this; }
 	const String& operator = (const char* x){ *this = String_Ref(x); return *this; }
 	const String& operator = (char* x){ *this = String_Ref(x); return *this; }
 	const String& operator = (char x){ SetLength(1); _p[0] = x; return *this; }

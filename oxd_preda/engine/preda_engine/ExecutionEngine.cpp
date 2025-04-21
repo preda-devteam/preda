@@ -9,8 +9,8 @@
 #include "PredaCompiledContracts.h"
 
 
-CExecutionEngine::CExecutionEngine(CContractDatabase *pDB)
-	: m_pDB(pDB), m_runtimeInterface(pDB), 
+CExecutionEngine::CExecutionEngine(CContractDatabase* pDB)
+	: m_pDB(pDB), m_runtimeInterface(pDB),
 	m_wasm_runtime(
 		pDB->m_runtime_mode == RuntimeMode::WASM || pDB->m_runtime_mode == RuntimeMode::CWASM ?
 		WASMRuntime::CreateRuntime(*this, pDB->wasm_engine(), pDB->wasm_main_module()) :
@@ -21,6 +21,9 @@ CExecutionEngine::CExecutionEngine(CContractDatabase *pDB)
 		WASMRuntime::CreateBaseLinker(*this) :
 		std::optional<wasmtime::Linker>{}
 	)
+#ifndef __APPLE__
+	, m_intermediateContractInstances(std::pmr::polymorphic_allocator<std::pair<const rvm::ContractVersionId, ContractRuntimeInstance*>>(&m_memory_pool))
+#endif
 {
 	m_runtimeInterface.SetExecutionEngine(this);
 }
@@ -39,8 +42,6 @@ void CExecutionEngine::ReleaseExecutionIntermediateData()
 	m_runtimeInterface.ClearOrphanTokens();
 	m_runtimeInterface.ClearDepositTokens();
 	m_runtimeInterface.ClearTokensSupplyChange();
-
-	m_inputStateCopies.clear();
 }
 
 ContractRuntimeInstance* CExecutionEngine::CreateContractInstance(const rvm::ContractModuleID &moduleId, rvm::ContractVersionId cvId, const rvm::ContractVersionId *importedCvId, uint32_t numImportedContracts, uint64_t gas_limit)
@@ -77,7 +78,7 @@ ContractRuntimeInstance* CExecutionEngine::CreateContractInstance(const rvm::Con
 		return nullptr;
 	}
 
-	ContractRuntimeInstance* pContractInstance = loaded_mod->NewInstance(*this, cvId, importedCvId, numImportedContracts, gas_limit).release();
+	ContractRuntimeInstance* pContractInstance = loaded_mod->NewInstance(*this, cvId, importedCvId, numImportedContracts, gas_limit);
 	if (!pContractInstance) {
 		return nullptr;
 	}
@@ -107,39 +108,27 @@ bool CExecutionEngine::MapNeededContractContext(rvm::ExecutionContext *execution
 		return true;
 
 	// collect the needed contexts
-	std::vector<uint8_t> neededContexts(1, uint8_t(neededContextLevel));	// first the context of the function
+	thread_local std::vector<uint8_t> neededContexts;	// first the context of the function
+	neededContexts.clear();
+	neededContexts.push_back(uint8_t(neededContextLevel));
 	// then global / shard if not already mapped
 	for (uint8_t i = uint8_t(pInstance->currentMappedContractContextLevel) + 1; i < std::min(uint8_t(shardLevel + 1), uint8_t(neededContextLevel)); i++)
 		neededContexts.push_back(i);
 
 	for (int i = 0; i < (int)neededContexts.size(); i++)
 	{
-		const uint8_t *buffer = nullptr;
-		uint32_t buffer_size = 0;
 		rvm::Scope scope = _details::PredaScopeToRvmScope(_details::RuntimeContextTypeToPredaScope(prlrt::ContractContextType(neededContexts[i])));
 		if (scope == rvm::Scope::_Bitmask)
 			return false;
 
+		rvm::ConstStateData state = executionContext->GetState(rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(pInstance->cvId), scope));
+		if (state.DataSize && state.DataPtr)
 		{
-			rvm::ConstStateData state = executionContext->GetState(rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(pInstance->cvId), scope));
-			if (state.DataSize)
-			{
-				if (state.Version != rvm::CONTRACT_BUILD(pInstance->cvId))		// the version of the state doesn't match the contract version, TODO: upgrade state when contract state upgrading is implemented in the future
-					return false;
-				m_inputStateCopies.push_back(std::vector<uint8_t>());
-				m_inputStateCopies.back().resize(state.DataSize);
-				memcpy(&m_inputStateCopies.back()[0], state.DataPtr, state.DataSize);
-				buffer = &m_inputStateCopies.back()[0];
-				buffer_size = (uint32_t)state.DataSize;
-			}
-		}
+			if (state.Version != rvm::CONTRACT_BUILD(pInstance->cvId))		// the version of the state doesn't match the contract version, TODO: upgrade state when contract state upgrading is implemented in the future
+				return false;
 
-		if (buffer == nullptr)
-			continue;
-
-		if (!pInstance->MapContractContextToInstance(prlrt::ContractContextType(neededContexts[i]), buffer, buffer_size))
-		{
-			return false;
+			if (!pInstance->MapContractContextToInstance(prlrt::ContractContextType(neededContexts[i]), state.DataPtr, state.DataSize))
+				return false;
 		}
 	}
 	pInstance->currentMappedContractContextLevel = neededContextLevel;
@@ -350,20 +339,13 @@ uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionConte
 	{
 		// first check if multiple states will different versions of a contract is to be committed.
 		// This could happen is some cases, e.g.A[v2] --calls--> B --calls--> A[v1] and A didn't have an existing state.
-		std::map<rvm::ContractId, rvm::BuildNum> modifiedContractVersions;
-		for (auto itor : m_intermediateContractInstances)
+		for (auto itor = m_intermediateContractInstances.begin(); itor != m_intermediateContractInstances.end(); itor++)
 		{
-			rvm::ContractVersionId cvId = itor.first;
-			rvm::ContractId cId = rvm::CONTRACT_UNSET_BUILD(cvId);
-			rvm::BuildNum version = rvm::CONTRACT_BUILD(cvId);
-			auto itor2 = modifiedContractVersions.find(cId);
-			if (itor2 == modifiedContractVersions.end())
-				modifiedContractVersions.emplace(cId, version);
-			else
-			{
-				if (itor2->second != version)
-					return uint32_t(ExecutionResult::SerializeOutMultipleVersionState);
-			}
+			auto next = std::next(itor);
+			if (next == m_intermediateContractInstances.end())
+				break;
+			if (rvm::CONTRACT_UNSET_BUILD(itor->first) == rvm::CONTRACT_UNSET_BUILD(next->first) && rvm::CONTRACT_BUILD(itor->first) != rvm::CONTRACT_BUILD(next->first))
+				return uint32_t(ExecutionResult::SerializeOutMultipleVersionState);
 		}
 
 		thread_local std::vector<std::tuple<rvm::ContractVersionId, rvm::Scope, uint8_t *>> pendingStates;
@@ -391,7 +373,7 @@ uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionConte
 						rvm::Scope scope = _details::PredaScopeToRvmScope(_details::RuntimeContextTypeToPredaScope(prlrt::ContractContextType(i)));
 						rvm::ConstStateData state = executionContext->GetState(rvm::CONTRACT_SET_SCOPE(rvm::CONTRACT_UNSET_BUILD(cvId), scope));
 						uint32_t orignSize = state.DataSize;
-						// burn state memory expandsion gas
+						// burn state memory expansion gas
 						if(csSize > orignSize && !m_runtimeInterface.BurnGas((csSize - orignSize) * 100))
 							return uint32_t(ExecutionResult::InsufficientGas);
 
@@ -413,6 +395,18 @@ uint32_t CExecutionEngine::Invoke_Internal(rvm::ExecutionContext *executionConte
 					}
 				}
 			}
+			uint64_t remainingGas = m_runtimeInterface.GetRemainingGas();
+			itor.second->SetRemainingGas(remainingGas);
+			auto ret = itor.second->CommitJournaledStates(bGlobalContext);
+			m_runtimeInterface.BurnGas(remainingGas - itor.second->GetRemainingGas());
+			
+			if ((ret & 0xff) != uint8_t(prlrt::ExecutionError::NoError))
+			{
+				m_runtimeInterface.ClearJournaledStatesCache();
+				return (ret << 8) | uint32_t(ExecutionResult::ExecutionError);
+			}
+			m_runtimeInterface.CommitJournaledStates();
+			m_runtimeInterface.ClearJournaledStatesCache();
 		}
 
 		{

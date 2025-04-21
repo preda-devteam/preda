@@ -125,6 +125,54 @@ ConcreteTypePtr IdentifierHub::GetTypeFromBuiltInContainerTypeNameContext(PredaP
 		}
 		return instantiatedType;
 	}
+	else if (ctx->scatteredMapTypeName())			// scattered_map
+	{
+		PredaParser::ScatteredMapTypeNameContext *mapCtx = ctx->scatteredMapTypeName();
+		std::vector<ConcreteTypePtr> templateParams;
+		templateParams.push_back(GetConcreteTypeFromContextText(mapCtx->mapKeyTypeName()));	// Grab the key type
+		templateParams.push_back(GetTypeFromTypeNameContext(mapCtx->typeName()));	// Grab the value type, note that this is a recursive call
+
+		if (templateParams[0] == nullptr || templateParams[1] == nullptr)
+			return nullptr;
+
+		std::shared_ptr<transpiler::TemplateType> templateType = m_pTranspilerCtx->GetBuiltInScatteredMapType();										//built-in map template type
+		ConcreteTypePtr instantiatedType = templateType->GetConcreteTypeFromTemplateParams(templateParams);			//instantiate the template with the given key type and value type
+		instantiatedType->supportedOperatorMask &= (~uint64_t(transpiler::OperatorTypeBitMask::AssignmentBit));
+		instantiatedType->scatteredScopeKeySize = templateParams[0]->fixedSizeInBytes;
+		if (instantiatedType == nullptr)
+		{
+			m_pErrorPortal->AddInternalError(mapCtx->start, "Unknown error when instantiating scattered_map with type\"" + mapCtx->mapKeyTypeName()->getText() + "\", \"" + mapCtx->typeName()->getText() + "\". Probably a compiler bug.");
+			return nullptr;
+		}
+		instantiatedType->nestingPropagatableFlags |= (uint32_t)transpiler::PredaTypeNestingPropagatableFlags::CantBeContained;
+		instantiatedType->nestingPropagatableFlags |= (uint32_t)transpiler::PredaTypeNestingPropagatableFlags::CantBePassedToRelay;
+		instantiatedType->nestingPropagatableFlags |= (uint32_t)transpiler::PredaTypeNestingPropagatableFlags::GlobalAndShardOnly;
+		instantiatedType->nestingPropagatableFlags |= (uint32_t)transpiler::PredaTypeNestingPropagatableFlags::IsScatteredType;
+
+		return instantiatedType;
+	}
+	else if (ctx->scatteredArrayTypeName())			// scattered_array
+	{
+		std::vector<ConcreteTypePtr> templateParams(1, GetTypeFromTypeNameContext(ctx->scatteredArrayTypeName()->typeName()));	// Grab value type
+		if (templateParams[0] == nullptr)
+			return nullptr;
+
+		std::shared_ptr<transpiler::TemplateType> templateType = m_pTranspilerCtx->GetBuiltInScatteredArrayType();										//built-in array template type
+		ConcreteTypePtr instantiatedType = templateType->GetConcreteTypeFromTemplateParams(templateParams);	//instantiate the template with the given value type
+		instantiatedType->supportedOperatorMask &= (~uint64_t(transpiler::OperatorTypeBitMask::AssignmentBit));
+		instantiatedType->scatteredScopeKeySize = sizeof(uint32_t);
+		if (instantiatedType == nullptr)
+		{
+			m_pErrorPortal->AddInternalError(ctx->scatteredArrayTypeName()->typeName()->start, "Unknown error when instantiating array with type\"" + ctx->scatteredArrayTypeName()->typeName()->getText() + "\"");
+			return nullptr;
+		}
+		instantiatedType->nestingPropagatableFlags |= (uint32_t)transpiler::PredaTypeNestingPropagatableFlags::CantBeContained;
+		instantiatedType->nestingPropagatableFlags |= (uint32_t)transpiler::PredaTypeNestingPropagatableFlags::CantBePassedToRelay;
+		instantiatedType->nestingPropagatableFlags |= (uint32_t)transpiler::PredaTypeNestingPropagatableFlags::GlobalAndShardOnly;
+		instantiatedType->nestingPropagatableFlags |= (uint32_t)transpiler::PredaTypeNestingPropagatableFlags::IsScatteredType;
+
+		return instantiatedType;
+	}
 	else
 	{
 		assert(0);

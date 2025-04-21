@@ -1,5 +1,5 @@
 
-// Generated from Preda.g4 by ANTLR 4.9.3
+// Generated from Preda.g4 by ANTLR 4.12.0
 
 #pragma once
 
@@ -20,57 +20,51 @@ public:
     T__32 = 33, T__33 = 34, T__34 = 35, T__35 = 36, T__36 = 37, T__37 = 38, 
     T__38 = 39, T__39 = 40, T__40 = 41, T__41 = 42, T__42 = 43, T__43 = 44, 
     T__44 = 45, T__45 = 46, T__46 = 47, T__47 = 48, T__48 = 49, T__49 = 50, 
-    T__50 = 51, T__51 = 52, T__52 = 53, T__53 = 54, T__54 = 55, DoxygenSingle = 56, 
-    DoxygenMulti = 57, BreakKeyword = 58, ConstantKeyword = 59, ContinueKeyword = 60, 
-    RelayKeyword = 61, SupplyKeyword = 62, IfKeyword = 63, ElseKeyword = 64, 
-    ShardKeyword = 65, ShardsKeyword = 66, GlobalKeyword = 67, AddressKeyword = 68, 
-    AutoKeyword = 69, MinerKeyword = 70, StructKeyword = 71, EnumKeyword = 72, 
-    ContractKeyword = 73, ImportKeyword = 74, FunctionKeyword = 75, PublicKeyword = 76, 
-    ExportKeyword = 77, AsKeyword = 78, UsingKeyword = 79, InterfaceKeyword = 80, 
-    ImplementsKeyword = 81, DeployKeyword = 82, ConstructorKeyword = 83, 
-    NextKeyword = 84, FloatType = 85, IntType = 86, UintType = 87, BooleanLiteral = 88, 
-    DecimalFloatLiteral = 89, DecimalIntegerLiteral = 90, DecimalIntegerLiteralBody = 91, 
-    AddressLiteral = 92, HashLiteral = 93, HexIntegerLiteral = 94, HexIntegerLiteralBody = 95, 
-    DecimalBigIntegerLiteral = 96, HexBigIntegerLiteral = 97, Identifier = 98, 
-    StringLiteral = 99, WS = 100, COMMENT = 101, LINE_COMMENT = 102
+    T__50 = 51, T__51 = 52, T__52 = 53, T__53 = 54, T__54 = 55, T__55 = 56, 
+    T__56 = 57, DoxygenSingle = 58, DoxygenMulti = 59, BreakKeyword = 60, 
+    ConstantKeyword = 61, ContinueKeyword = 62, RelayKeyword = 63, SupplyKeyword = 64, 
+    IfKeyword = 65, ElseKeyword = 66, ShardKeyword = 67, ShardsKeyword = 68, 
+    GlobalKeyword = 69, AddressKeyword = 70, AutoKeyword = 71, MinerKeyword = 72, 
+    StructKeyword = 73, EnumKeyword = 74, ContractKeyword = 75, ImportKeyword = 76, 
+    FunctionKeyword = 77, PublicKeyword = 78, ExportKeyword = 79, AsKeyword = 80, 
+    UsingKeyword = 81, InterfaceKeyword = 82, ImplementsKeyword = 83, DeployKeyword = 84, 
+    ConstructorKeyword = 85, NextKeyword = 86, FloatType = 87, IntType = 88, 
+    UintType = 89, BooleanLiteral = 90, DecimalFloatLiteral = 91, DecimalIntegerLiteral = 92, 
+    DecimalIntegerLiteralBody = 93, AddressLiteral = 94, HashLiteral = 95, 
+    HexIntegerLiteral = 96, HexIntegerLiteralBody = 97, DecimalBigIntegerLiteral = 98, 
+    HexBigIntegerLiteral = 99, Identifier = 100, StringLiteral = 101, WS = 102, 
+    COMMENT = 103, LINE_COMMENT = 104
   };
 
   explicit PredaLexer(antlr4::CharStream *input);
-  ~PredaLexer();
 
-  virtual std::string getGrammarFileName() const override;
-  virtual const std::vector<std::string>& getRuleNames() const override;
+  ~PredaLexer() override;
 
-  virtual const std::vector<std::string>& getChannelNames() const override;
-  virtual const std::vector<std::string>& getModeNames() const override;
-  virtual const std::vector<std::string>& getTokenNames() const override; // deprecated, use vocabulary instead
-  virtual antlr4::dfa::Vocabulary& getVocabulary() const override;
 
-  virtual const std::vector<uint16_t> getSerializedATN() const override;
-  virtual const antlr4::atn::ATN& getATN() const override;
+  std::string getGrammarFileName() const override;
+
+  const std::vector<std::string>& getRuleNames() const override;
+
+  const std::vector<std::string>& getChannelNames() const override;
+
+  const std::vector<std::string>& getModeNames() const override;
+
+  const antlr4::dfa::Vocabulary& getVocabulary() const override;
+
+  antlr4::atn::SerializedATNView getSerializedATN() const override;
+
+  const antlr4::atn::ATN& getATN() const override;
+
+  // By default the static state used to implement the lexer is lazily initialized during the first
+  // call to the constructor. You can call this function if you wish to initialize the static state
+  // ahead of time.
+  static void initialize();
 
 private:
-  static std::vector<antlr4::dfa::DFA> _decisionToDFA;
-  static antlr4::atn::PredictionContextCache _sharedContextCache;
-  static std::vector<std::string> _ruleNames;
-  static std::vector<std::string> _tokenNames;
-  static std::vector<std::string> _channelNames;
-  static std::vector<std::string> _modeNames;
-
-  static std::vector<std::string> _literalNames;
-  static std::vector<std::string> _symbolicNames;
-  static antlr4::dfa::Vocabulary _vocabulary;
-  static antlr4::atn::ATN _atn;
-  static std::vector<uint16_t> _serializedATN;
-
 
   // Individual action functions triggered by action() above.
 
   // Individual semantic predicate functions triggered by sempred() above.
 
-  struct Initializer {
-    Initializer();
-  };
-  static Initializer _init;
 };
 

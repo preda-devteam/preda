@@ -98,6 +98,10 @@ namespace transpiler {
 		UseCurrentContractType = 88,
 		RelayNextFromShard = 89,
 		MemberOnlyAccessibleViaTypeName = 90,
+		ScatteredTypeDefinedInStruct = 91,
+		ScatteredTypeCanOnlybeGlobalOrShard = 92,
+		ScatteredTypeUsedInRelay = 93,
+		ScatteredTypeNumOutOfLimit = 94,
 
 		SyntaxError = 1024,
 		InternalError = 0xffff,
@@ -149,6 +153,12 @@ namespace transpiler {
 		virtual bool ScopeStateVariableHasAsset(transpiler::ScopeType scope) const = 0;
 		virtual bool ScopeStateVariableHasBlob(transpiler::ScopeType scope) const = 0;
 
+		virtual uint32_t GetNumScatteredStateVariable() const = 0;
+		virtual const char* GetScatteredStateVariableTypeSignature(uint32_t scatteredStateIdx) const = 0;
+		virtual const char* GetScatteredStateVariableName(uint32_t scatteredStateIdx) const = 0;
+		virtual uint16_t GetScatteredStateVariableScopeKeySize(uint32_t scatteredStateIdx) const = 0;
+		virtual uint8_t GetScatteredStateVariableSlotId(uint32_t scatteredStateIdx) const = 0;
+
 		virtual uint32_t GetNumEnumTypes() const = 0;
 		virtual const char* GetEnumDoxygenComment(uint32_t enumTypeIdx) const = 0;
 		virtual const char* GetEnumTypeName(uint32_t enumTypeIdx) const = 0;
@@ -186,6 +196,23 @@ namespace transpiler {
 		virtual void GetCompileWarningPos(uint32_t warningIdx, uint32_t &line, uint32_t &pos) const = 0;
 
 		virtual const char* GetOutput() const = 0;
+	};
+
+	struct ICrystalityTranspiler
+	{
+		virtual void Release() = 0;
+		virtual bool BuildParseTree(const char *sourceCode) = 0;
+		virtual bool Transpile() = 0;
+		virtual const char* GetOutput() const = 0;
+
+		virtual uint32_t GetNumStorageVariables() const = 0;
+		virtual const char* GetStorageVariableType(uint32_t idx) const = 0;
+		virtual const char* GetStorageVariableName(uint32_t idx) const = 0;
+		virtual const char* GetStorageVariableScope(uint32_t idx) const = 0;
+
+		virtual uint32_t GetNumTranspileErrors() const = 0;
+		virtual const char* GetTranspileErrorMsg(uint32_t errorIdx) const = 0;
+		virtual void GetTranspileErrorPos(uint32_t errorIdx, uint32_t &line, uint32_t &pos) const = 0;
 	};
 
 }

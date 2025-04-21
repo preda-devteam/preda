@@ -168,6 +168,8 @@ public:
 	int		PrivateKeySize() const { return _pEntry->PrivateKeySize; }
 	int		SignatureSize() const { return _pEntry->SignatureSize; }
 	int		AddressEffectiveSize() const { return _pEntry->AddressSize; }
+	bool	IsPossibleAddressDialectString(const rt::String_Ref& s, bool allow_substitute = true) const; // only check charset
+
 
 	bool	DeriveEncryptionPublicKey(LPCVOID pk, LPVOID out_epk) const { return _pEntry->DeriveEncryptionPublicKey(pk, out_epk); }
 	bool	DeriveEncryptionPrivateKey(LPCVOID sk, LPVOID out_esk) const { return _pEntry->DeriveEncryptionPrivateKey(sk, out_esk); }

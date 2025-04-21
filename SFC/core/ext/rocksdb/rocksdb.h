@@ -863,7 +863,7 @@ public:
 		BYTE		Data[1];
 		bool		IsUnpaged() const { return TotalSize>PAGING_SIZE; }
 		T_PAGE		GetPageCount() const { T_PAGE ret; ret = (T_PAGE)((TotalSize+PAGING_SIZE+1)/PAGING_SIZE); return ret; }
-		UINT		GetPageSize() const {  }
+		UINT		GetPageSize() const { return UINT(PAGING_SIZE); }
 	};
 #pragma pack(pop)
 	ValueType*	GetPaged(const T_KEYVAL& b, T_PAGE page_no, std::string& ws) const { return (ValueType*)_SC::GetPaged(b, page_no, ws); }

@@ -570,33 +570,33 @@ namespace _details
 {
 
 template<int size, SIZE_T set, bool size_exceeded = (size > 32)> struct _PodFill
-{	static INLFUNC void Fill(LPBYTE obj)
+{	static INLFUNC void Fill(LPBYTE obj) noexcept 
 	{	SIZE_T* p = (SIZE_T*)obj;
 		for(SIZE_T i=sizeof(SIZE_T);i<=size;i+=sizeof(SIZE_T), p++)*p = set;
 		_PodFill<size%sizeof(SIZE_T), set>::Fill(obj + (size - size%sizeof(SIZE_T)));
 }	};
 	template<int size, SIZE_T set> struct _PodFill<size, set, false>
-	{	static INLFUNC void Fill(LPBYTE p)
+	{	static INLFUNC void Fill(LPBYTE p) noexcept 
 		{	*(SIZE_T*)p = set;
 			_PodFill<size-sizeof(SIZE_T), set, false>::Fill(p+sizeof(SIZE_T));
 	}	};
-	template<SIZE_T set> struct _PodFill<0, set, false>{ static INLFUNC void Fill(LPBYTE p){}};
-	template<SIZE_T set> struct _PodFill<1, set, false>{ static INLFUNC void Fill(LPBYTE p){ *p = (BYTE)set; }};
-	template<SIZE_T set> struct _PodFill<2, set, false>{ static INLFUNC void Fill(LPBYTE p){ *(WORD*)p = (WORD)set; }};
-	template<SIZE_T set> struct _PodFill<3, set, false>{ static INLFUNC void Fill(LPBYTE p){ *(WORD*)p = (WORD)set; p[2] = (BYTE)set; }};
+	template<SIZE_T set> struct _PodFill<0, set, false>{ static INLFUNC void Fill(LPBYTE p) noexcept {}};
+	template<SIZE_T set> struct _PodFill<1, set, false>{ static INLFUNC void Fill(LPBYTE p) noexcept { *p = (BYTE)set; }};
+	template<SIZE_T set> struct _PodFill<2, set, false>{ static INLFUNC void Fill(LPBYTE p) noexcept { *(WORD*)p = (WORD)set; }};
+	template<SIZE_T set> struct _PodFill<3, set, false>{ static INLFUNC void Fill(LPBYTE p) noexcept { *(WORD*)p = (WORD)set; p[2] = (BYTE)set; }};
 #if defined(PLATFORM_64BIT)
-	template<SIZE_T set> struct _PodFill<4, set, false>{ static INLFUNC void Fill(LPBYTE p){ *(DWORD*)p = (DWORD)set; }};
-	template<SIZE_T set> struct _PodFill<5, set, false>{ static INLFUNC void Fill(LPBYTE p){ *(DWORD*)p = (DWORD)set; _PodFill<1, set>::Fill(p+4); }};
-	template<SIZE_T set> struct _PodFill<6, set, false>{ static INLFUNC void Fill(LPBYTE p){ *(DWORD*)p = (DWORD)set; _PodFill<2, set>::Fill(p+4); }};
-	template<SIZE_T set> struct _PodFill<7, set, false>{ static INLFUNC void Fill(LPBYTE p){ *(DWORD*)p = (DWORD)set; _PodFill<3, set>::Fill(p+4); }};
+	template<SIZE_T set> struct _PodFill<4, set, false>{ static INLFUNC void Fill(LPBYTE p) noexcept { *(DWORD*)p = (DWORD)set; }};
+	template<SIZE_T set> struct _PodFill<5, set, false>{ static INLFUNC void Fill(LPBYTE p) noexcept { *(DWORD*)p = (DWORD)set; _PodFill<1, set>::Fill(p+4); }};
+	template<SIZE_T set> struct _PodFill<6, set, false>{ static INLFUNC void Fill(LPBYTE p) noexcept { *(DWORD*)p = (DWORD)set; _PodFill<2, set>::Fill(p+4); }};
+	template<SIZE_T set> struct _PodFill<7, set, false>{ static INLFUNC void Fill(LPBYTE p) noexcept { *(DWORD*)p = (DWORD)set; _PodFill<3, set>::Fill(p+4); }};
 #endif
 
 } // namespace _details
 
-template<typename T> INLFUNC void Zero(T& obj){ _details::_PodFill<sizeof(T), 0>::Fill((LPBYTE)&obj); } // treat any type as POD
-template<typename T> INLFUNC void Void(T& obj){ _details::_PodFill<sizeof(T), (SIZE_T)-1>::Fill((LPBYTE)&obj); } // treat any type as POD
-template<UINT LEN> INLFUNC void Zero(LPVOID obj){ _details::_PodFill<LEN, 0>::Fill((LPBYTE)obj); }
-template<UINT LEN> INLFUNC void Void(LPVOID obj){ _details::_PodFill<LEN, (SIZE_T)-1>::Fill((LPBYTE)obj); }
+template<typename T> INLFUNC void Zero(T& obj) noexcept { _details::_PodFill<sizeof(T), 0>::Fill((LPBYTE)&obj); } // treat any type as POD
+template<typename T> INLFUNC void Void(T& obj) noexcept { _details::_PodFill<sizeof(T), (SIZE_T)-1>::Fill((LPBYTE)&obj); } // treat any type as POD
+template<UINT LEN> INLFUNC void Zero(LPVOID obj) noexcept { _details::_PodFill<LEN, 0>::Fill((LPBYTE)obj); }
+template<UINT LEN> INLFUNC void Void(LPVOID obj) noexcept { _details::_PodFill<LEN, (SIZE_T)-1>::Fill((LPBYTE)obj); }
 
 INLFUNC void Zero(LPVOID obj, SIZE_T size)
 {	SIZE_T* p = (SIZE_T*)obj;
@@ -637,62 +637,62 @@ INLFUNC void Void(LPVOID obj, SIZE_T size)
 namespace _details
 {
 template<int size, bool size_exceeded = (size > 32)> struct _PodCopy
-{	static INLFUNC void Fill(LPBYTE p_in, LPCBYTE s_in)
+{	static INLFUNC void Fill(LPBYTE p_in, LPCBYTE s_in) noexcept
 	{	SIZE_T* p = (SIZE_T*)p_in;
 		SIZE_T* s = (SIZE_T*)s_in;
 		for(SIZE_T i=sizeof(SIZE_T);i<=size;i+=sizeof(SIZE_T), p++, s++)*p = *s;
 		_PodCopy<size%sizeof(SIZE_T)>::Fill(p_in + (size - size%sizeof(SIZE_T)), s_in + (size - size%sizeof(SIZE_T)));
 }	};
 	template<int size> struct _PodCopy<size, false>
-	{	static INLFUNC void Fill(LPBYTE p, LPCBYTE s)
+	{	static INLFUNC void Fill(LPBYTE p, LPCBYTE s) noexcept
 		{	*(SIZE_T*)p = *(SIZE_T*)s;
 			_PodCopy<size-sizeof(SIZE_T)>::Fill(p+sizeof(SIZE_T), s+sizeof(SIZE_T));
 	}	};
-	template<> struct _PodCopy<0>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s){}};
-	template<> struct _PodCopy<1>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s){ *p = *s; }};
-	template<> struct _PodCopy<2>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s){ *(WORD*)p = *(WORD*)s; }};
-	template<> struct _PodCopy<3>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s){ *(WORD*)p = *(WORD*)s; p[2] = s[2]; }};
+	template<> struct _PodCopy<0>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s) noexcept {}};
+	template<> struct _PodCopy<1>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s) noexcept { *p = *s; }};
+	template<> struct _PodCopy<2>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s) noexcept { *(WORD*)p = *(WORD*)s; }};
+	template<> struct _PodCopy<3>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s) noexcept { *(WORD*)p = *(WORD*)s; p[2] = s[2]; }};
 #if defined(PLATFORM_64BIT)
-	template<> struct _PodCopy<4>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s){ *(DWORD*)p = *(DWORD*)s; }};
-	template<> struct _PodCopy<5>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s){ *(DWORD*)p = *(DWORD*)s; _PodCopy<1>::Fill(p+4, s+4); }};
-	template<> struct _PodCopy<6>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s){ *(DWORD*)p = *(DWORD*)s; _PodCopy<2>::Fill(p+4, s+4); }};
-	template<> struct _PodCopy<7>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s){ *(DWORD*)p = *(DWORD*)s; _PodCopy<3>::Fill(p+4, s+4); }};
+	template<> struct _PodCopy<4>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s) noexcept { *(DWORD*)p = *(DWORD*)s; }};
+	template<> struct _PodCopy<5>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s) noexcept { *(DWORD*)p = *(DWORD*)s; _PodCopy<1>::Fill(p+4, s+4); }};
+	template<> struct _PodCopy<6>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s) noexcept { *(DWORD*)p = *(DWORD*)s; _PodCopy<2>::Fill(p+4, s+4); }};
+	template<> struct _PodCopy<7>{ static INLFUNC void Fill(LPBYTE p, LPCBYTE s) noexcept { *(DWORD*)p = *(DWORD*)s; _PodCopy<3>::Fill(p+4, s+4); }};
 #endif
 
 template<int size, bool size_exceeded = (size > 32)> struct _PodEqual
-{	static INLFUNC bool IsEqual(LPCBYTE p_in, LPCBYTE s_in)
+{	static INLFUNC bool IsEqual(LPCBYTE p_in, LPCBYTE s_in) noexcept
 	{	SIZE_T* p = (SIZE_T*)p_in;
 		SIZE_T* s = (SIZE_T*)s_in;
 		for(SIZE_T i=sizeof(SIZE_T);i<=size;i+=sizeof(SIZE_T), p++, s++)if(*p != *s)return false;
 		return _PodEqual<size%sizeof(SIZE_T)>::IsEqual(p_in + (size - size%sizeof(SIZE_T)), s_in + (size - size%sizeof(SIZE_T)));
 }	};
 	template<int size> struct _PodEqual<size, false>
-	{	static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s)
+	{	static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s) noexcept
 		{	return	*(SIZE_T*)p == *(SIZE_T*)s &&
 					_PodEqual<size-sizeof(SIZE_T)>::IsEqual(p+sizeof(SIZE_T), s+sizeof(SIZE_T));
 	}	};
-	template<> struct _PodEqual<0, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s){ return true; }};
-	template<> struct _PodEqual<1, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s){ return *p == *s; }};
-	template<> struct _PodEqual<2, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s){ return *(WORD*)p == *(WORD*)s; }};
-	template<> struct _PodEqual<3, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s){ return *(WORD*)p == *(WORD*)s && p[2] == s[2]; }};
+	template<> struct _PodEqual<0, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s) noexcept { return true; }};
+	template<> struct _PodEqual<1, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s) noexcept { return *p == *s; }};
+	template<> struct _PodEqual<2, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s) noexcept { return *(WORD*)p == *(WORD*)s; }};
+	template<> struct _PodEqual<3, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s) noexcept { return *(WORD*)p == *(WORD*)s && p[2] == s[2]; }};
 #if defined(PLATFORM_64BIT)
-	template<> struct _PodEqual<4, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s){ return *(DWORD*)p == *(DWORD*)s; }};
-	template<> struct _PodEqual<5, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s){ return *(DWORD*)p == *(DWORD*)s && _PodEqual<1>::IsEqual(p+4, s+4); }};
-	template<> struct _PodEqual<6, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s){ return *(DWORD*)p == *(DWORD*)s && _PodEqual<2>::IsEqual(p+4, s+4); }};
-	template<> struct _PodEqual<7, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s){ return *(DWORD*)p == *(DWORD*)s && _PodEqual<3>::IsEqual(p+4, s+4); }};
+	template<> struct _PodEqual<4, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s) noexcept { return *(DWORD*)p == *(DWORD*)s; }};
+	template<> struct _PodEqual<5, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s) noexcept { return *(DWORD*)p == *(DWORD*)s && _PodEqual<1>::IsEqual(p+4, s+4); }};
+	template<> struct _PodEqual<6, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s) noexcept { return *(DWORD*)p == *(DWORD*)s && _PodEqual<2>::IsEqual(p+4, s+4); }};
+	template<> struct _PodEqual<7, false>{ static INLFUNC bool IsEqual(LPCBYTE p, LPCBYTE s) noexcept { return *(DWORD*)p == *(DWORD*)s && _PodEqual<3>::IsEqual(p+4, s+4); }};
 #endif
 
 } // namespace _details
 
 template<UINT LEN>
-INLFUNC void Copy(LPVOID obj, LPCVOID from){ _details::_PodCopy<LEN>::Fill((LPBYTE)obj, (LPCBYTE)from); }
+INLFUNC void Copy(LPVOID obj, LPCVOID from) noexcept { _details::_PodCopy<LEN>::Fill((LPBYTE)obj, (LPCBYTE)from); }
 template<typename T1, typename T2>
-INLFUNC void Copy(T1& obj, const T2& from){ Copy<sizeof(T1)>((LPBYTE)&obj, (LPCBYTE)&from); static_assert(sizeof(T1) == sizeof(T2), "rt::Copy sizes of operands mismatch"); } // treat any type as POD
+INLFUNC void Copy(T1& obj, const T2& from) noexcept { Copy<sizeof(T1)>((LPBYTE)&obj, (LPCBYTE)&from); static_assert(sizeof(T1) == sizeof(T2), "rt::Copy sizes of operands mismatch"); } // treat any type as POD
 
 template<UINT LEN>
-INLFUNC bool IsEqual(LPCVOID obj, LPCVOID from){ return _details::_PodEqual<LEN>::IsEqual((LPCBYTE)obj, (LPCBYTE)from); }
+INLFUNC bool IsEqual(LPCVOID obj, LPCVOID from) noexcept { return _details::_PodEqual<LEN>::IsEqual((LPCBYTE)obj, (LPCBYTE)from); }
 template<typename T1, typename T2>
-INLFUNC bool IsEqual(const T1& obj, const T2& from){ return IsEqual<sizeof(T1)>((LPCBYTE)&obj, (LPCBYTE)&from); static_assert(sizeof(T1) == sizeof(T2), "rt::IsEqual sizes of operands mismatch"); } // treat any type as POD
+INLFUNC bool IsEqual(const T1& obj, const T2& from) noexcept { return IsEqual<sizeof(T1)>((LPCBYTE)&obj, (LPCBYTE)&from); static_assert(sizeof(T1) == sizeof(T2), "rt::IsEqual sizes of operands mismatch"); } // treat any type as POD
 
 
 namespace _details
@@ -999,7 +999,7 @@ namespace rt
 		 * @return FORCEINL 
 		 */
 		template<UINT Len>
-		INLFUNC void _Exchange_32AL(LPDWORD obj_a,LPDWORD obj_b)
+		INLFUNC void _Exchange_32AL(LPDWORD obj_a,LPDWORD obj_b) noexcept
 		{
 			DWORD t = *obj_a;
 			*obj_a = *obj_b;
@@ -1008,7 +1008,7 @@ namespace rt
 			rt::_details::_Exchange_32AL<Len-1>(obj_a+1,obj_b+1);
 		}
 		template<>
-		INLFUNC void _Exchange_32AL<0>(LPDWORD,LPDWORD){} // dummy
+		INLFUNC void _Exchange_32AL<0>(LPDWORD,LPDWORD) noexcept {} // dummy
 	} // namespace _details
 } // namespace rt
 
@@ -1016,7 +1016,7 @@ namespace rt
 {
 #pragma warning(disable: 4307) ///< warning C4307: '*' : integral constant overflow
 template<typename T>
-INLFUNC void Swap(T& a, T& b)
+INLFUNC void Swap(T& a, T& b) noexcept
 {	
 	rt::_details::_Exchange_32AL<sizeof(T)/4> ((LPDWORD)&a, (LPDWORD)&b);
 	if( (sizeof(T)&0x1) == 0x1 )

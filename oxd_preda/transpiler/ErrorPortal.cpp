@@ -490,3 +490,23 @@ void ErrorPortal::AddCompileWarning(uint32_t line, uint32_t pos, const std::stri
 {
 	m_warnings.emplace_back(line, pos, ErrorCode::InternalError, msg);
 }
+
+void ErrorPortal::AddScatteredMapDefinedinStructError()
+{
+	AddError(ErrorCode::ScatteredTypeDefinedInStruct, "scattered types are not allowed to be defined in struct");
+}
+
+void ErrorPortal::AddScatteredTypesScopeError()
+{
+	AddError(ErrorCode::ScatteredTypeCanOnlybeGlobalOrShard, "scattered types must be in global or shard scope.");
+}
+
+void ErrorPortal::AddScatteredTypesAsRelayParamsError()
+{
+	AddError(ErrorCode::ScatteredTypeUsedInRelay, "scattered types cannot be used in relay parameters.");
+}
+
+void ErrorPortal::AddExceedScatteredTypesNumberLimitError()
+{
+	AddError(ErrorCode::ScatteredTypeNumOutOfLimit, "scattered types with the same key size can be defined 16 times at most. (\"scattered_array<*>\" and \"scattered_map<uint32,*>\" are calculated together)");
+}

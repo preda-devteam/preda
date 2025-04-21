@@ -3,17 +3,21 @@
 #include "../native/types/typetraits.h"
 #include "core_contracts.h"
 
+#ifndef __APPLE__
+#include <memory_resource>
+#endif
 
 namespace oxd
 {
-
+class ChainSimulator;
 class Simulator;
 class SimuShard;
 class SimuGlobalShard;
 
 class ExecutionUnit
 {
-	friend class Simulator;
+	//friend class Simulator;
+	friend class ChainSimulator;
 	rvm::ExecutionUnit*	pUnits[(int)rvm::EngineId::Max];
 
 public:
@@ -30,13 +34,14 @@ protected:
 	rt::Buffer<rt::BufferEx<SimuTxn*>>	_ToShards;
 	rt::BufferEx<SimuTxn*>				_ToNextBlock;
 
-	Simulator*  _pSimulator;
+	ChainSimulator* _pSimulator;
 	SimuShard*  _pShard;
 
 public:
+	RelayEmission(ChainSimulator* s, SimuShard* shard);
 	RelayEmission(Simulator* s, SimuShard* shard);
 	~RelayEmission();
-	void	Collect(SimuTxn* origin, rt::BufferEx<SimuTxn*>& txns, uint64_t& remained_gas);
+	void	Collect(SimuTxn* origin, rt::BufferEx<SimuTxn*>& txns, uint64_t remained_gas);
 	void	Dispatch();  // dispatch all collected and clean up
 	auto&	GetDeferredTxns() const { return _ToNextBlock; }
 	void	ClearDeferredTxns(){ _ToNextBlock.ShrinkSize(0); };
@@ -57,7 +62,7 @@ class SimuShard: public rvm::ExecutionContext
 {
 protected:
 	ExecutionUnit				_ExecUnits;
-	Simulator*					_pSimulator = nullptr;
+	ChainSimulator*				_pSimulator = nullptr;
 	SimuGlobalShard*			_pGlobalShard = nullptr;
 
 	PendingTxns					_PendingTxns;
@@ -89,6 +94,9 @@ protected:
 	RelayEmission				_TxnEmitted;
 
 	constexpr static uint64_t relay_base_gas = 2000;
+#ifndef __APPLE__
+	std::pmr::unsynchronized_pool_resource _MemoryPool;
+#endif
 	// current transaction being executing
 	SimuTxn*					_pTxn = nullptr;
 	rt::BufferEx<uint8_t>		_ReturnVal;
@@ -181,8 +189,8 @@ protected:
 	virtual void					NativeTokensSupplyChange(const rvm::ConstNativeToken* tokens, uint32_t count) override;
 
 public:
-	SimuShard(Simulator* simu, uint64_t time_base, uint32_t shard_order, uint32_t shard_index, SimuGlobalShard* global); // normal shard
-	SimuShard(Simulator* simu, uint64_t time_base, uint32_t shard_order); // global shard
+	SimuShard(ChainSimulator* simu, uint64_t time_base, uint32_t shard_order, uint32_t shard_index, SimuGlobalShard* global); // normal shard
+	SimuShard(ChainSimulator* simu, uint64_t time_base, uint32_t shard_order); // global shard
 	virtual ~SimuShard(){ Term(); }
 
 	void		Init();
@@ -200,7 +208,7 @@ public:
 
 	bool		JsonifyAllAddressStates(rt::Json& append, const rt::BufferEx<User>& Users, rvm::ContractId cid);
 	bool		JsonifyBlocks(rt::Json& append, int64_t height = -1);
-	bool		JsonifyAddressState(rt::Json& append, const rvm::Address* targetAddr, const rt::BufferEx<User>& Users, rvm::ContractId cid);
+	bool		JsonifyAddressState(rt::Json& append, const rvm::Address* targetAddr, uint32_t userId, rvm::ContractId cid);
 	bool		JsonifyScopeState(rt::Json& append, SimuAddressContract key, bool allState);
 	void		JsonifyAddressStateWithoutGrouping(rt::Json& append, rvm::ContractId cid);
 	bool		JsonifyShardState(rt::Json& append, rvm::ContractId cid);
@@ -211,6 +219,9 @@ public:
 	size_t		GetPendingTxnCount() const {return _PendingTxns.GetSize();}
 	auto		GetAddressState(SimuAddressContract k) { return (const SimuState*)_AddressStates.Get(k); }
 	void		PushIntraRelay(SimuTxn* t) { _IntraRelayTxns.Push(t); }
+#ifndef __APPLE__
+	std::pmr::unsynchronized_pool_resource* GetMemPool() { return &_MemoryPool; }
+#endif
 };
 
 } // namespace oxd

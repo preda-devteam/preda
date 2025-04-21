@@ -458,10 +458,14 @@ namespace transpiler{
 	{
 		bool res = true;
 		// Register built-in template types
-		m_builtInArrayType = BuiltInArrayType::CreateType(this);
+		m_builtInArrayType = BuiltInArrayType::CreateType(this, "array");
 		res = res && (globalType->AttachInnerTemplateType(m_builtInArrayType));
-		m_builtInMapType = BuiltInMapType::CreateType(this);
+		m_builtInMapType = BuiltInMapType::CreateType(this, "map");
 		res = res && (globalType->AttachInnerTemplateType(m_builtInMapType));
+		m_builtInScatteredMapType = BuiltInMapType::CreateType(this, "scattered_map");
+		res = res && (globalType->AttachInnerTemplateType(m_builtInScatteredMapType));
+		m_builtInScatteredArrayType = BuiltInArrayType::CreateType(this, "scattered_array");
+		res = res && (globalType->AttachInnerTemplateType(m_builtInScatteredArrayType));
 		assert(res);
 	}
 

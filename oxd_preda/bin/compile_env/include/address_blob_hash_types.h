@@ -33,7 +33,6 @@ namespace prlrt {
 
 		fixed_size_value_type(const this_type &rhs)
 		{
-			burn_gas((uint64_t)gas_costs[PRDOP_ABH_ASSIGN]);
 			memcpy(data, rhs.data, fixed_size_in_bytes::value);
 		}
 
@@ -91,7 +90,7 @@ namespace prlrt {
 			memcpy(buffer, data, fixed_size_in_bytes::value);
 		}
 
-		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
+		bool map_from_serialized_data(const uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
 			if (bufferSize < LEN)
 				return false;

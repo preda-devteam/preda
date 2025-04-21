@@ -1,0 +1,36 @@
+random.reseed 88
+
+allocate.address $~count$
+chain.gaslimit 256
+
+chain.deploy @0 Kitty.xtl
+
+log.highlight "Kitty breeding test"
+
+log "init states"
+KittyBreeding.mint { "genes": "$bigint.random(20)$", "gender": true, "owner": "$@all$" }
+chain.run 
+chain.info 
+
+KittyBreeding.mint { "genes": "$bigint.random(20)$", "gender": false, "owner": "$@all$" }
+chain.run 
+chain.info 
+
+log.highlight "generating test transactions"
+
+KittyBreeding.breed * $~count$ @random { "m": $random(1, ~count-1)$, "s": $random(~count+1, ~count*2-1)$, "gender" : false }
+
+log.highlight "executing"
+stopwatch.restart
+chain.run
+stopwatch.report
+chain.info 
+
+log.highlight "collect new born"
+
+KittyBreeding.finalize @0 {}
+chain.run
+chain.info 
+
+viz.shard #g KittyBreeding
+viz.shard #all KittyBreeding

@@ -1,87 +1,14 @@
 #include <iostream>
 #include "EVMContractData.h"
+#include "evm_abi/abi_parser.h"
+#include "./evm_abi/abi_types.h"
+#include "EVMExecutionEngine.h"
+#include <ethash/keccak.h>
+
 #ifdef ENABLE_EVM
 
-namespace preda_evm {
-    void ContractCompileData::AddFunction(const ContractFunction& funcInfo)
-    {
-        m_functions[funcInfo.name].push_back(funcInfo);
-    }
-
-    bool ContractCompileData::ComposeInputData(const rt::JsonObject& args_json, uint64_t& value, std::string& data) const
-    {
-        std::map<std::string, std::pair<std::string,std::string>> inputArguments; //name => (type, value)
-        uint32_t argSize = 0;
-        rt::JsonKeyValuePair p;
-        std::string funcName;
-        while (args_json.GetNextKeyValuePair(p))
-        {
-            rt::String key = p.GetKey();
-            rt::String val = p.GetValue();
-            if (key == "SolFunctionName"){
-                funcName = std::string(val.Begin(), val.GetLength());
-            }
-            else if(key == "value"){
-                val.ToNumber<uint64_t>(value);
-            }
-            else{
-                inputArguments[std::string(key.Begin(), key.GetLength())] = {std::string(), std::string(val.Begin(), val.GetLength())};
-                argSize++;
-            }
-        }
-        //see if "funcName" exist
-        auto iter = m_functions.find(funcName);
-        if(iter == m_functions.end())
-        {
-            return false;
-        }
-        bool matched = false;
-        std::string funcHash;
-        ContractFunction target;
-        //for all overloaded "funcName"
-        for(uint32_t i = 0; i < iter->second.size() && !matched; i++)
-        {
-            //if the parameter size does not match argument size
-            if(iter->second[i].parameters.size() != argSize)
-            {
-                continue;
-            }
-            else if (iter->second[i].parameters.size() == 0 && argSize == 0) //function takes no parameter
-            {
-                funcHash = iter->second[i].signatureHash;
-                matched = true;
-                break;
-            }
-            //for each parameter, check if parameter name exist in the input json
-            for(uint32_t j = 0; j < iter->second[i].parameters.size(); j++)
-            {
-                auto paramIter = inputArguments.find(iter->second[i].parameters[j].second);
-                if(paramIter == inputArguments.end())
-                {
-                    matched = false;
-                    break;
-                }
-                //fill in the parameter type
-                paramIter->second.first = iter->second[i].parameters[j].first;
-                funcHash = iter->second[i].signatureHash;
-                matched = true;
-                target = iter->second[i];
-            }
-        }
-        //sort parameters in order, align with function arguments
-        std::vector<std::pair<std::string, std::string>> in;
-        if (matched)
-        {
-            data = funcHash;
-            for (uint32_t i = 0; i < target.parameters.size(); i++)
-            {
-                in.push_back(inputArguments.find(target.parameters[i].second)->second);
-            }
-            EVMUtil::TypeEncoder::encodeParameters(in, data);
-        }
-
-        return matched;
-    }
+namespace xtl 
+{
 
     ContractDelegate::ContractDelegate(ContractCompileData* compile_data, ContractDeployData* deploy_data) : m_compile_data(compile_data), m_deploy_data(deploy_data)
     {
@@ -195,23 +122,14 @@ namespace preda_evm {
 
     uint32_t ContractDelegate::GetFunctionCount() const
     {
-        return (uint32_t)m_compile_data->m_functions.size() + 1;
+        return (uint32_t)m_compile_data->functions.size() + 1;
     }
 
     rvm::ConstString ContractDelegate::GetFunctionName(uint32_t idx) const
     {
-        if (idx == 0)
-        {
-            static rt::String_Ref str("mint");
-            return *(rvm::ConstString*)&str;
-        }
-        auto iter = m_compile_data->m_functions.begin();
-        std::advance(iter, idx - 1); //idx 0 is reserved for mint, iterating the function map starting from idx == 1
-        if(iter != m_compile_data->m_functions.end())
-        {
-            return rvm::ConstString({ iter->first.c_str(), (uint32_t)iter->first.length() });
-        }
-        return rvm::ConstString();
+        if (idx >= uint32_t(m_compile_data->functions.size()))
+            return rvm::ConstString();
+        return rvm::ConstString({ m_compile_data->functions[idx].name.c_str(), (uint32_t)m_compile_data->functions[idx].name.length() });
     }
 
     rvm::FunctionFlag ContractDelegate::GetFunctionFlag(uint32_t idx) const
@@ -226,7 +144,17 @@ namespace preda_evm {
 
     bool ContractDelegate::GetFunctionSignature(uint32_t idx, rvm::StringStream* signature_out) const
     {
-        return false;
+		if (idx >= uint32_t(m_compile_data->functions.size()))
+			return false;
+		std::string tmp;
+		for (std::pair<std::string, std::string> p : m_compile_data->functions[idx].parameters)
+		{
+			tmp += p.first + " " + p.second + " ";
+		}
+		if(tmp.size() > 0)
+			signature_out->Append(tmp.c_str(), (uint32_t)tmp.length() - 1); //remove the last space
+
+		return true;
     }
 
     rvm::OpCode ContractDelegate::GetFunctionOpCode(uint32_t idx) const
@@ -240,6 +168,7 @@ namespace preda_evm {
 
     void ContractDelegate::GetSystemFunctionOpCodes(rvm::SystemFunctionOpCodes* out) const
     {
+        out->GlobalDeploy = rvm::OpCode(0);
     }
 
     uint32_t ContractDelegate::GetInterfaceCount() const
@@ -256,35 +185,23 @@ namespace preda_evm {
         return contractIdx >= m_contracts.size() ? nullptr : &m_contracts[contractIdx];
     }
 
-    void CompiledModules::AddContract(ContractCompileData compile_data, rt::String bytecode, rt::String init_data)
+    void CompiledModules::AddContract(ContractCompileData compile_data, rt::String bytecode)
     {
         m_contracts.push_back(std::move(compile_data));
         m_bytecode.push_back(std::move(bytecode));
-        m_initdata.push_back(std::move(init_data));
-        m_delegates.emplace_back(&m_contracts.back(), nullptr);
+		m_delegates.emplace_back(&m_contracts.back(), nullptr);
     }
-
-    const rt::String_Ref CompiledModules::GetBytecode(uint32_t idx)
+    void CompiledModules::LinkContract()
+	{
+		m_linked = true;
+	}
+    rt::String_Ref CompiledModules::GetBytecode(uint32_t idx)
     {
         if (idx >= m_bytecode.size()) {
             return {};
         }
-        return rt::String_Ref(m_bytecode[idx]);k
+        return rt::String_Ref(m_bytecode[idx]);
     }
-
-    const rt::String_Ref CompiledModules::GetInitData(uint32_t idx)
-    {
-        if (idx >= m_bytecode.size()) {
-            return {};
-        }
-        return rt::String_Ref(m_initdata[idx]);
-    }
-
-    void CompiledModules::AttachLinkData(std::vector<ContractLinkData> linkdata)
-    {
-        m_linkdata.swap(linkdata);
-    }
-
     rvm::EngineId CompiledModules::GetEngineId() const
     {
         return rvm::EngineId::SOLIDITY_EVM;
@@ -299,10 +216,7 @@ namespace preda_evm {
     }
     const rvm::Contract* CompiledModules::GetContract(uint32_t idx) const
     {
-        if (idx >= m_delegates.size()) {
-            return nullptr;
-        }
-        return &m_delegates[idx];
+        return idx < m_delegates.size() ? &m_delegates[idx] : nullptr;
     }
     rvm::ConstString CompiledModules::GetExternalDependencies() const
     {
@@ -310,12 +224,175 @@ namespace preda_evm {
     }
     bool CompiledModules::IsLinked() const
     {
-        return m_linkdata.size() == m_contracts.size();
+        return m_linked;
     }
     void CompiledModules::Release()
     {
         delete this;
     }
 
+	int ContractDatabaseEntry::EncodeJsonFunctionArguments(std::string_view args_json, std::vector<uint8_t>& out) const
+	{
+		nlohmann::json json = nlohmann::json::parse(args_json);
+		if(json.find("__sol__function__name__") == json.end())
+			return 1;
+		std::string function_name = json["__sol__function__name__"];
+		nlohmann::json args = json["args"];
+
+		// find matched overloaded functions
+		const ContractFunction* matched_func = nullptr;
+		for(const auto& func : compileData.functions)
+		{
+			if(func.name != function_name || func.parameters.size() != args.size())
+				continue;
+			bool bFind = true;
+			for(const auto& param : func.parameters)
+			{
+				std::string_view param_name = param.second;
+				if(args.find(param_name) == args.end())
+				{
+					bFind = false;
+					break;
+				}
+			}
+            if (bFind) {
+				matched_func = &func;
+                break;
+            }
+		}
+		if(!matched_func)
+			return 2;
+		
+		std::vector<std::pair<std::string, std::string>> type_value_pairs;
+		for(const auto& param : matched_func->parameters)
+			type_value_pairs.push_back(std::make_pair(param.first, args[param.second].dump()));
+
+        evmc::bytes ret;
+		if(0 != function_arguments_abi_encode(type_value_pairs, ret))
+			return 3;
+			
+        rt::String sig;
+        os::Base16Decode(matched_func->signatureHash, sig);
+        out.resize(sig.GetLength() + ret.size());
+
+        std::copy(ret.begin(), ret.end(), std::copy(sig.Begin(), sig.Begin() + sig.GetLength(), out.begin()));
+
+		return 0;
+	}
+
+    int ContractDatabaseEntry::DecodeEventArguments(evmc::bytes32 event_sig, evmc::bytes_view bytes, std::string& out) const
+    {
+		const ContractEvent* matched_event = nullptr;
+		for(const auto& event : compileData.events)
+		{
+			if(event.signatureHash == event_sig)
+				matched_event = &event;
+		}
+		if(!matched_event)
+			return 1;
+		if(0 != abi_decode(matched_event->parameters, bytes, out))
+			return 2;
+        return 0;
+    }
+
+
+	int ContractDatabaseEntry::ShardStateJsonify(bool b_global, const rvm::ChainStates* p_chain_state, nlohmann::json& out) const
+	{
+		rvm::ContractScopeId csid = rvm::CONTRACT_SET_SCOPE(deployData.contractId, b_global ? xtl::CrystalityHost::GlobalStorageScope : xtl::CrystalityHost::ShardStorageScope);
+		uint16_t scope = (uint16_t)(b_global ? rvm::Scope::Global : rvm::Scope::Shard);
+		for(const auto& storage_var : compileData.storage_variables)
+		{
+			if(storage_var.scope == scope)
+			{
+				evmc::bytes bytes_data(storage_var.number_of_bytes, 0);
+				uint32_t number_of_bytes = storage_var.number_of_bytes;
+				if(storage_var.offset)
+				{
+					evmc::bytes32 storage_key(storage_var.slot_id);
+					rvm::ScopeKey skey{ storage_key.bytes, sizeof(evmc::bytes32) };
+					rvm::ConstStateData state_data = p_chain_state->GetState(csid, &skey);
+					if(state_data.DataSize)
+						std::memcpy(bytes_data.data(), state_data.DataPtr + storage_var.offset, number_of_bytes);
+				}
+				else 
+				{
+					uint16_t slot_id = storage_var.slot_id;
+					while(number_of_bytes)
+					{
+						evmc::bytes32 storage_key(slot_id++);
+						rvm::ScopeKey skey{ storage_key.bytes, sizeof(evmc::bytes32) };
+						rvm::ConstStateData state_data = p_chain_state->GetState(csid, &skey);
+						if(number_of_bytes >= 32)
+						{
+							if(state_data.DataSize)
+								std::memcpy(bytes_data.data() + storage_var.number_of_bytes - number_of_bytes, state_data.DataPtr, sizeof(evmc::bytes32));
+							number_of_bytes -= sizeof(evmc::bytes32);
+						}
+						else
+						{
+							if(state_data.DataSize)
+								std::memcpy(bytes_data.data() + storage_var.number_of_bytes - number_of_bytes, state_data.DataPtr, number_of_bytes);
+							number_of_bytes = 0;
+						}
+					}
+				}
+				if(storage_var.members.empty())
+				{
+					xtl::TypeParser type_parser(storage_var.type);
+					out[storage_var.name] = (type_parser.type == xtl::Type::Undefined || type_parser.is_dynamic_array) ? "" : xtl::create_type(storage_var.type, bytes_data)->GetDecodedDataString();
+				}
+				else
+				{
+					for(const auto& member : storage_var.members)
+					{
+						xtl::TypeParser type_parser(member.type);
+						evmc::bytes_view bv(bytes_data.data() + member.slot_id * sizeof(evmc::bytes32), member.number_of_bytes);
+                        if (type_parser.type == xtl::Type::String || type_parser.type == xtl::Type::Bytes)
+                        {
+                            evmc::bytes str_bytes(2 * sizeof(evmc::bytes32), 0);
+                            evmc::bytes32 str_len((uint32_t)bv[31]);
+                            std::memcpy(str_bytes.data(), str_len.bytes, sizeof(evmc::bytes32));
+                            std::memcpy(str_bytes.data() + sizeof(evmc::bytes32), bv.data(), (uint32_t)bv[31]);
+                            out[storage_var.name][member.name] = xtl::create_type(member.type, str_bytes)->GetDecodedDataString();
+                        }
+                        else
+                        {
+						    out[storage_var.name][member.name] = (type_parser.type == xtl::Type::Undefined || type_parser.is_dynamic_array) ? "" : xtl::create_type(member.type, bv)->GetDecodedDataString();
+                        }
+					}
+				}
+			}
+		}
+        return 0;
+    }
+
+    int ContractDatabaseEntry::AddressStateJsonify(const rvm::Address& addr, const rvm::ChainStates* p_chain_state, nlohmann::json& out) const
+    {
+		rvm::ContractScopeId csid = rvm::CONTRACT_SET_SCOPE(deployData.contractId, xtl::CrystalityHost::ShardStorageScope);
+		for(const auto& storage_var : compileData.storage_variables)
+		{
+			if(storage_var.scope == (uint16_t)rvm::Scope::Address)
+			{
+				uint32_t number_of_bytes = storage_var.number_of_bytes;
+				uint16_t slot_id = storage_var.slot_id;
+				evmc::bytes bytes_key;
+				bytes_key.resize(sizeof(evmc::bytes32) * 2, 0);
+				std::memcpy(bytes_key.data() + sizeof(evmc::bytes32) - sizeof(evmc::address), &addr, sizeof(evmc::address));
+				evmc::bytes32 slot_key(storage_var.slot_id);
+				std::memcpy(bytes_key.data() + sizeof(evmc::bytes32), slot_key.bytes, sizeof(evmc::bytes32));
+
+				ethash_hash256 hash = ethash_keccak256(bytes_key.data(), bytes_key.size());
+				rvm::ScopeKey skey{ hash.bytes, sizeof(ethash_hash256) };
+				rvm::ConstStateData state_data = p_chain_state->GetState(csid, &skey);
+				evmc::bytes bytes_data(storage_var.number_of_bytes, 0);
+                if(state_data.DataSize)
+				    std::memcpy(bytes_data.data(), state_data.DataPtr, number_of_bytes);
+
+				xtl::TypeParser type_parser(storage_var.type);
+				out[storage_var.name] = (type_parser.type == xtl::Type::Undefined || type_parser.is_dynamic_array) ? "" : xtl::create_type(storage_var.type, bytes_data)->GetDecodedDataString();
+			}
+		}
+        return 0;
+    }
 }
 #endif

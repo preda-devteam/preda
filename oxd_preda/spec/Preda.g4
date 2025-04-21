@@ -90,17 +90,23 @@ fundamentalTypeName
   : 'bool' | IntType | UintType | FloatType | 'string' | 'blob' | 'hash' | 'bigint' | AddressKeyword;
 
 builtInContainerTypeName
-  : mapTypeName | arrayTypeName;
+  : mapTypeName | arrayTypeName | scatteredMapTypeName | scatteredArrayTypeName;
 
 mapKeyTypeName
-  : 'bool' | IntType | UintType | FloatType | 'blob' | 'hash' | AddressKeyword;
+  : IntType | UintType | 'blob' | 'hash' | AddressKeyword;
 
 mapTypeName
   : 'map' '<' mapKeyTypeName ',' typeName '>';
 
+scatteredMapTypeName
+  : 'scattered_map' '<' mapKeyTypeName ',' typeName '>';
+
 arrayTypeName
   : 'array' '<' typeName '>';
-  
+
+scatteredArrayTypeName
+  : 'scattered_array' '<' typeName '>';
+
 userDefinedTypeName
   : (identifier '.')* identifier ;       //append "( '.' identifier )*" to support nested type definition
 

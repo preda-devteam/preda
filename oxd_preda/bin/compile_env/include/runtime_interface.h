@@ -130,7 +130,14 @@ namespace prlrt {
 	PRDOP_BLK_CTX,
 	// debug
 	PRDOP_DEBUG_OP,
-	PRDOP_NUM
+	// scattered types
+	PRDOP_SCTP_GET_UNTOUCHED,
+	PRDOP_SCTP_COMMIT,
+	PRDOP_SCTMAP_ERASE,
+	PRDOP_SCTARR_PUSH,
+	PRDOP_SCTARR_POP,
+	PRDOP_SCTARR_LEN,
+	PRDOP_NUM,
 	};
 
 	struct CBigInt;
@@ -300,7 +307,10 @@ namespace prlrt {
 	V(void, SetAsContractAddress, void* pAddress, uint64_t contract_id)\
 	V(void, SetAsCustomAddress, void* pAddress, const uint8_t* data)\
 \
-	V(bool, BurnGas, uint64_t gas_cost)\
+	V(bool, GetState, uint64_t cvid, uint8_t scope_id, uint8_t slot_id, const uint8_t* key_data, uint32_t key_data_size, const uint8_t*& value_data, uint32_t& value_data_size)\
+	V(void, SetState, uint64_t cvid, uint8_t scope_id, uint8_t slot_id, const uint8_t* key_data, uint32_t key_data_size, const uint8_t* value_data, uint32_t value_data_size)\
+	V(uint32_t, GetStateSize, uint64_t cvid, uint8_t scope_id, uint8_t slot_id, const uint8_t* key_data, uint32_t key_data_size)\
+	V(bool, GetStateData, uint64_t cvid, uint8_t scope_id, uint8_t slot_id, const uint8_t* key_data, uint32_t key_data_size, uint8_t* value_data)\
 \
 	FOR_EACH_PREDA_FLOAT_METHOD(V, 256)\
 	FOR_EACH_PREDA_FLOAT_METHOD(V, 512)\

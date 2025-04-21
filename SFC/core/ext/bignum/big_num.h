@@ -276,7 +276,7 @@ public:
 					return r;
 				}
 	template<class t_Ostream>
-	friend t_Ostream& operator<<(t_Ostream& Ostream, const BigNumRough& x){	return Ostream << x.ToDouble();	}
+	friend t_Ostream& operator<<(t_Ostream& Ostream, const BigNumRough& x){Ostream << x.ToDouble(); return Ostream;}
 	static const BigNumRough& Zero(){ static const DWORD _ = 0; return (BigNumRough&)_; }
 };
 
@@ -298,9 +298,9 @@ struct BigNumImmutable: public STORE_CLS
 	bool		operator == (const BigNumRef& x) const { return _details::BN_Equal(*this, x); }
 	bool		operator != (const BigNumRef& x) const { return !_details::BN_Equal(*this, x); }
 	bool		operator > (ULONGLONG x) const { return !IsNegative() && (STORE_CLS::GetLength()>1 || (STORE_CLS::GetLength()==1 && STORE_CLS::Data()[0] >x)); }
-	bool		operator >= (ULONGLONG x) const { return !IsNegative() && (STORE_CLS::GetLength()>1 || (STORE_CLS::GetLength()==1 && STORE_CLS::Data()[0] >=x)); }
-	bool		operator < (ULONGLONG x) const { return IsNegative() || STORE_CLS::GetLength()>1 || (STORE_CLS::GetLength()==1 && STORE_CLS::Data()[0] <x); }
-	bool		operator <= (ULONGLONG x) const { return IsNegative() || STORE_CLS::GetLength()>1 || (STORE_CLS::GetLength()==1 && STORE_CLS::Data()[0] <=x); }
+	bool		operator >= (ULONGLONG x) const { return !IsNegative() && (STORE_CLS::GetLength()>1 || (STORE_CLS::GetLength()==1 && STORE_CLS::Data()[0] >=x) || (STORE_CLS::GetLength() == 0 && 0 == x)); }
+	bool		operator < (ULONGLONG x) const { return IsNegative() || (STORE_CLS::GetLength() == 1 && STORE_CLS::Data()[0] < x) || (STORE_CLS::GetLength() == 0 && 0 < x); }
+	bool		operator <= (ULONGLONG x) const { return IsNegative() || (STORE_CLS::GetLength()==1 && STORE_CLS::Data()[0] <=x) || STORE_CLS::GetLength() == 0; }
 
 	template<class t_Ostream>
 	friend t_Ostream& operator<<(t_Ostream& Ostream, const BigNumImmutable& x)
@@ -417,7 +417,7 @@ public:
 	template<class S>
 	BigNumMutable(const BigNumImmutable<S>& x){ *this = x; }
 	BigNumMutable(const BigNumMutable& x){ *this = x; }
-	BigNumMutable(BigNumMutable&& x) { rt::Copy(*this, x); rt::Zero(x); }
+	BigNumMutable(BigNumMutable&& x) noexcept { rt::Copy(*this, x); rt::Zero(x); }
 	BigNumMutable(unsigned int x){ *this = x; }
 	BigNumMutable(int x){ *this = x; }
 	BigNumMutable(unsigned short x){ *this = x; }

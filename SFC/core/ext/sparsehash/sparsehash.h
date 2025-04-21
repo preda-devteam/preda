@@ -185,6 +185,7 @@ public:
 	auto&			operator [](const KEY& key) const { return _SC::operator [](key); }
 	void			set(const KEY& key, const VALUE& val){ _SC::erase(key); _SC::operator [](key) = val; }
 	void			insert(const KEY& key, const VALUE& val){ ASSERT(!has(key)); _SC::operator [](key) = val; }
+	void			swap(fast_map_aliased_key& fm){ _SC::swap(fm); }
 };
 
 template<typename KEY, typename hash_compare = SPARSEHASH_HASH<KEY>>

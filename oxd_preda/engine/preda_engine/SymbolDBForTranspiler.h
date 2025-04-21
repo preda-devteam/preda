@@ -195,6 +195,27 @@ class CContractSymbolDatabaseForTranspiler : public transpiler::IContractSymbolD
 			return m_pEntry->scopeStateVarMeta[int(scope)].hasBlob;
 		}
 
+		virtual uint32_t GetNumScatteredStateVariable() const override
+		{
+			return (uint32_t)m_pEntry->scatteredTypeStateVarInfo.size();
+		}
+		virtual const char* GetScatteredStateVariableTypeSignature(uint32_t scatteredStateIdx) const override
+		{
+			return m_pEntry->scatteredTypeStateVarInfo[scatteredStateIdx].typeSignature.c_str();
+		}
+		virtual const char* GetScatteredStateVariableName(uint32_t scatteredStateIdx) const override
+		{
+			return m_pEntry->scatteredTypeStateVarInfo[scatteredStateIdx].name.c_str();
+		}
+		virtual uint16_t GetScatteredStateVariableScopeKeySize(uint32_t scatteredStateIdx) const override
+		{
+			return m_pEntry->scatteredTypeStateVarInfo[scatteredStateIdx].scopeKeySize;
+		}
+		virtual uint8_t GetScatteredStateVariableSlotId(uint32_t scatteredStateIdx) const override
+		{
+			return m_pEntry->scatteredTypeStateVarInfo[scatteredStateIdx].slotId;
+		}
+
 		virtual uint32_t GetNumEnumTypes() const override
 		{
 			return (uint32_t)m_pEntry->enums.size();

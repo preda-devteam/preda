@@ -1,5 +1,5 @@
 #include "simu_global.h"
-#include "simulator.h"
+#include "chain_simu.h"
 #include "../native/types/data_jsonifer.h"
 #include "core_contracts.h"
 
@@ -57,7 +57,7 @@ void ContractsDatabase::Revert()
 	_NextContractSN = 0;
 }
 
-SimuGlobalShard::SimuGlobalShard(Simulator* simu, uint64_t time_base, uint32_t shard_order)
+SimuGlobalShard::SimuGlobalShard(ChainSimulator* simu, uint64_t time_base, uint32_t shard_order)
 	:SimuShard(simu, time_base, shard_order)
 {
 	_pGlobalShard = this;
@@ -262,12 +262,12 @@ bool SimuGlobalShard::AllocateContractIds(const BuildContracts& built)
 	for(uint32_t i=0; i<count; i++)
 	{
 		auto* c = linked->GetContract(i);
-		rt::String full_name = _pSimulator->DAPP_NAME + '.' + c->GetName().Str();
+		rt::String full_name = _pSimulator->m_attribute.DAPP_NAME + '.' + c->GetName().Str();
 		
 		rvm::ContractVersionId cvid = _Contracts.get(full_name, rvm::ContractVersionIdInvalid);
 		if(cvid == rvm::ContractVersionIdInvalid)
 		{
-			rvm::ContractId cid = rvm::CONTRACT_ID_MAKE(_DeployingDatabase._NextContractSN++, _pSimulator->DAPP_ID, e);
+			rvm::ContractId cid = rvm::CONTRACT_ID_MAKE(_DeployingDatabase._NextContractSN++, _pSimulator->m_attribute.DAPP_ID, e);
 			cvid = rvm::CONTRACT_SET_BUILD(cid, BUILD_NUM_INIT);
 			
 			_DeployingDatabase._Contracts[full_name] = cvid;
@@ -295,8 +295,8 @@ bool SimuGlobalShard::AllocateContractIds(const BuildContracts& built)
 
 rvm::DAppId	SimuGlobalShard::_GetDAppByName(const rvm::ConstString* dapp_name) const
 {
-	if(dapp_name->Str() == Simulator::Get().DAPP_NAME)
-		return Simulator::Get().DAPP_ID;
+	if(dapp_name->Str() == _pSimulator->m_attribute.DAPP_NAME)
+		return _pSimulator->m_attribute.DAPP_ID;
 	else if(dapp_name->Str() == rt::SS("core"))
 		return rvm::DAppIdCore;
 
@@ -345,7 +345,7 @@ bool SimuGlobalShard::CommitDeployment(const BuildContracts& built)
 	{
 		auto* c = deployed->GetContract(i);
 		auto name = c->GetName();
-		rt::String full_name = _pSimulator->DAPP_NAME + '.' + name.Str();
+		rt::String full_name = _pSimulator->m_attribute.DAPP_NAME + '.' + name.Str();
 		rvm::ConstString s = { full_name.Begin(), (uint32_t)full_name.GetLength() };
 		rvm::ContractVersionId cvid = _GetContractByName(&s);
 		ASSERT(cvid != rvm::ContractVersionIdInvalid);
@@ -490,6 +490,7 @@ bool BuildContracts::Compile(bool checkDeployArg)
 
 			if(_EngineId == rvm::EngineId::SOLIDITY_EVM)
 			{
+				continue;
 				rt::JsonObject sol_json(_Sources[0]);
 				_ContractToFilename[sol_json.GetValue("entryContract")] = filename = sol_json.GetValue("entryFile");
 			}
@@ -642,6 +643,30 @@ rvm::InvokeResult BuildContracts::InvokeConstructor(rvm::ExecutionUnit* exec, rv
 {
 	ASSERT(_Stage == STAGE_DEPLOY);
 	return exec->InitializeContracts(exec_ctx, gas_limit, _pCompiled, _ContractDeployArgs);
+}
+
+uint32_t BuildContracts::CalcDeployGasBurnt()
+{
+	static constexpr uint32_t DEFAULT_COMPILATION_TIME = 30;
+	static constexpr uint32_t TXN_GAS_OFFERED_DEFAULT = 1000000;
+	rvm::ArrayMutable<rvm::Data> sources;
+	rvm::ArrayMutable<rvm::Data> args;
+	for (uint32_t i = 0; i < _Filenames.GetSize(); i++)
+	{
+		rvm::DataMutable dsrc(_Sources[i], rvm::Data::TYPE_BINARY);
+		sources.Append(rvm::RvmImmutableTypeCompose(dsrc));
+		rvm::DataMutable dcargs(_ContractDeployArgs[i].Str(), rvm::Data::TYPE_BINARY);
+		args.Append(rvm::RvmImmutableTypeCompose(dcargs));
+	}
+
+	uint32_t source_size = rvm::Array<rvm::Data>::GetEmbeddedSize(sources);
+	uint32_t ctor_size = rvm::Array<rvm::Data>::GetEmbeddedSize(args);
+	return (GAS_PERBYTE_OF_ARGUMENT*(source_size + ctor_size) + GAS_PERBYTE_OF_SOURCECODE*source_size + 
+			GAS_PERSECOND_OF_BUILD*DEFAULT_COMPILATION_TIME + TXN_GAS_OFFERED_DEFAULT) +
+		   (GAS_PERBYTE_OF_ARGUMENT*(source_size + ctor_size + SIZE_OF_DEPLOY_CONFIGING) +
+		   (GAS_PERBYTE_OF_STATE + GAS_PERBYTE_OF_SOURCECODE)*source_size + 
+		   (GAS_PERBYTE_OF_STATE + GAS_PERBYTE_OF_ARGUMENT)*(SIZE_OF_SCHEDULEDDEPLOYMENT)*sources.GetCount() +
+		   GAS_PERSECOND_OF_BUILD*DEFAULT_COMPILATION_TIME/2);
 }
 
 void BuildContracts::GetContractsInfo(rt::Json& json) const

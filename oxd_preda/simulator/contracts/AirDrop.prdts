@@ -4,8 +4,8 @@ chain.gaslimit 256
 
 chain.deploy @1 Token.prd
 
-log.highlight Airdrop test
-log Perparing test transactions ($~count$)
+log.highlight "Airdrop test"
+log "Perparing test transactions ($~count$)"
 
 state.set Token.address @all { balance:"10000000000000" }
 
@@ -38,7 +38,7 @@ Token.transfer_n*$~count$ @random { recipients: [ \
 ]}
 
 chain.info
-log Executing
+log "Executing"
 
 stopwatch.restart
 chain.run

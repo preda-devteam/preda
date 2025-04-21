@@ -67,7 +67,7 @@ endfunction()
 file(GLOB ESSENTIALS_SOURCES ../SFC/essentials.*)
 file(GLOB BOTAN_SOURCES ../SFC/core/ext/botan/botan.*)
 file(GLOB OXD_LIBSEC_SOURCES src/*.cpp src/*.h)
-file(GLOB LIBSODIUM_SOURCES src/libsodium/*.cpp src/libsodium/*.h)
+file(GLOB_RECURSE LIBSODIUM_SOURCES src/libsodium/libsodium/src/libsodium/*.c)
 file(GLOB OXD_LIBSEC_HEAD src/*.h)
 file(GLOB MAIN_FILES
     src/keccak256.cpp
@@ -88,6 +88,8 @@ add_library(oxd_libsec STATIC
     ${LIBSODIUM_SOURCES}
 )
 include_directories(./src/libsodium/libsodium/src/libsodium/include/sodium)
+
+add_definitions(-DSODIUM_STATIC)
 
 option(INCLUDE_TEST_PROJECT "oxd_libsec_test for devs" OFF)
 message(STATUS "INCLUDE_TEST_PROJECT is ${INCLUDE_TEST_PROJECT}, to enable with: -DINCLUDE_TEST_PROJECT=ON")
@@ -136,14 +138,17 @@ if(WIN32)
         set_target_properties(libsec_test PROPERTIES OUTPUT_NAME "oxd_libsec")
     endif()
 elseif(UNIX AND NOT APPLE)
-    # linux_link_ipp_rule(oxd_libsec)
     target_link_directories(oxd_libsec PRIVATE ../SFC/libs/linux)
     file(GLOB LINUX_IPP_LIBS ../SFC/libs/linux/*.a)
     target_link_libraries(oxd_libsec PRIVATE
         pthread dl X11
     )
-    target_link_libraries(oxd_libsec PRIVATE ${LINUX_IPP_LIBS})
     add_compile_options(-fPIC -pthread -ldl -lX11)
+    if(NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+        target_link_libraries(oxd_libsec PRIVATE ${LINUX_IPP_LIBS})
+    else()
+        target_compile_definitions(oxd_libsec PRIVATE PLATFORM_DISABLE_INTEL_IPP)
+    endif()
     ########################## add libsec_test executable target ###################################
     if(INCLUDE_TEST_PROJECT)
         link_directories(../SFC/libs/linux)

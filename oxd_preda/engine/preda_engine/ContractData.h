@@ -74,6 +74,15 @@ struct ContractCompileData
 
 	std::vector<ScopeStateVariableMetadata> scopeStateVarMeta;
 
+	struct ScatteredTypeStateVariableInfo
+	{
+		uint16_t scopeKeySize;
+		uint8_t slotId;
+		std::string typeSignature;
+		std::string name;
+	};
+	std::vector<ScatteredTypeStateVariableInfo> scatteredTypeStateVarInfo;
+
 	std::vector<ContractEnum> enums;
 	std::vector<ContractStruct> structs;
 	std::vector<std::string> importedContracts;

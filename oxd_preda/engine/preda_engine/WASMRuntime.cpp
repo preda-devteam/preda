@@ -518,6 +518,32 @@ std::optional<wasmtime::Linker> WASMRuntime::CreateBaseLinker(CExecutionEngine& 
 		})) {
 		return {};
 	}
+	if (!linker.func_wrap("env", "predaGetStateSize",
+		[&engine](wasmtime::Caller caller, uint64_t cvid, uint32_t scope_id, uint32_t slot_id, WasmPtrT key_data_offset, uint32_t key_data_size) -> uint32_t {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			const uint8_t* key_data = WasmPtrToPtr<const uint8_t*>(mem, key_data_offset);
+			return engine.runtimeInterface().GetStateSize(cvid, scope_id, slot_id, key_data, key_data_size);
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaGetStateData",
+		[&engine](wasmtime::Caller caller, uint64_t cvid, uint32_t scope_id, uint32_t slot_id, WasmPtrT key_data_offset, uint32_t key_data_size, WasmPtrT value_data_offset) -> uint32_t {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			const uint8_t* key_data = WasmPtrToPtr<const uint8_t*>(mem, key_data_offset);
+			uint8_t* value_data = WasmPtrToPtr<uint8_t*>(mem, value_data_offset);
+			return engine.runtimeInterface().GetStateData(cvid, scope_id, slot_id, key_data, key_data_size, value_data);
+		})) {
+		return {};
+	}
+	if (!linker.func_wrap("env", "predaSetState",
+		[&engine](wasmtime::Caller caller, uint64_t cvid, uint32_t scope_id, uint32_t slot_id, WasmPtrT key_data_offset, uint32_t key_data_size, WasmPtrT value_data_offset, uint32_t value_data_size) -> void {
+			wasmtime::Span<uint8_t> mem = engine.wasm_runtime()->memory().data(caller.context());
+			const uint8_t* key_data = WasmPtrToPtr<const uint8_t*>(mem, key_data_offset);
+			const uint8_t* value_data = WasmPtrToPtr<const uint8_t*>(mem, value_data_offset);
+			return engine.runtimeInterface().SetState(cvid, scope_id, slot_id, key_data, key_data_size, value_data, value_data_size);
+		})) {
+		return {};
+	}
 
 #define _DEFINE_FLOAT_METHOD(_BIT)\
 	if (!linker.func_wrap("env", "predaGetConvertToStringLen_" # _BIT,\

@@ -2311,6 +2311,9 @@ void os::CommandLine::Parse(int argc, WCHAR* argv[])	// for _tmain
 
 void os::CommandLine::Parse(LPCWSTR pCmdLine)		// for _twmain
 {
+	if (!_details::__FirstParsedCommandLine)
+		_details::__FirstParsedCommandLine = this;
+
 	Parse(__UTF8(pCmdLine));
 }
 
@@ -2623,6 +2626,15 @@ os::Process::Process()
 	_ExecutionTime = 0;
 #if defined(PLATFORM_WIN)
 	_hProcess = INVALID_HANDLE_VALUE;
+#else
+#endif
+}
+
+os::Process::~Process()
+{
+#if defined(PLATFORM_WIN)
+	if (_hProcess != INVALID_HANDLE_VALUE)
+		CloseHandle(_hProcess);
 #else
 #endif
 }

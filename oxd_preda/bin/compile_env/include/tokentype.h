@@ -20,10 +20,12 @@ namespace prlrt {
 
 		~____token_impl()
 		{
+			disable_burn_gas();
 			if (!bSerialized && amount > amount_type(0))
 			{
 				PREDA_CALL(ReportOrphanToken, id._v, amount._v);
 			}
+			enable_burn_gas();
 		}
 
 		id_type GetTokenId() const
@@ -112,7 +114,7 @@ namespace prlrt {
 			}
 		}
 
-		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
+		bool map_from_serialized_data(const uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
 			if (!id.map_from_serialized_data(buffer, bufferSize, bDeep))
 				return false;
@@ -211,7 +213,7 @@ namespace prlrt {
 			ptr->serialize_out(buffer, for_debug);
 		}
 
-		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
+		bool map_from_serialized_data(const uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
 			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_MAP_STATIC]);
 			return ptr->map_from_serialized_data(buffer, bufferSize, bDeep);

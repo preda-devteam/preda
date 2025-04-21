@@ -1,5 +1,8 @@
 #pragma once
 #include <map>
+#ifndef __APPLE__
+#include <memory_resource>
+#endif
 #include "../../native/abi/vm_interfaces.h"
 #include "RuntimeInterfaceImpl.h"
 #include "ContractData.h"
@@ -30,7 +33,10 @@ private:
 	CContractDatabase *m_pDB = nullptr;
 	CRuntimeInterface m_runtimeInterface;
 	// gas table
-	constexpr static uint64_t m_intrinsic_gas = 20000; 
+	constexpr static uint64_t m_intrinsic_gas = 20000;
+#ifndef __APPLE__
+	std::pmr::unsynchronized_pool_resource m_memory_pool;
+#endif
 
 	// The wasm runtime is wrapper of wasmtime engine, holds wasmtime::Store, wasmtime::Memory and main module symbols.
 	// It is created once only when the ExecutionEngine is constructed.
@@ -44,7 +50,7 @@ private:
 	// But it doesn't check that strictly in the source code.
 	std::optional<wasmtime::Linker> m_base_linker;
 
-	// This data sturcture used for cross contract call, such as A call B and then B call A.
+	// This data structure used for cross contract call, such as A call B and then B call A.
 	// However, as we keep the wesmtime engine, the number of wastime::instance is limited to 10000 currently. 
 	// In addition, we haven't found a way to release the wastime::instance at present, it is auto realeased as the wastime engine destroys. 
 	// Thus, we keep this structure instead of clearing it every invoke to solve the limited instance issue.
@@ -58,8 +64,11 @@ private:
 	// It's not indexed by ContractId because different versions of the same contract might co-exist along
 	// the call chain. (e.g. A[v2] -> B -> A[v1]). Although in this case the call would fail if A[v1] tries
 	// to map a non-empty chain state that has already been converted to A[v2] format.
+#ifndef __APPLE__
+	std::map<rvm::ContractVersionId, ContractRuntimeInstance*, std::less<>, std::pmr::polymorphic_allocator<std::pair<const rvm::ContractVersionId, ContractRuntimeInstance*>>> m_intermediateContractInstances;
+#else
 	std::map<rvm::ContractVersionId, ContractRuntimeInstance*> m_intermediateContractInstances;
-	std::vector<std::vector<uint8_t>> m_inputStateCopies;
+#endif
 	void ReleaseExecutionIntermediateData();
 
 	uint32_t InvokeContractCall(rvm::ExecutionContext *executionContext, rvm::ContractVersionId cvId, uint32_t opCode, const void **ptrs, uint32_t numPtrs);

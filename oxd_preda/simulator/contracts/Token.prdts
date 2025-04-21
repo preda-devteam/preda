@@ -4,8 +4,8 @@ chain.gaslimit 256
 
 chain.deploy @1 Token.prd
 
-log.highlight Token test
-log Perparing test transactions
+log.highlight "Token test"
+log "Perparing test transactions"
 
 state.set Token.address @all { balance:"10000000000000" }
 

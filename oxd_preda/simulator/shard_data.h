@@ -1,14 +1,19 @@
 #pragma once
 #include <deque>
+#ifndef __APPLE__
+#include <memory_resource>
+#endif
 #include "../../SFC/core/ext/bignum/ttmath/ttmath.h"
 #include "../../SFC/core/ext/sparsehash/sparsehash.h"
 #include "../../SFC/core/ext/concurrentqueue/async_queue.h"
 #include "../../SFC/core/ext/exprtk/exprtk.h"
+#include "../3rdParty/nlohmann/json.hpp"
 #include "../native/abi/vm_interfaces.h"
 #include "../native/types/array.h"
 #include "../native/types/coins.h"
 #include "../native/types/abi_def_impl.h"
 #include "../../oxd_libsec/oxd_libsec.h"
+
 
 namespace oxd
 {
@@ -40,6 +45,10 @@ struct ShardStateKeyObj: protected ShardStateKey
 
 	const ShardStateKeyObj& operator = (const ShardStateKeyObj& x);
 	bool operator == (const ShardStateKeyObj& x) const;
+
+	rvm::ScopeKey GetScopeKey() { return Key; }
+	rvm::ContractScopeId GetCsid() { return Contract; }
+
 };
 
 struct ScopeKeyPOD: public rvm::ScopeKey
@@ -57,6 +66,10 @@ struct User
 {
 	rvm::Address		Addr;
 	uint32_t			ShardDword;
+#ifdef VERIFY_SIG
+	uint8_t         	pk[32];
+    uint8_t         	sk[64];
+#endif
 	bool				operator==(const User& u) const
 	{
 		return (!memcmp(Addr._, u.Addr._, RVM_HASH_SIZE) && Addr._CheckSum == u.Addr._CheckSum && (ShardDword == u.ShardDword));
@@ -143,11 +156,16 @@ struct SimuTxn
 	uint64_t				Timestamp;
 	uint64_t				Gas;
 	uint32_t				GasRedistributionWeight;
-	static constexpr uint64_t DefaultGas = 10000000;
+	inline static uint64_t			DefaultGas;
 
 	rvm::ContractInvokeId	Contract;  // Contract with scope
 	rvm::OpCode				Op;
 	SimuTxnFlag				Flag;
+
+#ifdef VERIFY_SIG
+	uint8_t 				pk[32];
+	uint8_t 				sig[64];
+#endif
 
 	uint32_t				TokensSerializedSize;	// rvm::Array<rvm::Coins>, normal txn only
 	uint32_t				ArgsSerializedSize;
@@ -171,6 +189,10 @@ struct SimuTxn
 	uint32_t				GetSize() const { return ArgsSerializedSize + TokensSerializedSize + offsetof(SimuTxn, SerializedData); }
 	void					Release(){ _SafeFree8AL_ConstPtr(this); }
 	static SimuTxn*			Create(uint32_t args_size, uint32_t assets_size);
+#ifndef __APPLE__
+	void 					ReleaseRelay(std::pmr::unsynchronized_pool_resource* mem_pool);
+	static SimuTxn*			CreateRelay(std::pmr::unsynchronized_pool_resource* mem_pool, uint32_t args_size, uint32_t assets_size);
+#endif
 	SimuTxn*				Clone() const;
 	rvm::EngineId			GetEngineId() const { return rvm::CONTRACT_ENGINE(Contract); }
 	void					Jsonify(rvm::RvmEngine* engine, rt::Json& append) const;
@@ -210,6 +232,7 @@ struct SimuBlock
 	uint64_t			Timestamp;
 	rvm::Address		Miner;
 	uint64_t			TotalGas;
+	uint32_t 			ShardId;
 	uint32_t			TxnCount;
 	ConfirmTxn			Txns[1];
 
@@ -220,12 +243,19 @@ struct SimuBlock
 
 struct SimuState
 {
+#ifndef __APPLE__
+	uint32_t			ShardId;
+#endif
 	rvm::BuildNum	 	Version;
 	uint32_t			DataSize;
 	uint8_t				Data[1];
 
-	void				Release(){ _SafeFree8AL_ConstPtr(this); }
+	void				Release();
+#ifndef __APPLE__
+	static SimuState*	Create(uint32_t size, rvm::BuildNum buildnum = (rvm::BuildNum)0, uint32_t shard_id = rvm::GlobalShard, const void* data = nullptr);
+#else
 	static SimuState*	Create(uint32_t size, rvm::BuildNum buildnum = (rvm::BuildNum)0, const void* data = nullptr);
+#endif
 };
 #pragma pack(pop)
 
@@ -313,20 +343,24 @@ public:
 			}
 	auto*	Get(const KEY& k) const { return _State.get(k); }
 	void	Set(const KEY& k, SimuState* s, bool keep_nullptr = false)
-			{	if(keep_nullptr || s)
-				{	_SafeRelease_ConstPtr(_State.replace(k, s));
+			{	if(keep_nullptr || (s && s->DataSize))
+				{
+					auto* ret = _State.replace(k, s);
+					if(ret) ret->Release();
 				}
 				else
 				{	auto it = _State.find(k);
 					if(it != _State.end())
-					{	_SafeRelease_ConstPtr(it->second);
+					{	
+						if(it->second) it->second->Release();
 						_State.erase(it);
 					}
 				}
 			}
 	size_t	GetSize() const { return _State.size(); }
 	void	Empty()
-			{	_State.foreach([](const KEY& k, SimuState* s){ _SafeRelease_ConstPtr(s); });
+			{
+				_State.foreach([](const KEY& k, SimuState* s) { s->Release(); });
 				_State.clear();
 			}
 	void	Commit(SimuChainState& to)
@@ -334,7 +368,7 @@ public:
 				_State.clear();
 			}
 	SimuChainState() = default;
-	~SimuChainState(){ Empty(); }
+	~SimuChainState() = default;
 
 	bool ShardStateJsonify(const EngineEntry* engine, rt::Json& append, rvm::ContractId target_cid, uint64_t shard_index) const
 	{
@@ -399,24 +433,23 @@ public:
 		}
 	}
 
-	void AddressStateJsonify(const EngineEntry* engine, rt::Json& append, const rt::BufferEx<User>& Users, rvm::ContractId target_cid, int shard_index,const rvm::Address* targetAddr)
+	void AddressStateJsonify(const EngineEntry* engine, rt::Json& append, uint32_t userId, rvm::ContractId target_cid, int shard_index,const rvm::Address* targetAddr)
 	{
+		assert(targetAddr != nullptr);
 		std::map<rvm::Address, rt::BufferEx<std::pair<rvm::ContractScopeId, SimuState*>>, cmpAddress> states_per_addr;
 		GroupAddrState(states_per_addr);
 		for (auto it : states_per_addr)
 		{
 			rvm::Address addr = it.first;
 			rt::BufferEx<std::pair<rvm::ContractScopeId, SimuState*>> state_arr = it.second;
-			auto s = append.ScopeAppendingElement();
-			if (targetAddr != nullptr && memcmp(&addr._, &(targetAddr->_), sizeof(rvm::Address)) != 0)
-			{
+			if (memcmp(&addr._, &(targetAddr->_), sizeof(rvm::Address)) != 0)
 				continue;
-			}
 
+			auto s = append.ScopeAppendingElement();
 			User a({ addr, rvm::ADDRESS_SHARD_DWORD(addr) });
 			append.Object((
 				J(Address) = oxd::SecureAddress::String(addr),
-				J(AddressIndex) = rt::SS() + ('@') + Users.Find(a),
+				J(AddressIndex) = rt::SS() + ('@') + userId,
 				J(ShardIndex) = rt::SS() + ('#') + shard_index
 				));
 			auto ss = append.ScopeAppendingKey("States");
@@ -443,7 +476,7 @@ public:
 		{
 			for (auto it : _State)
 			{
-				if(it.first.Address.target_size == key.Address.target_size && rvm::CONTRACT_UNSET_SCOPE(key.Id) == rvm::CONTRACT_UNSET_SCOPE(it.first.Id))
+				if(it.first.Address.target_size == key.Address.target_size && rvm::CONTRACT_UNSET_SCOPE(key.Id) == rvm::CONTRACT_UNSET_SCOPE(it.first.Id) && rvm::CONTRACT_SCOPE(key.Id) != rvm::Scope::ScatteredMapOnGlobal && rvm::CONTRACT_SCOPE(key.Id) != rvm::Scope::ScatteredMapOnShard)
 				{
 					SimuState* s = it.second;
 					JsonifyScopeState(append, s, it.first, shardIndex, engine[(int)rvm::CONTRACT_ENGINE(it.first.Id)].pEngine);
@@ -459,6 +492,96 @@ public:
 			}
 			JsonifyScopeState(append, s, key, shardIndex, engine[(int)rvm::CONTRACT_ENGINE(key.Id)].pEngine);
 		}
+		return true;
+	}
+
+	bool ScatteredMapJsonify(const EngineEntry* engine, rt::String& jsonStr, uint32_t shardIndex) const {
+		rt::String keyStr, valStr, varStr;
+		rvm::StringStreamImpl keySS(keyStr);
+		rvm::StringStreamImpl valSS(valStr);
+		rvm::StringStreamImpl varSS(varStr);
+		std::string tmp(jsonStr.GetString(), jsonStr.GetLength());
+		nlohmann::json mapJson = nlohmann::json::parse(tmp);
+		if (shardIndex == 65535)
+		{
+			shardIndex = 0;
+		}
+		for (auto it : _State)
+		{
+			ShardStateKeyObj keyObj = it.first;
+			rvm::ContractScopeId tmp = keyObj.GetCsid();
+			rvm::Scope scope = rvm::CONTRACT_SCOPE(keyObj.GetCsid());
+			rvm::ScopeType scope_type = rvm::SCOPE_TYPE(scope);
+			if (scope_type == rvm::ScopeType::ScatteredMapOnGlobal || scope_type == rvm::ScopeType::ScatteredMapOnShard)
+			{
+				rvm::ConstData keyData({ keyObj.GetScopeKey().Data, keyObj.GetScopeKey().Size});
+				rvm::ConstData valData({ it.second->Data, it.second->DataSize });
+				uint8_t engineId = (uint8_t)rvm::CONTRACT_ENGINE(keyObj.GetCsid());
+				rvm::ContractScopeId csid = keyObj.GetCsid();
+				rvm::ContractInvokeId ciid = rvm::CONTRACT_SET_BUILD(csid, it.second->Version);
+				rvm::ContractVersionId cvid = rvm::CONTRACT_UNSET_SCOPE(ciid);
+				bool suc = engine[engineId].pEngine->GetContractStateSignature(ciid, &varSS);
+				suc = suc && engine[engineId].pEngine->ScatteredStateKeyJsonify(ciid, &keyData, &keySS);
+				suc = suc && engine[engineId].pEngine->StateJsonify(ciid, &valData, &valSS);
+				if (!suc)
+				{
+					_LOG("[PRD]: Unable to jsonify Scattered Data Structure");
+					return true;
+				}
+				std::string type;
+				std::string varOut = std::string(varSS.GetString().StrPtr, varSS.GetString().Length);
+				size_t pos = varOut.find(" ");
+				if (pos != std::string::npos)
+				{
+					type = varOut.substr(pos + 1);
+					varOut = varOut.substr(0, pos);
+				}
+				bool IsScatteredMap = type == "scattered_map";
+				std::string keyOut = std::string(keySS.GetString().StrPtr, keySS.GetString().Length);
+				if(keyOut[0] != '"' && keyOut.back() != '"' && IsScatteredMap)
+				{
+					std::ostringstream oss;
+					oss << std::quoted(keyOut);
+					keyOut = oss.str();
+				}
+				rt::String unescapedStr = rt::String_Ref(valSS);
+				unescapedStr.EscapeCharacters("\\");
+				std::string valOut = std::string(unescapedStr.Begin());
+				auto& curShardObj = mapJson[shardIndex]["States"];
+				for (auto& stateIter : curShardObj.items())
+				{
+					uint64_t stateCvid = std::stoull(stateIter.value()["CVID"].dump());
+					if (stateCvid != (uint64_t)cvid)
+					{
+						continue;
+					}
+					auto& shardState = stateIter.value()["State"];
+					auto varIter = shardState.find(varOut);
+					if (varIter != shardState.end())
+					{
+						if (varIter->is_number())
+						{
+							shardState.erase(varIter);
+							shardState[varOut] = IsScatteredMap ? nlohmann::json::object() : nlohmann::json::array();
+
+						}
+						if (IsScatteredMap)
+						{
+							shardState[varOut].update(nlohmann::json::parse("{" + keyOut + ":" + valOut + "}"));
+						}
+						else
+						{
+							shardState[varOut][std::stoi(keyOut)] = (nlohmann::json::parse(valOut));
+						}						
+						
+					}
+				}
+				keyStr.Empty();
+				valStr.Empty();
+				varStr.Empty();
+			}
+		}
+		jsonStr = rt::String(mapJson.dump().c_str(), mapJson.dump().length());
 		return true;
 	}
 
@@ -545,75 +668,6 @@ struct JsonLogError: public rvm::LogMessageOutput
 	{
 		_LOG_WARNING("[BC]: Json ("<<line<<':'<<lineOffset<<"): "<<message->Str());
 	}
-};
-
-class InputParametrized
-{
-	Simulator&	_Simulator;
-	auto&		_TempString(){ thread_local rt::String _; return _; }
-	auto&		_TempBuffer(){ thread_local rvm::DataBufferImpl _; return _; }
-
-	rt::BufferEx<uint8_t>	_TokensSupplied;  // rvm::Array<rvm::Coins>
-
-public:
-	struct Symbols: public ext::ExpressionSymbols<int64_t>
-	{
-		struct Random: public ext::ExpressionFunction<int64_t, 2>
-		{
-			Simulator&		_Simulator;
-			int64_t			_Last = 0;
-			Random(Simulator& s):_Simulator(s){}
-			virtual int64_t operator() (const int64_t& x, const int64_t& y) override;
-		};
-
-		Random	_random;
-		Symbols(Simulator& s);
-	};
-
-protected:
-	enum SegmentType
-	{
-		ST_ERROR = 0,
-		ST_STATIC,				// String = static string
-		ST_SPECIFIC_ADDRESS,	// UserIndex = index of the user in text
-		ST_NONSTATIC_MIN = 0xf,
-		ST_EXPRESSION,			// Expression = an long integer expression
-		ST_RANDOM_ADDRESS,		// (address string of a random user)
-		ST_INDEXED_ADDRESS,		// _Users[_LoopIndex]
-		ST_RANDOM_BIGINT,		// Bytes = number of random bytes
-	};
-	struct Segment
-	{
-		SegmentType					Type;
-		union {
-		uint32_t					UserIndex;
-		rt::String_Ref				String;
-		ext::Expression<int64_t>*	Expression;
-		uint32_t					Digits;
-		};
-
-		Segment(const rt::String_Ref& s, bool is_static, Simulator& simu);
-		Segment(Segment&& x){ rt::Copy(*this, x); x.Expression = nullptr; }
-		~Segment(){ if(Type == ST_EXPRESSION)_SafeDel(Expression); }
-		bool IsError() const { return Type == ST_ERROR; }
-		bool IsNonStatic() const { return Type > ST_NONSTATIC_MIN; }
-		bool IsLoopIndexInvolved() const { return Type == ST_INDEXED_ADDRESS; }
-	};
-
-	rt::BufferEx<Segment>			_Segments;
-	bool							_bIsParametrized;
-	bool							_bLoopIndexInvolved;
-
-public:
-	InputParametrized(Simulator& s):_Simulator(s){}
-	bool	Parse(const rt::String_Ref& s);
-	void	Empty();
-	void	Evaluate(rt::String& out, int loop_index = 0) const;
-	bool	ComposeState(rvm::ConstData &out_buf, rvm::ContractInvokeId cid, int loop_index = 0, const rt::String_Ref& existing_state = nullptr);
-	auto	ComposeTxn(rvm::ContractInvokeId cid, rvm::OpCode opcode, int loop_index = 0) -> SimuTxn*;
-	bool	IsError() const { return _Segments.GetSize() && _Segments.last().IsError(); }
-	bool	IsParameterized() const { return _bIsParametrized; }
-	bool	IsLoopIndexInvolved() const { return _bLoopIndexInvolved; }
 };
 
 } // namespace oxd

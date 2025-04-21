@@ -1,0 +1,58 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.13;
+contract ERC20 {
+    uint @global public totalSupply;
+    uint @address public balance;
+    mapping(address => uint) @address public allowance;
+
+    event Transfer(address from, address to, uint256 value);
+
+    function mint(uint amount) @address external {
+        require(msg.sender == msg.scope);
+        balance += amount;
+        relay@global _addtotalsupply(amount);
+        emit Transfer(address(0), msg.sender, amount);
+    }
+	
+    function _deposit(uint amount) @address internal {
+        balance += amount;
+    }
+
+    function transfer(address recipient, uint amount) @address external returns (bool) {
+        require(msg.sender == msg.scope);
+        balance -= amount;
+        relay@recipient _deposit(amount);
+        emit Transfer(msg.scope, recipient, amount);
+        return true;
+    }
+    function approve(address spender, uint amount) @address external returns (bool) {
+        require(msg.sender == msg.scope);
+        allowance[spender] = amount;
+        // emit Approval(msg.scope, spender, amount);
+        return true;
+    }
+
+    function transferFrom(address sender, address recipient, uint amount) @address external returns (bool) {
+        require(sender == msg.scope);
+        allowance[msg.sender] -= amount;
+        balance -= amount;
+        relay@recipient _deposit(amount);
+        emit Transfer(msg.scope, recipient, amount);
+        return true;
+    }
+    
+    function _addtotalsupply(uint amount) @global internal {
+        totalSupply += amount;
+    }
+
+    function _subtotalsupply(uint amount) @global internal {
+        totalSupply -= amount;
+    }
+
+    function burn(uint amount) @address external {
+        require(msg.sender == msg.scope);
+        balance -= amount;
+        relay@global _subtotalsupply(amount);
+        emit Transfer(msg.sender, address(0), amount);
+    }
+}

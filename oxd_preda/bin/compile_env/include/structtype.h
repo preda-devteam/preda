@@ -61,7 +61,7 @@ namespace prlrt {
 			ptr->serialize_out(buffer, for_debug);
 		}
 
-		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
+		bool map_from_serialized_data(const uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
 			return ptr->map_from_serialized_data(buffer, bufferSize, bDeep);
 		}

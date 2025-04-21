@@ -14,6 +14,8 @@
 #include "include/interface.h"
 #include "include/contexts.h"
 #include "include/gascost.h"
+#include "include/scattered_map.h"
+#include "include/scattered_array.h"
 
 #if defined(__linux__) || defined(__linux) || defined(__APPLE__)
 	#define API_EXPORT __attribute__((visibility("default")))
@@ -30,3 +32,7 @@ extern "C" {
 
 thread_local prlrt::IRuntimeInterface* prlrt::g_executionEngineInterface = nullptr;
 thread_local bool prlrt::g_inRelaySerialization = false;
+
+#if !defined(__wasm32__) && !defined(__APPLE__)
+thread_local std::pmr::unsynchronized_pool_resource prlrt::g_memory_pool;
+#endif

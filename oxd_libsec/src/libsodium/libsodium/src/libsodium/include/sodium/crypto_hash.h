@@ -2,7 +2,7 @@
 #define crypto_hash_H
 
 /*
- * WARNING: Unless you absolutely need to use SHA512 for interoperatibility,
+ * WARNING: Unless you absolutely need to use SHA512 for interoperability,
  * purposes, you might want to consider crypto_generichash() instead.
  * Unlike SHA512, crypto_generichash() is not vulnerable to length
  * extension attacks.
@@ -14,7 +14,7 @@
 #include "export.h"
 
 #ifdef __cplusplus
-# if __GNUC__
+# ifdef __GNUC__
 #  pragma GCC diagnostic ignored "-Wlong-long"
 # endif
 extern "C" {
@@ -26,11 +26,12 @@ size_t crypto_hash_bytes(void);
 
 SODIUM_EXPORT
 int crypto_hash(unsigned char *out, const unsigned char *in,
-                unsigned long long inlen);
+                unsigned long long inlen) __attribute__ ((nonnull(1)));
 
 #define crypto_hash_PRIMITIVE "sha512"
 SODIUM_EXPORT
-const char *crypto_hash_primitive(void);
+const char *crypto_hash_primitive(void)
+            __attribute__ ((warn_unused_result));
 
 #ifdef __cplusplus
 }

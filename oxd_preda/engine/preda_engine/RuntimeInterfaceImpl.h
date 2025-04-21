@@ -4,6 +4,9 @@
 #include <vector>
 #include <optional>
 #include <stack>
+#ifndef __APPLE__
+#include <memory_resource>
+#endif
 
 #include "../../native/abi/vm_interfaces.h"
 #include "../../bin/compile_env/include/runtime_interface.h"
@@ -38,7 +41,12 @@ private:
 		uint32_t numImportedContracts;
 		uint32_t funtionFlags;
 	};
+#ifndef __APPLE__
+	std::pmr::unsynchronized_pool_resource m_memory_pool;
+	std::vector<ContractStackEntry, std::pmr::polymorphic_allocator<ContractStackEntry>> m_contractStack;
+#else
 	std::vector<ContractStackEntry> m_contractStack;
+#endif
 	std::unordered_map<prlrt::CBigInt*, std::unique_ptr<prlrt::CBigInt>> m_bigint;
 
 	struct OrphanTokens : public rvm::NativeTokens
@@ -54,7 +62,11 @@ private:
 	std::map<uint64_t, rvm::BigNumMutable> m_depositTokens;
 	std::map<uint64_t, rvm::BigNumMutable> m_tokensSupplyChange;
 
+#ifndef __APPLE__
+	std::map<rvm::ContractVersionId, std::array<bool, uint8_t(prlrt::ContractContextType::Num)>, std::less<>, std::pmr::polymorphic_allocator<std::pair<const rvm::ContractVersionId, std::array<bool, uint8_t(prlrt::ContractContextType::Num)>>>> m_contractStateModifiedFlags;
+#else
 	std::map<rvm::ContractVersionId, std::array<bool, uint8_t(prlrt::ContractContextType::Num)>> m_contractStateModifiedFlags;
+#endif
 	rvm::ExecutionContext *m_pExecutionContext = nullptr;
 	CExecutionEngine *m_pExecutionEngine = nullptr;
 	CContractDatabase *m_pDB = nullptr;
@@ -67,6 +79,14 @@ private:
 	std::string m_logOutputBuffer;
 	std::stack<prlrt::ExceptionType> exec_stack;
 	prlrt::ExceptionType* curr_exc = nullptr;
+
+	struct ScatteredState
+	{
+		rvm::ContractInvokeId ciid;
+		rvm::ScopeKey sk;
+		uint8_t* data;
+	};
+	std::vector<ScatteredState> journaled_states_cache;
 
 private:
 	const ContractImplementedInterface* GetImplementedInterfaceFromContract(uint64_t cvId, int64_t interfaceContractImportSlot, uint32_t interfaceSlot);
@@ -152,9 +172,36 @@ public:
 		return m_remainingGas;
 	}
 
+	bool BurnGas(uint64_t gas_cost);
+
 	void SetChainState(rvm::ChainStates* pChainState)
 	{
 		m_pChainState = pChainState;
+	}
+
+	void CommitJournaledStates2Cache(rvm::ContractInvokeId ciid, rvm::ScopeKey sk, uint8_t* data)
+	{
+		ScatteredState state;
+		state.ciid = ciid;
+		state.data = data;
+		state.sk.Size = sk.Size;
+		uint8_t* skData = new uint8_t[sk.Size];
+		memcpy(skData, sk.Data, sk.Size);
+		state.sk.Data = skData;
+		journaled_states_cache.push_back(std::move(state));
+	}
+
+	void ClearJournaledStatesCache()
+	{
+		for (auto& state : journaled_states_cache)
+			delete const_cast<uint8_t*>(state.sk.Data);
+		journaled_states_cache.clear();
+	}
+
+	void CommitJournaledStates()
+	{
+		for (auto& state : journaled_states_cache)
+			m_pExecutionContext->CommitNewState(state.ciid, &state.sk, state.data);
 	}
 
 public:
@@ -398,6 +445,13 @@ inline GasCostTable gasCostTbl = []() constexpr noexcept {
 
 	// debug 
 	table[PRDOP_DEBUG_OP] = 3;
+	
+	// scattered types
+	table[PRDOP_SCTP_GET_UNTOUCHED] = 2000;
+	table[PRDOP_SCTP_COMMIT] = 100;
+	table[PRDOP_SCTMAP_ERASE] = 20;
+	table[PRDOP_SCTARR_PUSH] = 20;
+	table[PRDOP_SCTARR_POP] = 20;
 
 	return table;
 }();

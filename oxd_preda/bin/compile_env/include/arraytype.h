@@ -11,15 +11,28 @@ namespace prlrt {
 	template<typename T>
 	struct ____array_impl {
 		using element_type = T;
+#if !defined(__wasm32__) && !defined(__APPLE__)
+		using vector_type = std::vector<element_type, std::pmr::polymorphic_allocator<element_type>>;
+#else
 		using vector_type = std::vector<element_type>;
+#endif
 		using index_type = uint32_t;			// depends on vectorType (for ::size_type)
 
 		vector_type v;
-		uint8_t *mapped_data = nullptr;
+		const uint8_t *mapped_data = nullptr;
 		serialize_size_type mapped_data_size = 0;
 		index_type num_entry_in_mapped_data = 0;
 		index_type num_valid_entry_in_mapped_data = 0;				// This could be less than the number of mapped elements, since the array coule be pop()-ed after mapping
+#if !defined(__wasm32__) && !defined(__APPLE__)
+		mutable std::unordered_map<index_type, element_type, std::hash<index_type>, std::equal_to<index_type>, std::pmr::polymorphic_allocator<std::pair<const index_type, element_type>>> mapped_data_element_cache;
+
+		____array_impl()
+			: v(std::pmr::polymorphic_allocator<element_type>(&g_memory_pool))
+			, mapped_data_element_cache(std::pmr::polymorphic_allocator<std::pair<const index_type, element_type>>(&g_memory_pool))
+		{}
+#else
 		mutable std::unordered_map<index_type, element_type> mapped_data_element_cache;
+#endif
 
 		index_type length() const
 		{
@@ -60,8 +73,15 @@ namespace prlrt {
 
 		element_type& get_mapped_element_fixed_element_size(const index_type &index) const
 		{
-			uint8_t *element_buffer = mapped_data + serialize_size_type(sizeof(index_type)) + serialize_size_type(element_type::fixed_size_in_bytes::value * index);
-			return *(element_type*)element_buffer;
+			auto itor = mapped_data_element_cache.find(index);
+			if (itor != mapped_data_element_cache.end())
+				return itor->second;
+
+			const uint8_t *element_buffer = mapped_data + serialize_size_type(sizeof(index_type)) + serialize_size_type(element_type::fixed_size_in_bytes::value * index);
+			auto ret_it = mapped_data_element_cache.insert(std::make_pair(index, element_type()));
+			ret_it.first->second = *reinterpret_cast<const element_type*>(element_buffer); 
+
+			return ret_it.first->second;
 		}
 
 		element_type& get_mapped_element_non_fixed_element_size(const index_type &index) const
@@ -78,7 +98,7 @@ namespace prlrt {
 			if (element_buffer_start_offset > element_buffer_end_offset || element_buffer_end_offset > mapped_data_size)
 				preda_exception::throw_exception("deserialization error in " + std::string(__FUNCTION__), prlrt::ExceptionType::DeserializationFailure);
 
-			uint8_t *element_buffer_start = mapped_data + serialize_size_type(sizeof(index_type)) + element_buffer_start_offset;
+			const uint8_t *element_buffer_start = mapped_data + serialize_size_type(sizeof(index_type)) + element_buffer_start_offset;
 			serialize_size_type element_size = element_buffer_end_offset - element_buffer_start_offset;
 
 			element_type element;
@@ -162,15 +182,10 @@ namespace prlrt {
 			ptr += sizeof(index_type);
 
 			// data
-			if (num_valid_entry_in_mapped_data > 0)
+			for (index_type i = 0; i < length(); i++)
 			{
-				memcpy(ptr, mapped_data + sizeof(index_type), element_type::fixed_size_in_bytes::value * num_valid_entry_in_mapped_data);
-				ptr += element_type::fixed_size_in_bytes::value * num_valid_entry_in_mapped_data;
-			}
-			if (v.size())
-			{
-				memcpy(ptr, &v[0], element_type::fixed_size_in_bytes::value * v.size());
-				ptr += element_type::fixed_size_in_bytes::value * v.size();
+				(*this)[i].serialize_out(ptr, for_debug);
+				ptr += element_type::fixed_size_in_bytes::value;
 			}
 		}
 
@@ -198,7 +213,7 @@ namespace prlrt {
 			}
 		}
 
-		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
+		bool map_from_serialized_data(const uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
 			v.clear();
 			mapped_data = nullptr;
@@ -263,8 +278,17 @@ namespace prlrt {
 		}
 
 		smartptr_type ptr;
+#if !defined(__wasm32__) && !defined(__APPLE__)
 		__prlt_array()
-			:ptr(new implementation_type) {}											// always new an empty vector here in constructor is a waste, but this could be improved if transpiler ignores unused variables when parsing
+		{
+			// always new an empty vector here in constructor is a waste, but this could be improved if transpiler ignores unused variables when parsing
+			ptr = std::allocate_shared<implementation_type>(std::pmr::polymorphic_allocator<implementation_type>(&g_memory_pool));
+		}
+#else
+		__prlt_array()
+			:ptr(new implementation_type) {}											// always new an empty vector here in constructor is a waste, but this could be improved if transpiler ignores unused variables when parsingalways new an empty vector here in constructor is a waste, but this could be improved if transpiler ignores unused variables when parsing
+#endif
+
 		__prlt_array(const smartptr_type &p)
 			: ptr(p) {}
 		void operator=(const smartptr_type &p)
@@ -333,7 +357,7 @@ namespace prlrt {
 			ptr->serialize_out(buffer, for_debug);
 		}
 
-		bool map_from_serialized_data(uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
+		bool map_from_serialized_data(const uint8_t *&buffer, serialize_size_type &bufferSize, bool bDeep)
 		{
 			burn_gas((uint64_t)gas_costs[PRDOP_SERIALIZE_MAP_STATIC]);
 			return ptr->map_from_serialized_data(buffer, bufferSize, bDeep);

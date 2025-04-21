@@ -393,6 +393,7 @@ void Socket::Close()
 {
 	if(_hSocket != INVALID_SOCKET)
 	{
+		_LOG_HIGHLIGHT("[EVSS]: Socket::Close:" << _hSocket << " TH:" << os::Thread::GetCurrentId());
 		SOCKET tmp = _hSocket;
 		_hSocket = INVALID_SOCKET;
 

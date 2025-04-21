@@ -17,7 +17,7 @@ extern "C" {
 			return new CContractDatabase(RuntimeMode::NATIVE);
 #ifdef ENABLE_EVM
 		else if (config == std::string("-evm"))
-			return new preda_evm::ContractDatabase();
+			return new xtl::ContractDatabase();
 #endif
 		else
 			return nullptr;

@@ -8,6 +8,11 @@ void CodeSerializer::AddLine(const std::string &line)
 	lines.push_back(newLine + line);
 }
 
+void CodeSerializer::AddMacroLine(const std::string& line)
+{
+	lines.push_back(line);
+}
+
 void CodeSerializer::PushIndent()
 {
 	currentIndentLevel++;
@@ -20,7 +25,7 @@ void CodeSerializer::PopIndent()
 		currentIndentLevel--;
 }
 
-std::string CodeSerializer::GetCode()
+std::string CodeSerializer::GetCode() const
 {
 	std::string ret;
 	for (auto line : lines)

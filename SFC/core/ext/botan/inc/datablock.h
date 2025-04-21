@@ -116,8 +116,8 @@ public:
 	template< template<UINT l, bool s> class T >
 	DataBlockRef(const T<_LEN, false>& x){ Bytes = (LPBYTE)x.Bytes; }
 
-    operator	LPCBYTE () const { return (LPCBYTE)GetBytes(); }
-	operator	LPBYTE () { return (LPBYTE)GetBytes(); }
+    explicit operator	LPCBYTE () const { return (LPCBYTE)GetBytes(); }
+	explicit operator	LPBYTE () { return (LPBYTE)GetBytes(); }
 	template<typename T>
 	const BYTE&	operator [](T i) const { return GetBytes()[i]; }
 	template<typename T>
@@ -207,8 +207,8 @@ struct DataBlock: public _details::DataBlockStg<_LEN, is_sec>
 public:
 	typedef dword_op<_LEN/4> dwop;
 	static const UINT LEN = _LEN;
-    operator	LPCBYTE () const { return GetBytes(); }
-	operator	LPBYTE () { return GetBytes(); }
+    explicit operator	LPCBYTE () const { return GetBytes(); }
+	explicit operator	LPBYTE () { return GetBytes(); }
     operator    DataBlock<_LEN, !is_sec>& (){ return *(DataBlock<_LEN, !is_sec>*)this; }
     operator    const DataBlock<_LEN, !is_sec>& () const { return *(DataBlock<_LEN, !is_sec>*)this; }
 	template<typename T>
@@ -221,6 +221,12 @@ public:
 	bool		FromBase16(const rt::String_Ref& str){ return os::Base16DecodeLength(str.GetLength()) == _LEN && os::Base16Decode(GetBytes(), _LEN, str.Begin(), str.GetLength()); }
 	bool		FromBase32(const rt::String_Ref& str){ return os::Base32CrockfordDecode(this, sizeof(*this), str.Begin(), str.GetLength()); }
 	bool		FromBase64(const rt::String_Ref& str){ SIZE_T len; return os::Base64DecodeLength(str.Begin(), str.GetLength()) == _LEN && os::Base64Decode(GetBytes(), &len, str.Begin(), str.GetLength()) && len == _LEN; }
+	bool		FromUrlSafeBase64(const rt::String_Ref& str)
+				{	SIZE_T len;
+					rt::String base64 = str;
+					base64.Replace('-', '+').Replace('_', '/'); // RFC 4648 section-5
+					return os::Base64DecodeLength(base64.Begin(), base64.GetLength()) == _LEN && os::Base64Decode(GetBytes(), &len, base64.Begin(), base64.GetLength()) && len == _LEN;
+				}
 	bool		FromString(const rt::String_Ref& str)
 				{	if(str.GetLength() == os::Base16EncodeLength(LEN) && FromBase16(str))return true;
 					if(str.GetLength() == os::Base32EncodeLength(LEN) && FromBase32(str))return true;
@@ -228,6 +234,7 @@ public:
 					rt::Zero(*this); return false;
 				}
 	void		ToBase64(rt::String& str) const	{ str.SetLength(os::Base64EncodeLength(_LEN)); os::Base64Encode(str, GetBytes(), _LEN); }
+	void		ToUrlSafeBase64(rt::String& str) const	{ str.SetLength(os::Base64EncodeLength(_LEN)); os::Base64Encode(str, GetBytes(), _LEN); str.Replace('+', '-').Replace('/', '_'); } // RFC 4648 section-5
 	void		ToBase32(rt::String& str) const { str.SetLength(os::Base32EncodeLength(_LEN)); os::Base32CrockfordEncodeLowercase(str, GetBytes(), _LEN); }
 	void		ToBase16(rt::String& str) const	{ str.SetLength(os::Base16EncodeLength(_LEN)); os::Base16Encode(str, GetBytes(), _LEN); }
 	bool		IsZero() const { return dwop::equ(GetDWords(), (DWORD)0); }

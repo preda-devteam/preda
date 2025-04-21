@@ -14,7 +14,7 @@ ULONGLONG BigNumRough::operator = (ULONGLONG n)
 {
 	int a = 0;
 	if(n != 0)
-		a = (int)log2(n);
+		a = (int)log2(n)+1;
 	if(a>MANTISSA_BITS)
 	{
 		Exponent = a - MANTISSA_BITS;
@@ -37,7 +37,7 @@ bool BigNumRough::operator < (const BigNumRough&x) const
 	{	return (Mantissa >> (x.Exponent - Exponent)) < x.Mantissa;
 	}
 	else
-	{	return (Mantissa < (x.Mantissa << (Exponent - x.Exponent)));
+	{	return (Mantissa < (x.Mantissa >> (Exponent - x.Exponent)));
 	}
 }
 
@@ -49,7 +49,7 @@ bool BigNumRough::operator > (const BigNumRough&x) const
 	{	return (Mantissa >> (x.Exponent - Exponent)) > x.Mantissa;
 	}
 	else
-	{	return (Mantissa > (x.Mantissa << (Exponent - x.Exponent)));
+	{	return (Mantissa > (x.Mantissa >> (Exponent - x.Exponent)));
 	}
 }
 
@@ -59,7 +59,7 @@ bool BigNumRough::operator <= (const BigNumRough&x) const
 	{	return (Mantissa >> (x.Exponent - Exponent)) <= x.Mantissa;
 	}
 	else
-	{	return (Mantissa <= (x.Mantissa << (Exponent - x.Exponent)));
+	{	return (Mantissa <= (x.Mantissa >> (Exponent - x.Exponent)));
 	}
 }
 
@@ -69,7 +69,7 @@ bool BigNumRough::operator >= (const BigNumRough&x) const
 	{	return (Mantissa >> (x.Exponent - Exponent)) > x.Mantissa;
 	}
 	else
-	{	return (Mantissa > (x.Mantissa << (Exponent - x.Exponent)));
+	{	return (Mantissa > (x.Mantissa >> (Exponent - x.Exponent)));
 	}
 }
 
@@ -79,7 +79,7 @@ bool BigNumRough::operator == (const BigNumRough&x) const
 	{	return (Mantissa >> (x.Exponent - Exponent)) == x.Mantissa;
 	}
 	else
-	{	return (Mantissa == (x.Mantissa << (Exponent - x.Exponent)));
+	{	return (Mantissa == (x.Mantissa >> (Exponent - x.Exponent)));
 	}
 }
 
@@ -144,7 +144,7 @@ bool BN_AbsLess(const BN_Unsigned& a, const BN_Unsigned& b) // a < b
 	return false;
 }
 
-bool BN_AbsLessOrEqual(const BN_Unsigned& a, const BN_Unsigned& b) // a < b
+bool BN_AbsLessOrEqual(const BN_Unsigned& a, const BN_Unsigned& b) // a <= b
 {
 	if(a.Data() == b.Data())return true;
 
@@ -219,7 +219,7 @@ bool BN_Less(const BigNumRef& a, const BigNumRef& b) // a < b
 	case SIGNS_POS_POS: return BN_AbsLess(a, b);
 	case SIGNS_POS_NEG: return false;
 	case SIGNS_NEG_POS: return !BN_IsZero(a) || !BN_IsZero(b);
-	case SIGNS_NEG_NEG: return BN_AbsLessOrEqual(b, a);
+	case SIGNS_NEG_NEG: return BN_AbsLess(b, a);
 	}
 
 	return false;
@@ -248,7 +248,7 @@ bool BN_LessOrEqual(const BigNumRef& a, const BigNumRef& b) // a <= b
 	case SIGNS_POS_POS: return BN_AbsLessOrEqual(a, b);
 	case SIGNS_POS_NEG: return BN_IsZero(a) && BN_IsZero(b);
 	case SIGNS_NEG_POS: return true;
-	case SIGNS_NEG_NEG: return BN_AbsLess(b, a);
+	case SIGNS_NEG_NEG: return BN_AbsLessOrEqual(b, a);
 	}
 
 	return false;
@@ -578,7 +578,7 @@ void BN_Sub(const BigNumRef& b, ext::BigNumMutable& ret) // ret -= b
 		break;
 	case SIGNS_NEG_NEG:
 		{	
-			bool sign = !BN_AbsLess(ret, b);
+			bool sign = !BN_AbsLessOrEqual(ret, b);
 			BN_AbsSub(b, ret);
 			ret.SetSign(sign);
 		}

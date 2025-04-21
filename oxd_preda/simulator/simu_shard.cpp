@@ -1,7 +1,12 @@
 #include "../../SFC/core/ext/botan/botan.h"
 #include "../../SFC/core/ext/bignum/big_num.h"
 #include "simu_global.h"
-#include "simulator.h"
+#include "chain_simu.h"
+
+#if defined(__linux__) && defined(AFFINITY_SET)
+#include <pthread.h>
+#include <sched.h>
+#endif
 
 
 namespace oxd
@@ -19,7 +24,7 @@ void ShardStates::Commit(ShardStates& to)
 	_ShardKeyedStates.Commit(to._ShardKeyedStates);
 }
 
-SimuShard::SimuShard(Simulator* simu, uint64_t time_base, uint32_t shard_order)
+SimuShard::SimuShard(ChainSimulator* simu, uint64_t time_base, uint32_t shard_order)
 	:_TxnEmitted(simu, this)
 {
 	_pSimulator = simu;
@@ -32,7 +37,7 @@ SimuShard::SimuShard(Simulator* simu, uint64_t time_base, uint32_t shard_order)
 	rt::Zero(_PrevBlockHash);
 }
 
-SimuShard::SimuShard(Simulator* simu, uint64_t time_base, uint32_t shard_order, uint32_t shard_index, SimuGlobalShard* global)
+SimuShard::SimuShard(ChainSimulator* simu, uint64_t time_base, uint32_t shard_order, uint32_t shard_index, SimuGlobalShard* global)
 	:SimuShard(simu, time_base, shard_order)
 {
 	_pGlobalShard = global;
@@ -98,9 +103,16 @@ rvm::ConstStateData SimuShard::GetState(rvm::ContractScopeId contract, const rvm
 	auto scope_type = rvm::SCOPE_TYPE(scope);
 
 	ASSERT(scope_type != rvm::ScopeType::Contract);
-
 	ShardStateKey k = { contract, *key };
-	const SimuState* ret = _ShardKeyedStates.Get(k);
+
+	const SimuState* ret = nullptr;
+	if(rvm::ScopeType::ScatteredMapOnGlobal == scope_type)
+		ret = _pGlobalShard->_ShardKeyedStates.Get(k);
+	else if(rvm::ScopeType::ScatteredMapOnShard == scope_type)
+		ret = _ShardKeyedStates.Get(k);
+	else 
+		ASSERT(0);
+
 	if(ret)return { ret->Data, ret->DataSize, ret->Version };
 	else return { nullptr, 0, (rvm::BuildNum)0 };
 }
@@ -142,13 +154,17 @@ EMPTY_STATE:
 
 uint8_t* SimuShard::AllocateStateMemory(uint32_t dataSize)
 {
-	auto* s = SimuState::Create(dataSize);
+#ifndef __APPLE__
+	auto* s = SimuState::Create(dataSize, rvm::BuildNum(0), _ShardIndex);
+#else
+	auto* s = SimuState::Create(dataSize, rvm::BuildNum(0));
+#endif
 	return s?s->Data:nullptr;
 }
 
 void SimuShard::DiscardStateMemory(uint8_t* state)
 {
-	_SafeFree8AL_ConstPtr(state - offsetof(SimuState, Data));
+	reinterpret_cast<SimuState*>(state - offsetof(SimuState, Data))->Release();
 }
 
 void SimuShard::CommitNewState(rvm::ContractInvokeId contract, const rvm::ScopeKey* key, uint8_t* state)
@@ -203,9 +219,12 @@ rvm::ConstAddress* SimuShard::GetBlockCreator() const
 SimuTxn* SimuShard::_CreateRelayTxn(rvm::ContractInvokeId ciid, rvm::OpCode opcode, const rvm::ConstData* args_serialized, uint32_t gas_redistribution_weight) const
 {
 	auto scope = rvm::CONTRACT_SCOPE(ciid);
-	if(scope == rvm::ScopeInvalid)return nullptr;
-
+	if(rvm::CONTRACT_ENGINE(ciid) != rvm::EngineId::SOLIDITY_EVM && scope == rvm::ScopeInvalid) return nullptr;
+#ifndef __APPLE__
+	auto* txn = SimuTxn::CreateRelay(const_cast<std::pmr::unsynchronized_pool_resource*>(&_MemoryPool), args_serialized?(uint32_t)args_serialized->DataSize:0U, 0);
+#else
 	auto* txn = SimuTxn::Create(args_serialized?(uint32_t)args_serialized->DataSize:0U, 0);
+#endif
 	txn->Type = rvm::InvokeContextType::RelayInbound;
 	txn->Contract = ciid;
 	txn->Op = opcode;
@@ -405,7 +424,11 @@ void SimuShard::Term()
 		_BlockCreator.WaitForEnding();
 	}
 
-	for(auto b : _Chain)
+	_AddressStates.Empty();
+	_ShardStates.Empty();
+	_ShardKeyedStates.Empty();
+
+	for (auto b : _Chain)
 		b->Release();
 
 	_Chain.ShrinkSize(0);
@@ -449,6 +472,7 @@ void SimuShard::PushRelayTxn(SimuTxn** txns, uint32_t count)
 		ASSERT(txns[0]->IsRelay());
 
 		bool first_item = _PendingRelayTxns.Push(txns, count);
+		//_pSimulator->OnTxnPushed(count);
 		_pSimulator->OnTxnPushed(count);
 
 		if(first_item && _pSimulator->IsShardingAsync() && !_pSimulator->IsChainPaused() && !_pSimulator->IsChainStepping())
@@ -456,7 +480,7 @@ void SimuShard::PushRelayTxn(SimuTxn** txns, uint32_t count)
 	}
 }
 
-RelayEmission::RelayEmission(Simulator* s, SimuShard* shard)
+RelayEmission::RelayEmission(ChainSimulator* s, SimuShard* shard)
 	:_pSimulator(s),_pShard(shard)
 {
 	_ToShards.SetSize(s->GetShardCount());
@@ -476,7 +500,7 @@ RelayEmission::~RelayEmission()
 	_ToShards.SetSize(0);
 }
 
-void RelayEmission::Collect(SimuTxn* origin, rt::BufferEx<SimuTxn*>& txns, uint64_t& remained_gas)
+void RelayEmission::Collect(SimuTxn* origin, rt::BufferEx<SimuTxn*>& txns, uint64_t remained_gas)
 {
 #define APPEND_TRACE(t)		_pShard->AppendToTxnTrace(origin, t)
 	// calculate total gas redistribution weight
@@ -486,7 +510,7 @@ void RelayEmission::Collect(SimuTxn* origin, rt::BufferEx<SimuTxn*>& txns, uint6
 		switch(t->GetScope())
 		{
 		case rvm::Scope::Shard:
-			total_weight += t->GasRedistributionWeight * _ToShards.GetSize();
+			total_weight += t->GasRedistributionWeight * (uint32_t)_ToShards.GetSize();
 			break;
 		default:
 			total_weight += t->GasRedistributionWeight;
@@ -650,7 +674,7 @@ void SimuShard::_Execute(SimuTxn* t)
 				}
 			}
 
-			ret = pexec->Invoke(this, _pTxn->Gas, _pTxn->Contract, _pTxn->Op, &args);
+			ret = pexec->Invoke(this, (uint32_t)_pTxn->Gas, _pTxn->Contract, _pTxn->Op, &args);
 			if(ret.TokenResidual)
 			{
 				thread_local rt::String str;
@@ -689,11 +713,7 @@ void SimuShard::_Execute(SimuTxn* t)
 	else
 	{
 		rvm::ConstData args = _pTxn->GetArguments();
-
-		rt::String deployArgs;
-		deployArgs.SetLength(_pTxn->ArgsSerializedSize);
-		memcpy(deployArgs.Begin(), args.DataPtr, args.DataSize);
-		ret = _pSimulator->DeployFromStatement(deployArgs);
+		ret = _pSimulator->DeployFromStatement(args);
 	}
 
 POST_INVOKE:
@@ -733,6 +753,25 @@ POST_INVOKE:
 
 void SimuShard::_BlockCreationRoutine()
 {
+#if defined(__linux__) && defined(AFFINITY_SET)
+        if(!IsGlobal())
+        {
+		    struct sched_param param;
+            param.sched_priority = 99; // Setting priority.
+
+    	    // set the scheduling parameters
+    	    int ret = pthread_setschedparam(pthread_self(), SCHED_FIFO, &param);
+    	    if (ret != 0) {
+//    	         printf("pthread_setschedparam returned %d\n", ret);
+    	    }
+		    cpu_set_t cpuset;
+		    pthread_t thread = pthread_self();
+		    int core = this->_ShardIndex;
+		    CPU_ZERO(&cpuset);
+		    CPU_SET(core, &cpuset);
+		    pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+        }
+#endif
 	while(!_BlockCreator.WantExit())
 	{
 		bool step = _pSimulator->IsChainStepping();
@@ -745,7 +784,8 @@ void SimuShard::_BlockCreationRoutine()
 			_GoNextBlock.Reset();
 		}
 
-		if(_BlockCreator.WantExit())return;
+		if(_BlockCreator.WantExit())
+			return;
 
 		step = _pSimulator->IsChainStepping();
 		uint64_t gas_limit = IsGlobal() ? _pSimulator->GetScriptGlobalGasLimit() : _pSimulator->GetScriptGasLimit();
@@ -788,9 +828,17 @@ void SimuShard::_BlockCreationRoutine()
 		}
 
 		// normal txns second
+#ifdef VERIFY_SIG
+		oxd::SecuritySuite ss(oxd::SEC_SUITE_ED25519);
+#endif
 		while (SimuTxn* t = _TotalGasBurnt < gas_limit ? _PendingTxns.Pop() : nullptr)
 		{
 			ASSERT(_RelayEmitted.GetSize() == 0);
+#ifdef VERIFY_SIG
+			if(rvm::Scope::Address == t->GetScope() && !ss.VerifySignature( &(t->pk[0]), &(t->sig[0]), &t->SerializedData, t->ArgsSerializedSize)) {
+				std::cout << "verify failed" << std::endl;
+			}
+#endif
 			_Execute(t); // execute a txn
 		}
 
@@ -804,6 +852,7 @@ void SimuShard::_BlockCreationRoutine()
 		block->PrevBlock = _PrevBlockHash;
 		block->Timestamp = _GetBlockTime();
 		block->Miner = _pSimulator->GetMiner();
+		block->ShardId = _ShardIndex;
 		block->TxnCount = (uint32_t)_TxnExecuted.GetSize();
 		_TxnExecuted.CopyTo(block->Txns);
 		*(uint64_t*)&_BlockHash = os::crc64(block, offsetof(SimuBlock, Txns));
@@ -840,14 +889,14 @@ void SimuShard::_BlockCreationRoutine()
 				bool trigger_global = _pSimulator->CompleteShardExecution();
 				if(trigger_global)
 				{
-					if(_pSimulator->GetPendingTxnCount() && !step && !_pSimulator->IsChainPaused())
+					if(_pSimulator->GetPendingTxnsCount() && !step && !_pSimulator->IsChainPaused())
 						_pGlobalShard->Step();
 					else
 						_pSimulator->SetChainIdle();
 				}
 			}
 			else{
-				if(_pSimulator->GetPendingTxnCount() && !step && !_pSimulator->IsChainPaused())
+				if(_pSimulator->GetPendingTxnsCount() && !step && !_pSimulator->IsChainPaused())
 					_pGlobalShard->Step();
 				else
 					_pSimulator->SetChainIdle();
@@ -919,17 +968,40 @@ bool SimuShard::JsonifyAllAddressStates(rt::Json& append, const rt::BufferEx<Use
 	{
 		return false;
 	}
-	_AddressStates.AddressStateJsonify(_pSimulator->GetAllEngines(), append, Users, cid, GetShardIndex(), nullptr);
+	for(uint32_t id = 0; id < Users.GetSize(); ++id)
+		_AddressStates.AddressStateJsonify(_pSimulator->GetAllEngines(), append, id, cid, GetShardIndex(), &Users[id].Addr);
 	return true;
 }
 
-bool SimuShard::JsonifyAddressState(rt::Json& append, const rvm::Address* targetAddr, const rt::BufferEx<User>& Users, rvm::ContractId cid)
+bool SimuShard::JsonifyAddressState(rt::Json& append, const rvm::Address* targetAddr, uint32_t userId, rvm::ContractId cid)
 {
-	if(!_AddressStates.GetSize())
+	if(rvm::CONTRACT_ENGINE(cid) == rvm::EngineId::SOLIDITY_EVM)
 	{
-		return false;
+		rvm::ContractInvokeId ciid = rvm::CONTRACT_SET_SCOPE_BUILD(cid, rvm::Scope::Address, rvm::BuildNumInit);
+		rvm::StringStreamImpl str_impl;
+		std::vector<uint8_t> data(sizeof(rvm::ChainStates*) + sizeof(rvm::Address));
+		auto chain_state_addr = dynamic_cast<rvm::ChainStates*>(this);
+		std::memcpy(data.data(), &chain_state_addr, sizeof(rvm::ChainStates*));
+		std::memcpy(data.data() + sizeof(rvm::ChainStates*), targetAddr, sizeof(rvm::Address));
+		rvm::ConstData const_data{data.data(), sizeof(rvm::Address)};
+		if (!_pSimulator->GetAllEngines()[(uint8_t)rvm::EngineId::SOLIDITY_EVM].pEngine->StateJsonify(ciid, &const_data, &str_impl))
+			return false;
+		nlohmann::json json;
+		rt::tos::Base32CrockfordLowercaseOnStack<> addrStr(targetAddr, sizeof(rvm::ConstAddress));
+		json["Address"] = std::string(addrStr.Begin());
+		json["AddressIndex"] = userId;
+		json["ShardIndex"] = _ShardIndex;
+		json["States"].push_back(nlohmann::json::parse(str_impl.GetString().StrPtr));
+		nlohmann::json json_out = nlohmann::json::parse(append.GetInternalString().GetString());
+		json_out.push_back(json);
+		append.GetInternalString() = rt::String(json_out.dump().c_str());
 	}
-	_AddressStates.AddressStateJsonify(_pSimulator->GetAllEngines(), append, Users, cid, GetShardIndex(), targetAddr);
+	else
+	{
+		if(!_AddressStates.GetSize())
+			return false;
+		_AddressStates.AddressStateJsonify(_pSimulator->GetAllEngines(), append, userId, cid, GetShardIndex(), targetAddr);
+	}
 	return true;
 }
 
@@ -940,7 +1012,25 @@ void SimuShard::JsonifyAddressStateWithoutGrouping(rt::Json& append, rvm::Contra
 
 bool SimuShard::JsonifyShardState(rt::Json& append, rvm::ContractId cid)
 {
-	return _ShardStates.ShardStateJsonify(_pSimulator->GetAllEngines(), append, cid, GetShardIndex());
+	if(!_ShardStates.ShardStateJsonify(_pSimulator->GetAllEngines(), append, cid, GetShardIndex()))
+		return false;
+	if(!_ShardKeyedStates.ScatteredMapJsonify(_pSimulator->GetAllEngines(), append.GetInternalString(), GetShardIndex()))
+		return false;
+	if(rvm::CONTRACT_ENGINE(cid) == rvm::EngineId::SOLIDITY_EVM)
+	{
+		rvm::ContractInvokeId ciid = rvm::CONTRACT_SET_SCOPE_BUILD(cid, IsGlobal() ? rvm::Scope::Global : rvm::Scope::Shard, rvm::BuildNumInit);
+		rvm::StringStreamImpl str_impl;
+		std::vector<uint8_t> data(sizeof(rvm::ChainStates*));
+		auto chain_state_addr = dynamic_cast<rvm::ChainStates*>(this);
+		std::memcpy(data.data(), &chain_state_addr, sizeof(rvm::ChainStates*));
+		rvm::ConstData const_data{data.data(), 0};
+		if (!_pSimulator->GetAllEngines()[(uint8_t)rvm::EngineId::SOLIDITY_EVM].pEngine->StateJsonify(ciid, &const_data, &str_impl))
+			return false;
+		nlohmann::json json = nlohmann::json::parse(append.GetInternalString().GetString());
+		json.back()["States"].push_back(nlohmann::json::parse(str_impl.GetString().StrPtr));
+		append.GetInternalString() = rt::String(json.dump().c_str());
+	}
+	return true;
 }
 
 bool SimuShard::ConfirmedTxnJsonify(const SimuTxn* txn, rt::Json& append) const

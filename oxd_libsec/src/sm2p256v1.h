@@ -6,7 +6,7 @@ namespace oxd
 {
 
 template<>
-struct SecSuite<SEC_SUITE_SM2>: public ECDSA<(int)ECDSASchemes::BTC_ETH>
+struct SecSuite<SEC_SUITE_SM2>: public ECDSA<(int)ECDSASchemes::SM2>
 {
 	friend class SecuritySuite;
 	static const int				Id = SEC_SUITE_SM2;
